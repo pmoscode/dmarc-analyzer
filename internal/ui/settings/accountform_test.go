@@ -1,13 +1,18 @@
 package settings
 
 import (
+	"context"
+	"errors"
 	"testing"
 
+	"fyne.io/fyne/v2/test"
 	"github.com/stretchr/testify/require"
+
+	"github.com/pmoscode/dmarc-analyzer/internal/domain/account"
 )
 
 func validForm() *AccountForm {
-	f := NewAccountForm()
+	f := NewAccountForm(nil)
 	f.host.SetText("imap.example.com")
 	f.username.SetText("user@example.com")
 	f.password.SetText("app-passwort")
@@ -15,7 +20,7 @@ func validForm() *AccountForm {
 }
 
 func TestAccountForm_DefaultValues(t *testing.T) {
-	f := NewAccountForm()
+	f := NewAccountForm(nil)
 	require.Equal(t, "993", f.port.Text)
 	require.Equal(t, "INBOX", f.mailbox.Text)
 	require.True(t, f.useTLS.Checked)
@@ -84,4 +89,68 @@ func TestAccountForm_BuildAccount_InvalidPort_ReturnsError(t *testing.T) {
 func TestAccountForm_Secret_ReturnsEnteredPassword(t *testing.T) {
 	f := validForm()
 	require.Equal(t, "app-passwort", string(f.Secret().Expose()))
+}
+
+func newSyncTestFormWithWindow(t *testing.T) (*AccountForm, func()) {
+	t.Helper()
+	w := test.NewWindow(nil)
+	f := NewAccountForm(w)
+	f.runBackground = func(fn func()) { fn() }
+	f.host.SetText("imap.example.com")
+	f.username.SetText("user@example.com")
+	f.password.SetText("app-passwort")
+	w.SetContent(f)
+	return f, w.Close
+}
+
+func TestAccountForm_ListMailboxes_Success_PopulatesMailboxOptions(t *testing.T) {
+	f, closeWin := newSyncTestFormWithWindow(t)
+	defer closeWin()
+
+	var gotAcc account.MailAccount
+	f.ListMailboxes = func(_ context.Context, acc account.MailAccount, _ account.Secret) ([]string, error) {
+		gotAcc = acc
+		return []string{"INBOX", "INBOX/DMARC"}, nil
+	}
+
+	require.NotPanics(t, f.listMailboxes)
+
+	require.Equal(t, "imap.example.com", gotAcc.Host)
+	require.Equal(t, "user@example.com", gotAcc.Username)
+}
+
+func TestAccountForm_ListMailboxes_MissingConnectionDetails_DoesNotCall(t *testing.T) {
+	f, closeWin := newSyncTestFormWithWindow(t)
+	defer closeWin()
+	f.password.SetText("")
+
+	called := false
+	f.ListMailboxes = func(context.Context, account.MailAccount, account.Secret) ([]string, error) {
+		called = true
+		return nil, nil
+	}
+
+	require.NotPanics(t, f.listMailboxes)
+	require.False(t, called, "ohne vollständige Verbindungsdaten darf nicht probeweise verbunden werden")
+}
+
+func TestAccountForm_ListMailboxes_Failure_DoesNotPanicOrPopulateOptions(t *testing.T) {
+	f, closeWin := newSyncTestFormWithWindow(t)
+	defer closeWin()
+
+	called := false
+	f.ListMailboxes = func(context.Context, account.MailAccount, account.Secret) ([]string, error) {
+		called = true
+		return nil, errors.New("verbindung fehlgeschlagen")
+	}
+
+	require.NotPanics(t, f.listMailboxes)
+	require.True(t, called)
+}
+
+func TestAccountForm_ListMailboxes_NilCallback_DoesNothing(t *testing.T) {
+	f, closeWin := newSyncTestFormWithWindow(t)
+	defer closeWin()
+
+	require.NotPanics(t, f.listMailboxes)
 }

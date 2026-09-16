@@ -59,16 +59,19 @@ func newTestWizard(t *testing.T, setup *testSetup, w fyne.Window) *Wizard {
 
 // fillValidAccountForm trägt gültige Werte ein. wiz.form ist vom Typ
 // *settings.AccountForm (fremdes Paket, Felder dort unexported) — die
-// Entry-Widgets werden deshalb über uitest.FindEntries angesprochen,
-// in der Reihenfolge, in der settings.NewAccountForm sie anlegt:
-// Anzeigename, Host, Port, Benutzername, Postfach, Passwort (Check
-// "Verschlüsselte Verbindung" ist kein Entry und taucht hier nicht auf).
+// Entry-Widgets werden deshalb über uitest.FindEntries angesprochen, in
+// der Reihenfolge, in der settings.NewAccountForm sie anlegt: Anzeigename,
+// Host, Port, Benutzername, Passwort (Check "Verschlüsselte Verbindung"
+// ist kein Entry und taucht hier nicht auf). Das Postfach-Feld ist seit
+// AP 6 ein *widget.SelectEntry (Ordner-Picker, siehe AGENTS.md) — ein
+// eigener konkreter Typ, den uitest.FindEntries (Typassertion auf
+// *widget.Entry) nicht mehr mitzählt, obwohl SelectEntry Entry einbettet.
 func fillValidAccountForm(wiz *Wizard) {
 	entries := uitest.FindEntries(wiz.form)
 	const (
 		idxHost     = 1
 		idxUsername = 3
-		idxPassword = 5
+		idxPassword = 4
 	)
 	entries[idxHost].SetText("imap.example.com")
 	entries[idxUsername].SetText("user@example.com")

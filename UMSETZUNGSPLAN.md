@@ -561,6 +561,36 @@ Sendequelle fehlschlägt und wie viele Nachrichten betroffen sind. ✅ Erreicht.
   geprüft; die Fyne-Widget-Ebene selbst ist durchgängig per
   `fyne.io/fyne/v2/test` (Headless-Treiber) getestet.
 
+**Nachträgliche Ergänzung (nach Abschluss von AP 6):** Ordner-Picker fürs
+Kontoformular — DMARC-Berichte landen nicht zwangsläufig im Wurzelpostfach
+(INBOX), sondern können z. B. per Mailregel in einen Unterordner
+einsortiert sein. Das Postfach-Feld selbst unterstützte technisch schon
+immer einen beliebigen Ordnerpfad (freier Text, unverändert an IMAP
+SELECT/EXAMINE durchgereicht), aber ohne Hilfestellung musste der Nutzer
+den exakten Pfad samt serverabhängigem Trennzeichen (z. B. `/` bei
+Dovecot, `.` bei Courier) blind erraten.
+- Neuer, optionaler Port `sync.MailboxLister` (`domain/sync/ports.go`) —
+  bewusst getrennt von `MessageSource` statt einer weiteren Methode dort,
+  da nicht jede denkbare Quelle Postfächer auflisten kann/muss; Aufrufer
+  prüfen per Typassertion. `imap.Adapter` implementiert ihn zusätzlich
+  über `IMAP LIST`, gefiltert auf tatsächlich auswählbare Postfächer
+  (Attribut `\Noselect` ausgeschlossen).
+- `manageaccount.UseCase.ListMailboxes` verbindet probeweise (wie
+  `TestConnection`, ohne zu synchronisieren) und listet auf.
+- `settings.AccountForm.mailbox` ist jetzt ein `widget.SelectEntry` statt
+  `widget.Entry` — weiterhin frei eintippbar (z. B. für Server, bei denen
+  LIST aus irgendeinem Grund nicht das Richtige liefert), zusätzlich mit
+  Dropdown-Optionen befüllbar über den neuen Knopf "Ordner auflisten"
+  (nutzt die aktuell im Formular eingetragenen Zugangsdaten, ohne dass das
+  Konto schon gespeichert sein muss — funktioniert dadurch sowohl beim
+  Anlegen in den Einstellungen als auch im Ersteinrichtungs-Assistenten).
+- Kleine, durch Umstellung auf `SelectEntry` verursachte Testfalle
+  gefunden und behoben: `uitest.FindEntries` erkennt `*widget.SelectEntry`
+  nicht (Typassertion auf den konkreten Typ `*widget.Entry`, `SelectEntry`
+  bettet `Entry` nur ein) — ein index-basierter Testhelfer im
+  Ersteinrichtungs-Assistenten (`fillValidAccountForm`) musste neu
+  durchgezählt werden. Siehe AGENTS.md.
+
 ### AP 7 — Feinschliff und Release 1.0.0
 
 - [ ] Aufbewahrungsrichtlinie, Standard 24 Monate (Vorschlag 11.11)

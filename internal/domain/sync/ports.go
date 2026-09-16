@@ -73,3 +73,20 @@ type MessageSource interface {
 	FetchNew(ctx context.Context, state State) (iter.Seq2[RawMessage, error], State, error)
 	Close() error
 }
+
+// MailboxLister ist ein optionaler Zusatz-Port für Quellen, die die auf
+// dem Server tatsächlich vorhandenen Postfächer/Ordner auflisten können —
+// Grundlage für einen Ordner-Picker im Kontoformular, weil DMARC-Berichte
+// nicht zwangsläufig im Wurzelpostfach (INBOX) landen, sondern z. B. über
+// eine Mailregel in einen Unterordner sortiert sein können. Bewusst ein
+// eigener, separater Port statt einer weiteren MessageSource-Methode:
+// nicht jede denkbare Quelle (z. B. ein künftiger Datei-Adapter) kann das
+// sinnvoll leisten — Aufrufer prüfen per Typassertion, ob eine
+// MessageSource zusätzlich MailboxLister implementiert (siehe
+// manageaccount.UseCase.ListMailboxes).
+//
+// Setzt wie FetchNew eine bereits erfolgreiche Connect()-Verbindung
+// voraus.
+type MailboxLister interface {
+	ListMailboxes(ctx context.Context) ([]string, error)
+}

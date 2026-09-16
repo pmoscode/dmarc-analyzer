@@ -52,11 +52,16 @@ const (
 
 	AccountHelpPassword = "Bei aktivierter Zwei-Faktor-Authentifizierung wird ein App-Passwort benötigt, nicht das normale Kontopasswort."
 	AccountHelpTLS      = "Nur deaktivieren, wenn der Mailserver keine verschlüsselte Verbindung anbietet — die Zugangsdaten würden sonst unverschlüsselt übertragen."
+	AccountHelpMailbox  = "DMARC-Berichte landen nicht immer im Wurzelpostfach — z. B. wenn eine Mailregel sie in einen Unterordner einsortiert. \"Ordner auflisten\" zeigt die auf dem Server vorhandenen Postfächer, inklusive Unterordnern."
 
-	AccountErrorHostRequired     = "IMAP-Host darf nicht leer sein."
-	AccountErrorUsernameRequired = "Benutzername darf nicht leer sein."
-	AccountErrorPasswordRequired = "Passwort darf nicht leer sein."
-	AccountErrorPortInvalid      = "Port muss eine Zahl zwischen 1 und 65535 sein."
+	AccountErrorHostRequired           = "IMAP-Host darf nicht leer sein."
+	AccountErrorUsernameRequired       = "Benutzername darf nicht leer sein."
+	AccountErrorPasswordRequired       = "Passwort darf nicht leer sein."
+	AccountErrorPortInvalid            = "Port muss eine Zahl zwischen 1 und 65535 sein."
+	AccountErrorNeedsConnectionDetails = "Host, Benutzername und Passwort werden benötigt, um die Ordner aufzulisten."
+	AccountErrorListMailboxesFailed    = "Ordner konnten nicht aufgelistet werden — bitte Host, Port und Zugangsdaten prüfen."
+
+	AccountListMailboxes = "Ordner auflisten"
 )
 
 // Einstellungen — Kontoübersicht.

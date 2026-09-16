@@ -112,6 +112,22 @@ func (f *fakeMessageSource) Close() error {
 	return nil
 }
 
+// fakeMailboxListingSource ergänzt fakeMessageSource um
+// sync.MailboxLister — für Tests von ListMailboxes, ohne dass jede
+// fakeMessageSource diesen (optionalen) Port implementieren müsste.
+type fakeMailboxListingSource struct {
+	fakeMessageSource
+	mailboxes []string
+	listErr   error
+}
+
+func (f *fakeMailboxListingSource) ListMailboxes(context.Context) ([]string, error) {
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	return f.mailboxes, nil
+}
+
 func testAccount(t *testing.T, id account.AccountID) *account.MailAccount {
 	t.Helper()
 	acc, err := account.NewMailAccount(id, "Test", "imap.example.com", 993, "user@example.com", "INBOX", true, time.Now())
@@ -200,6 +216,48 @@ func TestTestConnection_Failure(t *testing.T) {
 	uc := &manageaccount.UseCase{NewSource: func() sync.MessageSource { return source }}
 
 	err := uc.TestConnection(context.Background(), *testAccount(t, "acc-1"), account.NewSecretFromString("x"))
+	require.Error(t, err)
+}
+
+func TestListMailboxes_Success_ReturnsMailboxesAndClosesConnection(t *testing.T) {
+	t.Parallel()
+
+	source := &fakeMailboxListingSource{mailboxes: []string{"INBOX", "INBOX/DMARC"}}
+	uc := &manageaccount.UseCase{NewSource: func() sync.MessageSource { return source }}
+
+	got, err := uc.ListMailboxes(context.Background(), *testAccount(t, "acc-1"), account.NewSecretFromString("x"))
+	require.NoError(t, err)
+	require.Equal(t, []string{"INBOX", "INBOX/DMARC"}, got)
+	require.True(t, source.closed, "Postfachliste muss die Verbindung wieder schließen")
+}
+
+func TestListMailboxes_ConnectFails_ReturnsError(t *testing.T) {
+	t.Parallel()
+
+	source := &fakeMailboxListingSource{fakeMessageSource: fakeMessageSource{connectErr: errTest}}
+	uc := &manageaccount.UseCase{NewSource: func() sync.MessageSource { return source }}
+
+	_, err := uc.ListMailboxes(context.Background(), *testAccount(t, "acc-1"), account.NewSecretFromString("x"))
+	require.Error(t, err)
+}
+
+func TestListMailboxes_ListFails_ReturnsError(t *testing.T) {
+	t.Parallel()
+
+	source := &fakeMailboxListingSource{listErr: errTest}
+	uc := &manageaccount.UseCase{NewSource: func() sync.MessageSource { return source }}
+
+	_, err := uc.ListMailboxes(context.Background(), *testAccount(t, "acc-1"), account.NewSecretFromString("x"))
+	require.ErrorIs(t, err, errTest)
+}
+
+func TestListMailboxes_SourceWithoutMailboxLister_ReturnsClearError(t *testing.T) {
+	t.Parallel()
+
+	source := &fakeMessageSource{}
+	uc := &manageaccount.UseCase{NewSource: func() sync.MessageSource { return source }}
+
+	_, err := uc.ListMailboxes(context.Background(), *testAccount(t, "acc-1"), account.NewSecretFromString("x"))
 	require.Error(t, err)
 }
 

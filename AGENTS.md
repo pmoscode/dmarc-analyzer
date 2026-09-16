@@ -226,3 +226,19 @@ die Standardauswahl aufrufen (harmlos ohne Callback), und `OnChanged` erst
 danach zuweisen, wenn der Rest des Widgets fertig aufgebaut ist — siehe
 `reports/list.go`. Gilt für jeden `widget.Select`, dessen `OnChanged` auf
 später im Konstruktor zugewiesene Felder zugreift.
+
+## `uitest.FindEntries` findet `*widget.SelectEntry` nicht
+
+`uitest.FindEntries` (internal/ui/uitest/walk.go) macht eine
+Typassertion auf den konkreten Typ `*widget.Entry`. `widget.SelectEntry`
+*bettet* `Entry` ein, ist aber ein eigener konkreter Typ — die Assertion
+schlägt fehl, ein `SelectEntry`-Feld (z. B. `settings.AccountForm.mailbox`,
+seit AP 6 ein Ordner-Picker) taucht in `FindEntries`-Ergebnissen **nicht**
+auf, obwohl es sich wie ein Entry verhält und `.Text`/`.SetText()` genauso
+funktionieren. Tests, die Formularfelder über feste Indizes in
+`FindEntries(...)` ansprechen (z. B.
+`onboarding/wizard_test.go:fillValidAccountForm`), müssen bei jeder
+Umstellung eines Feldes von `*widget.Entry` auf `*widget.SelectEntry` neu
+durchgezählt werden — das Feld verschwindet aus der Liste, alle
+nachfolgenden Indizes rutschen um eins nach vorn. Kein Bug im Widget
+selbst, nur eine Falle für index-basierte Testhelfer.

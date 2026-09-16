@@ -13,6 +13,13 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/sync"
 )
 
+// errMailboxListingUnsupported wird von ListMailboxes zurückgegeben, wenn
+// die per NewSource erzeugte Quelle sync.MailboxLister nicht implementiert
+// — praktisch nie der Fall (der einzige Produktiv-Adapter, IMAP,
+// implementiert ihn), aber der Port ist bewusst optional (siehe
+// domain/sync.MailboxLister-Dokumentation).
+var errMailboxListingUnsupported = errors.New("diese quelle unterstützt kein auflisten von postfächern")
+
 // UseCase orchestriert die Kontoverwaltung.
 type UseCase struct {
 	Accounts    account.Repository
@@ -50,6 +57,31 @@ func (uc *UseCase) TestConnection(ctx context.Context, acc account.MailAccount, 
 		return fmt.Errorf("verbindungstest fehlgeschlagen: %w", err)
 	}
 	return nil
+}
+
+// ListMailboxes verbindet probeweise (wie TestConnection, ohne etwas zu
+// synchronisieren) und listet die auf dem Server vorhandenen
+// Postfächer/Ordner auf — Grundlage für einen Ordner-Picker im
+// Kontoformular, weil DMARC-Berichte nicht zwangsläufig im Wurzelpostfach
+// (INBOX) landen (z. B. per Mailregel in einen Unterordner einsortiert).
+func (uc *UseCase) ListMailboxes(ctx context.Context, acc account.MailAccount, secret account.Secret) ([]string, error) {
+	source := uc.NewSource()
+	defer func() { _ = source.Close() }()
+
+	if err := source.Connect(ctx, acc, secret); err != nil {
+		return nil, fmt.Errorf("verbindung für die postfachliste fehlgeschlagen: %w", err)
+	}
+
+	lister, ok := source.(sync.MailboxLister)
+	if !ok {
+		return nil, errMailboxListingUnsupported
+	}
+
+	mailboxes, err := lister.ListMailboxes(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("postfächer konnten nicht aufgelistet werden: %w", err)
+	}
+	return mailboxes, nil
 }
 
 // TestConnectionByID lädt ein bereits gespeichertes Konto samt

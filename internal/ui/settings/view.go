@@ -142,7 +142,8 @@ func (v *View) refreshContent() {
 }
 
 func (v *View) showAddDialog() {
-	form := NewAccountForm()
+	form := NewAccountForm(v.window)
+	form.ListMailboxes = v.accounts.ListMailboxes
 	dialog.ShowCustomConfirm(i18n.SettingsAddAccount, i18n.ButtonSave, i18n.ButtonBack, form, func(ok bool) {
 		if !ok {
 			return

@@ -172,7 +172,7 @@ func TestView_SubmitNewAccount_ValidForm_CreatesAccountAndReloads(t *testing.T) 
 	changed := false
 	v.OnAccountsChanged = func() { changed = true }
 
-	form := NewAccountForm()
+	form := NewAccountForm(nil)
 	form.host.SetText("imap.example.com")
 	form.username.SetText("user@example.com")
 	form.password.SetText("app-passwort")
@@ -193,7 +193,7 @@ func TestView_SubmitNewAccount_InvalidForm_DoesNotCreateAccount(t *testing.T) {
 	v := newSyncTestView(uc, w)
 	w.SetContent(v)
 
-	form := NewAccountForm() // Host/Username/Passwort leer
+	form := NewAccountForm(nil) // Host/Username/Passwort leer
 	v.submitNewAccount(form)
 
 	require.Empty(t, repo.accounts)

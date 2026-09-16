@@ -144,3 +144,12 @@ die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
   `NewView()`-Aufruf über den vorzeitig ausgelösten Handler auf das noch
   nicht zugewiesene `v.container` zu (Nil-Pointer-Panic) — aufgedeckt
   durch einen einfachen Konstruktionstest.
+- Ordner-Picker fürs Kontoformular: DMARC-Berichte landen nicht
+  zwangsläufig im Wurzelpostfach — ein neuer, optionaler Port
+  `sync.MailboxLister` (implementiert von `imap.Adapter` über IMAP LIST,
+  ohne `\Noselect`-Postfächer) plus `manageaccount.UseCase.ListMailboxes`
+  lassen das Kontoformular (Einstellungen und Ersteinrichtungs-Assistent)
+  die auf dem Server tatsächlich vorhandenen Postfächer/Unterordner
+  auflisten. Das Postfach-Feld ist jetzt ein `widget.SelectEntry`
+  (weiterhin frei eintippbar, zusätzlich mit den gefundenen Ordnern als
+  Dropdown).

@@ -93,7 +93,8 @@ func (w *Wizard) setBody(objects ...fyne.CanvasObject) {
 func (w *Wizard) showAccountStep() {
 	w.current = stepAccount
 	w.banner.Hide()
-	w.form = settings.NewAccountForm()
+	w.form = settings.NewAccountForm(w.window)
+	w.form.ListMailboxes = w.accounts.ListMailboxes
 
 	next := widget.NewButton(i18n.ButtonNext, w.submitAccountStep)
 	next.Importance = widget.HighImportance
