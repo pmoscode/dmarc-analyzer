@@ -270,19 +270,68 @@ Optimierungspunkt für später vorgemerkt, kein Blocker für AP 2.
 
 **Ziel:** Aus einem echten Postfach wird nur Neues geholt.
 
-- [ ] IMAP-Adapter: TLS erzwungen, `BODY.PEEK`, UID-basiert, streamender Iterator
-- [ ] `UIDVALIDITY`-Wechsel → vollständiger Rescan, Duplikate fängt der Index
-- [ ] `SyncState` nach jeder Nachricht fortschreiben
-- [ ] Backoff bei temporären Fehlern (3 Versuche)
-- [ ] Keyring-Adapter, Service `de.pmoscode.dmarc-analyzer`
-- [ ] Typ `Secret` mit maskierendem `String()`/`MarshalJSON()` + Test, der
-      beweist, dass `%v` und JSON nichts preisgeben
-- [ ] Linux-Fallback: AES-256-GCM-Dateispeicher, Schlüssel via scrypt
-- [ ] Kontolöschung entfernt Metadaten **und** Keyring-Eintrag
-- [ ] Tests gegen einen In-Process-IMAP-Server, besonders UID-Logik
+- [x] IMAP-Adapter (`internal/infra/imap.Adapter`): TLS erzwungen sofern
+      `MailAccount.UseTLS` (context-fähiger Dial über `tls.Dialer`/
+      `net.Dialer`, nie `InsecureSkipVerify`), `BODY.PEEK[]` **und**
+      `EXAMINE` statt `SELECT` (read-only, doppelt abgesichert), UID-basiert,
+      streamender `iter.Seq2`-Iterator über `FetchMessageData.Collect()` je
+      Nachricht (nicht die ganze Ergebnismenge auf einmal)
+- [x] `UIDVALIDITY`-Wechsel → vollständiger Rescan (`startUID = 1`,
+      `baseline.LastUID = 0`), Duplikate fängt der UNIQUE-Index aus AP 2 ab
+      — mit In-Process-Server verifiziert (`TestFetchNew_
+      UIDValidityChange_TriggersFullRescan`)
+- [x] `SyncState` (`sync.State`) nach jeder Nachricht fortschreiben —
+      **Präzisierung:** `FetchNew` selbst schreibt nichts fort, sondern
+      liefert einen Baseline-State (v. a. die aktuelle `UIDValidity`) plus
+      pro Nachricht deren UID; der Aufrufer (SyncReports-Use-Case, AP 4)
+      schreibt `LastUID` nach jeder erfolgreich verarbeiteten Nachricht
+      fort. Siehe Kommentar an `sync.MessageSource` in `ports.go`.
+- [x] Backoff bei temporären Fehlern (3 Versuche, exponentiell) — **nur für
+      den Verbindungsaufbau**, nicht für Login: ein falsches Passwort wird
+      durch Wiederholen nicht richtig und wiederholte Fehlversuche können
+      Konten beim Provider sperren. Mit einem echten transienten Fehler
+      verifiziert (`TestConnect_RetriesTransientDialFailure`: Server startet
+      erst während der Backoff-Wartezeit zwischen Versuch 1 und 2).
+- [x] Keyring-Adapter (`internal/infra/keyring.OSStore`), Service
+      `de.pmoscode.dmarc-analyzer`
+- [x] Typ `Secret` (`internal/domain/account`) mit maskierendem
+      `String()`/`MarshalJSON()` + Tests. **Ein echtes Leck dabei gefunden
+      und behoben:** `%#v` benutzt `fmt.GoStringer`, nicht `fmt.Stringer —
+      ohne eigene `GoString()`-Methode hätte `%#v` die rohen Secret-Bytes
+      hex-kodiert gezeigt, obwohl `%v`/`%+v` bereits korrekt maskierten. Der
+      erste Testentwurf hätte das nicht gemerkt (ASCII-Substring-Suche
+      erkennt Hex-Kodierung nicht) — Test entsprechend verschärft. Siehe
+      AGENTS.md, Abschnitt „Maskierte Typen".
+- [x] Linux-Fallback (`internal/infra/keyring.FileStore`): AES-256-GCM
+      (Standardbibliothek `crypto/aes`/`crypto/cipher`), Schlüssel via
+      `scrypt` (neu gepinnt: `golang.org/x/crypto`, siehe
+      `docs/DEPENDENCIES.md`) aus Master-Passphrase + persistiertem Salt.
+      `keyring.IsAvailable()` prüft den OS-Schlüsselbund per Kanarienwert
+      statt aus einer bestimmten Fehlerklasse zu raten — die Entscheidung
+      *welcher* Store verwendet wird, trifft die Composition Root (AP 4/5),
+      nicht der Adapter selbst.
+- [~] Kontolöschung entfernt Metadaten **und** Keyring-Eintrag — **nur die
+      Keyring-Hälfte ist AP 3**: `CredentialStore.Delete` ist implementiert
+      und getestet (idempotent). Die Metadaten-Hälfte braucht
+      `account.Repository` gegen SQLite (`accountrepo.go`), das bewusst wie
+      in AP 1/2 für `MessageSource` begründet erst in AP 4 entsteht, wenn
+      die Kontoverwaltung (`internal/app/manageaccount`) beide Hälften
+      zusammenführt. Der Port `account.Repository` ist bereits definiert.
+- [x] Tests gegen einen In-Process-IMAP-Server (`imapmemserver`, go-imaps
+      eigene Testserver-Komponente), 11 Tests inkl. UID-Logik,
+      Kontext-Abbruch (vor und während der Iteration), PEEK/kein-\Seen-Flag.
+      **Ein Bug in der Beta-Bibliothek gefunden:**
+      `imapmemserver.User.Append` mit `nil`-Options dereferenziert
+      ungeprüft und panickt — mit `&imap.AppendOptions{}` umgangen,
+      dokumentiert im Test.
 
-**Fertig wenn:** Zweiter Sync-Lauf direkt nach dem ersten holt null Nachrichten;
-kein Testlauf enthält ein Passwort in Logs oder Fehlertexten.
+**Fertig wenn:** Zweiter Sync-Lauf direkt nach dem ersten holt null
+Nachrichten — erreicht, `TestFetchNew_SecondSync_ReturnsNoNewMessages` bildet
+genau das nach. Kein Testlauf enthält ein Passwort in Logs oder
+Fehlertexten — die Testserver-Logs wurden geprüft, `Secret` verhindert es
+strukturell; einzige bekannte Grenze: die an `imapclient.Login` als
+`string` übergebene Kopie des Passworts kann nicht mehr aktiv überschrieben
+werden (Go-Strings sind unveränderlich), siehe Kommentar an `Secret.Zero()`.
 
 ### AP 4 — Anwendungsschicht
 

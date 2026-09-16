@@ -62,7 +62,8 @@ Abschnitt 4.
 Domänentypen heißen nicht `report.ReportKey`, sondern `report.Key` — sonst
 stuttert der qualifizierte Name (`report.ReportKey`). Ausnahme: wenn die
 Kurzform mit einem Feldnamen kollidieren würde (`report.ReportID` bleibt so,
-weil `AggregateReport.ID ID` unlesbar wäre — siehe Kommentar im Code).
+weil `AggregateReport.ID ID` unlesbar wäre — ebenso `account.AccountID`
+wegen `MailAccount.ID ID` — siehe Kommentar im jeweiligen Code).
 `golangci-lint` (revive `exported`-Regel) erzwingt das; nicht mit
 `//nolint` pauschal umgehen, sondern umbenennen, außer eine echte Kollision
 verhindert es.
@@ -114,3 +115,33 @@ go-keyring, go-chart) stehen in `docs/DEPENDENCIES.md`, nicht in `go.mod`.
 - Unbekannte/RFC-abweichende Enum-Werte werden nie verworfen, sondern auf
   einen `Unknown`-Wert abgebildet — Provider halten sich nicht immer an den
   RFC, der Import darf daran nicht scheitern.
+
+## Maskierte Typen (Secret & Co.): `%#v` nicht vergessen
+
+`String()`/`MarshalJSON()` reichen nicht, um einen Wert wirklich
+unauslesbar zu machen — `%#v` benutzt `fmt.GoStringer` (`GoString()`),
+nicht `fmt.Stringer`. Ohne eigene `GoString()`-Methode zeigt `%#v` bei
+einem Struct mit einem `[]byte`-Feld die Rohbytes hex-kodiert (trivial
+rückführbar), obwohl `%v`/`%+v` bereits korrekt maskiert sind — gefunden in
+`internal/domain/account.Secret` (siehe `secret.go`/`secret_test.go`). Bei
+jedem neuen maskierten Typ: `GoString()` mit ergänzen, und im Test nicht
+nur auf den Klartext-Substring prüfen, sondern zusätzlich auf die
+hex-kodierte Form (`encoding/hex.EncodeToString`) — sonst fällt genau diese
+Lücke im Test nicht auf.
+
+## go-imap/v2 ist Beta — bekannte Fallstricke
+
+- `imapmemserver.User.Append(mailbox, reader, nil)` **panickt** (Nil-Pointer,
+  `mailbox.go: appendBytes` liest `options.Time`/`options.Flags` ungeprüft).
+  Immer `&imap.AppendOptions{}` statt `nil` übergeben. Siehe
+  `internal/infra/imap/testserver_test.go`.
+- Die `Dial*`-Funktionen in `imapclient` sind nicht context-fähig. Eigene
+  Verbindung per `net.Dialer`/`tls.Dialer` mit `DialContext` aufbauen und an
+  `imapclient.New(conn, opts)` übergeben (siehe `dial.go`); blockierende
+  Befehle (`Login().Wait()`, `Fetch()`/`Next()`) über `runCtx()` context-fähig
+  machen (schließt die Verbindung bei `ctx.Done()`, das lässt den
+  blockierenden Aufruf mit einem Fehler zurückkehren).
+- Bei jedem `go get` innerhalb dieses Moduls: `go mod tidy` nicht vergessen —
+  sonst bleiben frisch direkt importierte Pakete fälschlich als
+  `// indirect` markiert (passiert, wenn `go get` mehrere transitive
+  Abhängigkeiten in einem Rutsch auflöst).

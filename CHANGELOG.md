@@ -45,3 +45,17 @@ die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 - Integrationstests gegen eine temporäre Datei-DB (WAL, echte
   Transaktionen) sowie ein Performance-Test, der 100.000 Records importiert
   und eine typische Berichtstabellen-Abfrage darauf misst (~7-8 ms).
+- Mail & Sicherheit (AP 3): `internal/domain/account` (Aggregate
+  `MailAccount`, Typ `Secret` mit strukturell erzwungener Maskierung über
+  `String()`/`GoString()`/`MarshalJSON()`, Ports `Repository` und
+  `CredentialStore`).
+- IMAP-Adapter (`internal/infra/imap`) gegen `github.com/emersion/go-imap/v2`:
+  context-fähiger TLS-Verbindungsaufbau, `EXAMINE`+`BODY.PEEK[]` (Postfach
+  bleibt unberührt), UID-basierter streamender Iterator, automatischer
+  Rescan bei `UIDVALIDITY`-Wechsel, Backoff mit 3 Versuchen für den
+  Verbindungsaufbau (nicht für Login). Getestet gegen einen in-process
+  IMAP-Server (`imapmemserver`), 11 Tests, 89 % Coverage.
+- Keyring-Adapter (`internal/infra/keyring`): `OSStore` gegen den
+  Betriebssystem-Schlüsselbund (Service `de.pmoscode.dmarc-analyzer`),
+  `FileStore` als AES-256-GCM-Fallback mit scrypt-Schlüsselableitung für
+  Systeme ohne Secret Service, `IsAvailable()` zur Laufzeit-Erkennung.

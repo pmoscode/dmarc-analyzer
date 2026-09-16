@@ -19,6 +19,9 @@ nicht der aktuelle `go.mod`-Inhalt.
 | --- | --- | --- |
 | `github.com/stretchr/testify` | `v1.12.1` | `require` in allen Tests ab AP 0 (siehe IMPLEMENTIERUNG.md Abschnitt 12.4) |
 | `modernc.org/sqlite` | `v1.59.0` | Persistenz (AP 2), CGO-frei — genau die hier vorab recherchierte Version |
+| `github.com/emersion/go-imap/v2` | `v2.0.0-beta.8` | IMAP-Adapter (AP 3, `internal/infra/imap`) — genau die vorab recherchierte Version |
+| `github.com/zalando/go-keyring` | `v0.2.8` | OS-Schlüsselbund-Adapter (AP 3, `internal/infra/keyring.OSStore`) — genau die vorab recherchierte Version |
+| `golang.org/x/crypto` | `v0.57.0` | `scrypt` für den Linux-Datei-Fallback (AP 3, `internal/infra/keyring.FileStore`). **Nicht vorab recherchiert** — in `IMPLEMENTIERUNG.md` Abschnitt 3 nicht gelistet, weil AES-256-GCM selbst aus `crypto/aes`/`crypto/cipher` (Standardbibliothek) kommt; nur die Schlüsselableitung per scrypt braucht `x/crypto`, das keine eigene RFC-7489-artige Reifediskussion nötig hatte — offizielles, vom Go-Team gepflegtes Erweiterungsmodul, hier ohne Weiteres wie Standardbibliothek behandelt. |
 
 ## Gepinnt für spätere Arbeitspakete
 
@@ -32,10 +35,9 @@ Ausgangspunkt, kein Dogma.
 | Modul | Version (Stand 2026-09-16) | Geplant für | Hinweis |
 | --- | --- | --- | --- |
 | `fyne.io/fyne/v2` | `v2.8.1` | AP 5 | UI-Framework, Vorgabe aus `FEATURES.md` |
-| `github.com/emersion/go-imap/v2` | `v2.0.0-beta.8` | AP 3 | Noch Beta — siehe Risiko in IMPLEMENTIERUNG.md Abschnitt 16, Version fest pinnen |
-| `github.com/emersion/go-message` | `v0.18.2` | AP 3 | MIME-Zerlegung roher IMAP-Nachrichten. **Korrektur:** ursprünglich auch für AP 1 vorgesehen, aber `dmarcxml.Parser` arbeitet auf bereits extrahierten Anhang-Bytes (`sync.RawAttachment`), nicht auf rohen MIME-Mails — die MIME-Zerlegung ist ausschließlich Aufgabe des IMAP-Adapters in AP 3. |
-| `github.com/zalando/go-keyring` | `v0.2.8` | AP 3 | OS-Schlüsselbund |
+| `github.com/emersion/go-message` | `v0.18.2` | AP 4 | MIME-Zerlegung roher Nachrichten zu `sync.RawAttachment` — protokollunabhängiger Schritt zwischen `MessageSource.FetchNew` und `ReportParser`, siehe Kommentar in `internal/domain/sync/ports.go`. Aktuell nur *transitiv* über `go-imap/v2/imapclient` in `go.mod` (als `// indirect` markiert), unser eigener Code importiert es noch nicht. |
 | `github.com/wcharczuk/go-chart/v2` | `v2.1.2` | AP 6 | Hinter `ChartRenderer`-Port gekapselt |
 
 Standardbibliothek (`encoding/xml`, `compress/gzip`, `archive/zip`,
-`database/sql`, `log/slog`, `fyne.io/fyne/v2/test`) braucht kein Pinning.
+`database/sql`, `log/slog`, `crypto/aes`, `crypto/cipher`,
+`fyne.io/fyne/v2/test`) braucht kein Pinning.
