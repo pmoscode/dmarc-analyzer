@@ -18,6 +18,18 @@ type RawAttachment struct {
 	Data        []byte
 }
 
+// MessageDecoder zerlegt eine rohe Nachricht (RawMessage.Data) in ihre
+// Anhänge — der protokollunabhängige Schritt zwischen MessageSource und
+// ReportParser (siehe Kommentar an RawMessage). Implementiert in AP 4
+// gegen github.com/emersion/go-message (internal/infra/mailmime). Eigener
+// Port statt eines direkten Imports von internal/infra/mailmime aus der
+// Anwendungsschicht — sonst würde syncreports an einer konkreten
+// Infra-Technologie hängen statt an einem Port (DIP, IMPLEMENTIERUNG.md
+// Abschnitt 4.2).
+type MessageDecoder interface {
+	Decode(data []byte) ([]RawAttachment, error)
+}
+
 // ReportParser wandelt einen Rohanhang in Domänenobjekte. Über Supports()
 // wird die passende Implementierung gewählt — so kommen RUF und TLS-RPT
 // später additiv hinzu, ohne bestehenden Code zu ändern (Open/Closed,

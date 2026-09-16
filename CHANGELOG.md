@@ -59,3 +59,26 @@ die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
   Betriebssystem-Schlüsselbund (Service `de.pmoscode.dmarc-analyzer`),
   `FileStore` als AES-256-GCM-Fallback mit scrypt-Schlüsselableitung für
   Systeme ohne Secret Service, `IsAvailable()` zur Laufzeit-Erkennung.
+- Anwendungsschicht (AP 4): `syncreports.UseCase` orchestriert den
+  kompletten inkrementellen Sync (verbinden, abholen, MIME zerlegen,
+  parsen, deduplizieren, speichern, Fortschritt sichern) als nebenläufige
+  Pipeline (Abholen/Parsen parallel, Schreiben seriell) mit korrekter
+  Fortschritts-Fortschreibung auch bei außer der Reihe abgeschlossenen
+  Nachrichten. `importfiles.UseCase` importiert dieselben Formate aus
+  lokalen Dateien (.eml, .xml, .xml.gz, .zip) und teilt sich MIME-Zerlegung
+  und Deduplizierung mit `syncreports`. `manageaccount.UseCase` verwaltet
+  Konten vollständig (Anlegen, Verbindungstest, Löschen inkl.
+  Schlüsselbund-Eintrag). `statistics.UseCase` berechnet Dashboard-
+  Kennzahlen inklusive Vergleich zur Vorperiode. `queryreports.UseCase`
+  und `exportdata` (CSV-Export) ergänzen die Anwendungsschicht.
+- Neue SQLite-Adapter: `AccountRepository`, `SyncStateRepository`,
+  `FailedImportRepository`, `StatisticsRepository` (SQL-Aggregation statt
+  Laden einzelner Records).
+- MIME-Zerlegung (`internal/infra/mailmime`) roher Nachrichten in Anhänge,
+  gegen `github.com/emersion/go-message`.
+- CLI (`cmd/dmarc-analyzer`): `sync`, `import <pfad>`, `stats`,
+  `account add|list|test|delete`. Composition Root verdrahtet Adapter nur
+  für den tatsächlich aufgerufenen Unterbefehl — `stats`/`import` fassen
+  nie den OS-Schlüsselbund an.
+- `report.ErrDuplicate` und `report.SaveIfNew` als gemeinsame,
+  domänenseitige Deduplizierungslogik für alle Importwege.

@@ -337,17 +337,84 @@ werden (Go-Strings sind unveränderlich), siehe Kommentar an `Secret.Zero()`.
 
 **Ziel:** Der komplette Ablauf ist ohne UI nutzbar.
 
-- [ ] Use Cases `syncreports`, `queryreports`, `statistics`, `manageaccount`,
-      `exportdata`
-- [ ] Pipeline Abholen/Parsen nebenläufig, Schreiben seriell, `-race` sauber
-- [ ] Fortschritts- und Ergebnisberichte (neu / übersprungen / fehlerhaft)
-- [ ] Datei-Import als zweite `MessageSource` (Vorschlag 11.1)
-- [ ] CLI: `dmarc-analyzer sync --headless`, `import <pfad>`, `stats`
-- [ ] Alle Use Cases gegen handgeschriebene Fakes getestet, Abdeckung ≥ 85 %
-- [ ] Abbruch per `context.Cancel` hinterlässt konsistenten Zustand (Test)
+- [x] Use Cases `syncreports`, `queryreports`, `statistics`, `manageaccount`,
+      `exportdata` — plus `importfiles` (siehe nächster Punkt) und, als
+      Nebenprodukt, `internal/infra/mailmime` (MIME-Zerlegung, AP 3 bewusst
+      zurückgestellt) und drei neue SQLite-Repositories (`accountrepo.go`,
+      `syncstaterepo.go`, `failedimportrepo.go`), ebenfalls bewusst aus
+      AP 1–3 hierher verschoben, wo die tatsächlichen Verbraucher entstehen.
+      `statistics` bekam dabei einen `analysis`-Port (Statistics-Typen,
+      `Repository.Compute`) — die in AP 2 zurückgestellte SQL-Aggregation
+      ("Aggregationen für die Kennzahlen") landet hier, zugeschnitten statt
+      als Erweiterung von `report.Query`.
+- [x] Pipeline Abholen/Parsen nebenläufig, Schreiben seriell, `-race` sauber
+      — `syncreports.runPipeline`: eine Fetcher-Goroutine, ein
+      Parser-Worker-Pool (konfigurierbare Größe), ein einzelner Schreiber.
+      **Design-Detail über den Wortlaut hinaus:** da Worker außer der
+      Reihe fertig werden können, verfolgt ein `progressTracker` die
+      lückenlose Fortschrittsgrenze statt einfach die höchste gesehene UID
+      zu übernehmen — sonst könnte `LastUID` bei einem Absturz eine noch
+      nicht gespeicherte Nachricht überspringen. Mit gezielten Tests für
+      genau diesen Out-of-Order-Fall abgesichert.
+- [x] Fortschritts- und Ergebnisberichte (neu / übersprungen / fehlerhaft) —
+      `Result{New, Skipped, Failed, Errors}`, fehlerhafte Anhänge landen in
+      `failed_imports` (neuer `FailedImportRepository`-Port).
+- [x] Datei-Import (Vorschlag 11.1) — **bewusst NICHT** als zweite
+      `MessageSource`: der Port verlangt seit AP 3 `account.MailAccount` +
+      `Secret` für `Connect`, das hat ein lokaler Dateiimport nicht. Eigener
+      Use Case `internal/app/importfiles`, der sich `MessageDecoder` und
+      `ReportParser` mit `syncreports` teilt (dieselbe MIME-Zerlegung für
+      IMAP wie für `.eml`-Dateien) und dieselbe Dedup-Logik nutzt — dafür
+      extrahiert als domain-seitiges `report.SaveIfNew(ctx, repo, r)`
+      (siehe unten), statt in beiden Use Cases dupliziert.
+- [x] CLI: `dmarc-analyzer sync --headless`, `import <pfad>`, `stats` — plus
+      `account add|list|test|delete` (nicht im Wortlaut gefordert, aber ohne
+      irgendeinen Weg, ein Konto anzulegen, wäre `sync` von der CLI aus gar
+      nicht nutzbar; siehe Diskussion unten bei "Fertig wenn"). Composition
+      Root (`cmd/dmarc-analyzer/wire.go`) verdrahtet Adapter **nur für den
+      tatsächlich aufgerufenen Unterbefehl** — `stats`/`import` bauen keinen
+      Credential-Store auf und fassen damit nie den echten OS-Schlüsselbund
+      an, das passiert ausschließlich für `sync`/`account`.
+- [x] Alle Use Cases gegen handgeschriebene Fakes getestet, Abdeckung ≥ 85 %
+      — erreicht: `syncreports` 92,1 %, `manageaccount` 91,7 %,
+      `statistics` 90,9 %, `importfiles` 86,2 %, `exportdata` 87,8 %,
+      `queryreports` 100 %.
+- [x] Abbruch per `context.Cancel` hinterlässt konsistenten Zustand (Test) —
+      `TestSyncAccount_ContextCancelledMidSync_LeavesConsistentState`:
+      `LastUID` überspringt nie eine nicht tatsächlich verarbeitete
+      Nachricht, "neu" gezählte Reports sind immer wirklich gespeichert.
 
-**Fertig wenn:** Ein vollständiger Import aus einem Postfach läuft über die CLI
-durch, inklusive Kennzahlenausgabe.
+**Zwei echte Bugs unterwegs gefunden und behoben** (durch fehlschlagende
+Tests entdeckt, nicht nur behauptet):
+1. `ErrDuplicateReport` saß in `internal/infra/sqlite` — `syncreports`
+   hätte es importieren müssen, ein Verstoß gegen DIP (App-Schicht darf nur
+   an Domain-Ports hängen, AGENTS.md). Verschoben nach `report.ErrDuplicate`
+   im Domain-Port, `sqlite.ReportRepository.Save` gibt ihn jetzt (gewrappt)
+   zurück statt eines eigenen Sentinels.
+2. Ein bisher unausgesprochener Vertrag an `account.CredentialStore.Store`:
+   die echten Adapter (`OSStore`, `FileStore`) verwandeln die Secret-Bytes
+   synchron in eine eigene Kopie (String-Konversion bzw. Verschlüsselung),
+   ein Aufrufer darf das übergebene `Secret` direkt danach mit `Zero()`
+   überschreiben. Ein naiver Test-Fake, der nur flach speichert, würde vom
+   selben `Zero()`-Aufruf nachträglich mitgeleert (geteiltes Backing-Array)
+   — beim CLI-Test `account add` tatsächlich aufgetreten. Vertrag jetzt am
+   Port dokumentiert, alle drei Fake-`CredentialStore`-Implementierungen im
+   Repo kopieren jetzt defensiv (`account.NewSecret(s.Expose())`).
+
+**Fertig wenn:** Ein vollständiger Import aus einem Postfach läuft über die
+CLI durch, inklusive Kennzahlenausgabe. — Mit einer ehrlichen Einschränkung
+erreicht: end-to-end über die echte, gebaute Binary verifiziert für
+**Datei-Import** (`dmarc-analyzer import` mit drei echten Provider-Stil-
+Fixtures — RFC-7489-Beispiel, Google-gzip, Microsoft-zip —, danach
+`dmarc-analyzer stats` mit von Hand nachgerechneten Werten, Duplikaterkennung
+bei erneutem Import). **Nicht** end-to-end mit der echten Binary gegen ein
+echtes/simuliertes Postfach getestet — das würde `account add` erfordern,
+was den echten OS-Schlüsselbund dieser Maschine anfassen würde, das wollte
+ich ohne Rückfrage nicht auslösen. Der IMAP-Pfad selbst ist stattdessen
+doppelt abgesichert: AP 3 testet den Adapter gegen einen echten In-Process-
+IMAP-Server, AP 4 testet `syncreports.SyncAccount` (der Use Case, der ihn
+aufruft) umfassend gegen Fakes, inklusive des genauen "zweiter Lauf holt
+nichts"-Kriteriums.
 
 ### AP 5 — UI-Grundgerüst
 

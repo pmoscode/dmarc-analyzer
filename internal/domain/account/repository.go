@@ -31,6 +31,18 @@ type Repository interface {
 // Implementiert in AP 3 gegen den OS-Schlüsselbund
 // (internal/infra/keyring), mit verschlüsseltem Dateispeicher als
 // Linux-Fallback (IMPLEMENTIERUNG.md Abschnitt 9).
+//
+// Vertrag für Store-Implementierungen: die übergebenen Bytes (secret.
+// Expose()) dürfen nur synchron innerhalb des Aufrufs gelesen werden —
+// nie eine Referenz auf das zugrunde liegende Slice über den Aufruf
+// hinaus behalten. Aufrufer dürfen das übergebene Secret direkt danach
+// mit Zero() überschreiben (IMPLEMENTIERUNG.md Abschnitt 9: "Secret wird
+// erst unmittelbar vor dem Login gelesen und danach mit Zero()
+// überschrieben"); ein Store, der die Bytes nicht sofort in eine eigene
+// Kopie verwandelt (String-Konversion, Verschlüsselung, …), würde durch
+// ein späteres Zero() nachträglich selbst geleert. Die echten Adapter
+// (OSStore, FileStore) erfüllen das bereits von selbst; ein Test-Fake muss
+// es sich bewusst machen (account.NewSecret(secret.Expose()) kopiert).
 type CredentialStore interface {
 	Store(accountID AccountID, secret Secret) error
 	Retrieve(accountID AccountID) (Secret, error)

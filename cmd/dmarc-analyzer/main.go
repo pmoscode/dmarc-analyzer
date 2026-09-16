@@ -4,6 +4,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -14,23 +15,64 @@ import (
 // Task "build"). Für lokale Entwicklungsbuilds bleibt "dev".
 var version = "dev"
 
+const usage = `dmarc-analyzer ` + `%s` + `
+
+Verwendung:
+  dmarc-analyzer sync [--headless]          Alle konfigurierten Konten synchronisieren
+  dmarc-analyzer import <pfad>...           DMARC-Reports aus Dateien importieren (.eml, .xml, .xml.gz, .zip)
+  dmarc-analyzer stats [--days N] [--domain D]
+                                             Kennzahlen für die letzten N Tage ausgeben (Standard: 30)
+  dmarc-analyzer account add                Konto anlegen (fragt Zugangsdaten interaktiv ab)
+  dmarc-analyzer account list               Konfigurierte Konten auflisten
+  dmarc-analyzer account test <id>          Verbindung zu einem Konto testen
+  dmarc-analyzer account delete <id>        Konto entfernen (Metadaten und Zugangsdaten)
+
+Das grafische Programm (AP 5) startet, sobald kein Unterbefehl erkannt wird
+und eine UI existiert. Bis dahin zeigt der Aufruf ohne Argumente diese Hilfe.
+`
+
 func main() {
-	if err := run(os.Args[1:]); err != nil {
+	if err := run(context.Background(), os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func run(args []string) error {
+func run(ctx context.Context, args []string) error {
 	logger := logging.New()
 	logger.Info("dmarc-analyzer gestartet", "version", version)
 
-	// AP 0 — Grundgerüst: Programm startet, loggt seine Version und beendet
-	// sich sauber. UI-Start und CLI-Unterbefehle (sync/import/stats) folgen
-	// in AP 4 und AP 5.
-	if len(args) > 0 {
-		return fmt.Errorf("unbekanntes Argument %q — Unterbefehle folgen in AP 4", args[0])
+	if len(args) == 0 {
+		fmt.Printf(usage, version)
+		return nil
 	}
 
-	return nil
+	cmd, rest := args[0], args[1:]
+
+	handler, ok := subcommands[cmd]
+	if !ok {
+		return fmt.Errorf("unbekannter Unterbefehl %q — siehe 'dmarc-analyzer' ohne Argumente für die Hilfe", cmd)
+	}
+
+	// Composition Root: erst hier, nachdem der Unterbefehl als bekannt
+	// erkannt wurde, werden konkrete Adapter verdrahtet (echte Datenbank,
+	// echter OS-Schlüsselbund). Ein unbekannter Unterbefehl oder die reine
+	// Hilfeausgabe lösen keinerlei I/O aus — wichtig sowohl für Tests als
+	// auch dafür, dass ein Tippfehler nicht versehentlich die Datenbank
+	// anlegt oder den Schlüsselbund anspricht.
+	application, err := newApp(ctx, cmd)
+	if err != nil {
+		return fmt.Errorf("anwendung konnte nicht initialisiert werden: %w", err)
+	}
+	defer func() { _ = application.Close() }()
+
+	return handler(ctx, application, rest)
+}
+
+// subcommands bildet Unterbefehlsnamen auf ihre Handler ab.
+var subcommands = map[string]func(context.Context, *app, []string) error{
+	"sync":    runSync,
+	"import":  runImport,
+	"stats":   runStats,
+	"account": runAccount,
 }

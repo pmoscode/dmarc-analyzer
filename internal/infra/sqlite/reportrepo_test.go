@@ -88,7 +88,7 @@ func TestSave_DuplicateKey_ReturnsErrDuplicateReport(t *testing.T) {
 	second := newTestReport(t, reportOpts{orgName: "dup.example", reportID: "dup-1"})
 
 	err := repo.Save(ctx, second)
-	require.ErrorIs(t, err, sqlite.ErrDuplicateReport)
+	require.ErrorIs(t, err, report.ErrDuplicate)
 }
 
 func TestExists(t *testing.T) {
@@ -152,7 +152,7 @@ func TestSave_SetsIDOnlyOnSuccess(t *testing.T) {
 	// Erneutes Speichern desselben Domänenobjekts (gleiche Identität)
 	// scheitert an der Deduplizierung — r.ID darf sich dabei nicht ändern.
 	err := repo.Save(ctx, r)
-	require.True(t, errors.Is(err, sqlite.ErrDuplicateReport))
+	require.True(t, errors.Is(err, report.ErrDuplicate))
 	require.Equal(t, firstID, r.ID)
 }
 

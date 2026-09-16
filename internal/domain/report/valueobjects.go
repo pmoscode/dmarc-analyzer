@@ -222,6 +222,15 @@ type PolicyEvaluation struct {
 	Reasons     []PolicyOverrideReason
 }
 
+// PassesDMARC meldet, ob dieser Record DMARC nach RFC 7489 besteht: DKIM
+// oder SPF bestehen (nach Alignment) — DKIM und SPF hier sind bereits die
+// vom berichtenden Empfänger ausgewerteten (aligned) Ergebnisse aus
+// policy_evaluated, keine rohen Auth-Results. Grundlage der DMARC-Pass-Rate
+// in IMPLEMENTIERUNG.md Abschnitt 10.2.
+func (e PolicyEvaluation) PassesDMARC() bool {
+	return e.DKIM == AuthResultPass || e.SPF == AuthResultPass
+}
+
 // Identifiers sind die für die Alignment-Prüfung relevanten Absenderdaten
 // eines Records. HeaderFrom ist nach RFC 7489 immer vorhanden, EnvelopeFrom
 // und EnvelopeTo sind optional.

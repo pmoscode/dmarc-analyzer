@@ -157,3 +157,26 @@ func TestParseAuthResultValue_CoversBothDKIMAndSPFEnums(t *testing.T) {
 		require.Equal(t, want, report.ParseAuthResultValue(input), "input %q", input)
 	}
 }
+
+func TestPolicyEvaluation_PassesDMARC(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		eval report.PolicyEvaluation
+		want bool
+	}{
+		{name: "beide pass", eval: report.PolicyEvaluation{DKIM: report.AuthResultPass, SPF: report.AuthResultPass}, want: true},
+		{name: "nur dkim pass", eval: report.PolicyEvaluation{DKIM: report.AuthResultPass, SPF: report.AuthResultFail}, want: true},
+		{name: "nur spf pass", eval: report.PolicyEvaluation{DKIM: report.AuthResultFail, SPF: report.AuthResultPass}, want: true},
+		{name: "beide fail", eval: report.PolicyEvaluation{DKIM: report.AuthResultFail, SPF: report.AuthResultFail}, want: false},
+		{name: "beide unknown", eval: report.PolicyEvaluation{DKIM: report.AuthResultUnknown, SPF: report.AuthResultUnknown}, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			require.Equal(t, tt.want, tt.eval.PassesDMARC())
+		})
+	}
+}

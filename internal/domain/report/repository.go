@@ -2,8 +2,18 @@ package report
 
 import (
 	"context"
+	"errors"
 	"time"
 )
+
+// ErrDuplicate wird von Save zurückgegeben, wenn bereits ein Report mit
+// derselben fachlichen Identität (Key) gespeichert ist. Als Sentinel-Fehler
+// im Domänen-Port definiert, nicht im SQLite-Adapter — Aufrufer aus der
+// Anwendungsschicht (z. B. syncreports) dürfen an Ports hängen, aber nicht
+// an konkrete Infra-Pakete (DIP, IMPLEMENTIERUNG.md Abschnitt 4.2). Ein
+// Aufrufer prüft i. d. R. vorher per Exists — dieser Fehler ist die letzte
+// Verteidigungslinie gegen eine Race Condition zwischen Exists und Save.
+var ErrDuplicate = errors.New("report mit dieser org_name/report_id/date_begin-kombination existiert bereits")
 
 // Key ist die fachliche Identität eines Reports:
 // (OrgName, ReportID, DateRange.Begin) — siehe IMPLEMENTIERUNG.md

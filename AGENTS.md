@@ -145,3 +145,17 @@ Lücke im Test nicht auf.
   sonst bleiben frisch direkt importierte Pakete fälschlich als
   `// indirect` markiert (passiert, wenn `go get` mehrere transitive
   Abhängigkeiten in einem Rutsch auflöst).
+
+## Fakes für `account.CredentialStore`: defensiv kopieren
+
+`CredentialStore.Store` hat einen impliziten, jetzt am Port dokumentierten
+Vertrag: Implementierungen dürfen sich nach Rückkehr nicht mehr auf
+`secret.Expose()` beziehen, weil Aufrufer das übergebene `Secret` direkt
+danach mit `Zero()` überschreiben dürfen. Die echten Adapter (`OSStore`,
+`FileStore`) erfüllen das automatisch (String-Konversion bzw.
+Verschlüsselung verbrauchen die Bytes synchron). Ein Test-Fake, der das
+`Secret` nur flach speichert (`f.secrets[id] = s`), teilt das
+Backing-Array mit dem Original — ein späteres `Zero()` beim Aufrufer leert
+dann auch den "gespeicherten" Wert. Immer `account.NewSecret(s.Expose())`
+statt `s` speichern. Gefunden über einen echten Testausfall in
+`cmd/dmarc-analyzer/cmd_account_test.go` (AP 4).

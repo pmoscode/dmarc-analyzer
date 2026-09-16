@@ -28,13 +28,6 @@ func NewReportRepository(db *sql.DB) *ReportRepository {
 	return &ReportRepository{db: db}
 }
 
-// ErrDuplicateReport wird von Save zurückgegeben, wenn ein Report mit
-// derselben fachlichen Identität (report.Key) bereits gespeichert ist.
-// Aufrufer sollten stattdessen i. d. R. vorher Exists prüfen — dieser
-// Fehler ist die letzte Verteidigungslinie gegen eine Race Condition
-// zwischen Exists und Save.
-var ErrDuplicateReport = errors.New("report mit dieser org_name/report_id/date_begin-kombination existiert bereits")
-
 // Save speichert einen Report vollständig oder gar nicht: Report, Records,
 // Auth-Ergebnisse und Reasons laufen in einer Transaktion
 // (IMPLEMENTIERUNG.md Abschnitt 7.2/8.2). Bei Erfolg setzt Save r.ID auf
@@ -49,7 +42,7 @@ func (repo *ReportRepository) Save(ctx context.Context, r *report.AggregateRepor
 	reportID, err := insertReport(ctx, tx, r)
 	if err != nil {
 		if isUniqueConstraintError(err) {
-			return ErrDuplicateReport
+			return report.ErrDuplicate
 		}
 		return fmt.Errorf("report konnte nicht gespeichert werden: %w", err)
 	}

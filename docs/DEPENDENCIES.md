@@ -22,6 +22,8 @@ nicht der aktuelle `go.mod`-Inhalt.
 | `github.com/emersion/go-imap/v2` | `v2.0.0-beta.8` | IMAP-Adapter (AP 3, `internal/infra/imap`) — genau die vorab recherchierte Version |
 | `github.com/zalando/go-keyring` | `v0.2.8` | OS-Schlüsselbund-Adapter (AP 3, `internal/infra/keyring.OSStore`) — genau die vorab recherchierte Version |
 | `golang.org/x/crypto` | `v0.57.0` | `scrypt` für den Linux-Datei-Fallback (AP 3, `internal/infra/keyring.FileStore`). **Nicht vorab recherchiert** — in `IMPLEMENTIERUNG.md` Abschnitt 3 nicht gelistet, weil AES-256-GCM selbst aus `crypto/aes`/`crypto/cipher` (Standardbibliothek) kommt; nur die Schlüsselableitung per scrypt braucht `x/crypto`, das keine eigene RFC-7489-artige Reifediskussion nötig hatte — offizielles, vom Go-Team gepflegtes Erweiterungsmodul, hier ohne Weiteres wie Standardbibliothek behandelt. |
+| `github.com/emersion/go-message` | `v0.18.2` | MIME-Zerlegung (AP 4, `internal/infra/mailmime`) zu `sync.RawAttachment` — genau die vorab recherchierte Version, jetzt direkt importiert (vorher nur transitiv über `go-imap/v2/imapclient`). |
+| `github.com/google/uuid` | `v1.6.0` | Konto-IDs beim Anlegen (AP 4, `cmd/dmarc-analyzer` CLI `account add`). War schon vorher transitiv vorhanden (über `modernc.org/sqlite`), jetzt direkt importiert. Nicht vorab recherchiert — offizielles, weit verbreitetes Google-Modul ohne eigene Versionsdiskussion nötig, wie `x/crypto` oben. |
 
 ## Gepinnt für spätere Arbeitspakete
 
@@ -35,7 +37,6 @@ Ausgangspunkt, kein Dogma.
 | Modul | Version (Stand 2026-09-16) | Geplant für | Hinweis |
 | --- | --- | --- | --- |
 | `fyne.io/fyne/v2` | `v2.8.1` | AP 5 | UI-Framework, Vorgabe aus `FEATURES.md` |
-| `github.com/emersion/go-message` | `v0.18.2` | AP 4 | MIME-Zerlegung roher Nachrichten zu `sync.RawAttachment` — protokollunabhängiger Schritt zwischen `MessageSource.FetchNew` und `ReportParser`, siehe Kommentar in `internal/domain/sync/ports.go`. Aktuell nur *transitiv* über `go-imap/v2/imapclient` in `go.mod` (als `// indirect` markiert), unser eigener Code importiert es noch nicht. |
 | `github.com/wcharczuk/go-chart/v2` | `v2.1.2` | AP 6 | Hinter `ChartRenderer`-Port gekapselt |
 
 Standardbibliothek (`encoding/xml`, `compress/gzip`, `archive/zip`,
