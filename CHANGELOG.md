@@ -82,3 +82,21 @@ die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
   nie den OS-Schlüsselbund an.
 - `report.ErrDuplicate` und `report.SaveIfNew` als gemeinsame,
   domänenseitige Deduplizierungslogik für alle Importwege.
+- UI-Grundgerüst (AP 5, `internal/ui`): Hauptfenster mit seitlicher
+  Navigation (Berichte/Einstellungen) und eigenem Theme (Akzentfarbe, hell
+  und dunkel über Fynes `ThemeVariant`-System). `internal/ui/i18n` bündelt
+  alle sichtbaren Texte zentral. `settings.View` zum Anlegen, Testen und
+  Löschen von Konten. Dreistufiger Ersteinrichtungs-Assistent
+  (`onboarding.Wizard`: Konto → Verbindungstest → erster Abgleich).
+  `reports.View` mit lazy-ladender Berichtstabelle über `ReportQuery`
+  (Seitengröße 50) und Detailansicht. Sync-Knopf mit Fortschrittsanzeige
+  und Abbruch, I/O ausschließlich über injizierbares `runBackground`
+  außerhalb des UI-Threads, Rückweg über `fyne.Do()`. Leerzustände und
+  Klartext-Fehlermeldungen für alle Ansichten. Vollständig mit
+  `fyne.io/fyne/v2/test` getestet (Aufbau, Navigation, Formularvalidierung),
+  `-race`-sauber dank injizierbarem `runBackground`.
+- Echter Bug behoben: `settings.View.refreshContent()` überschrieb bei
+  jedem `Reload()` die Kopfzeile (Titel + Hinzufügen-Button) statt der
+  Liste, weil bei `container.NewBorder` der Center-Slot an Index 0 liegt,
+  nicht am Ende von `.Objects` — aufgedeckt durch den Navigationstest
+  `TestShell_SelectNav_SwitchesToSettings`.

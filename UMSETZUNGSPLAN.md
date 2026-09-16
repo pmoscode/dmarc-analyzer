@@ -420,19 +420,42 @@ nichts"-Kriteriums.
 
 **Ziel:** Bedienbares Programm für den Kern-Use-Case.
 
-- [ ] Hauptfenster, seitliche Navigation, eigenes Theme (hell und dunkel)
-- [ ] `internal/ui/i18n` — **alle** Texte zentral, kein String im Widget-Code
-- [ ] Einstellungen: Konto anlegen, Verbindung testen mit klarer Rückmeldung
-- [ ] Ersteinrichtungs-Assistent nach 3.1
-- [ ] Berichtstabelle mit Lazy-Datenquelle über `ReportQuery`
-- [ ] Detailansicht eines Reports
-- [ ] Sync-Knopf mit Fortschritt und Abbruch, I/O nie im UI-Thread,
+- [x] Hauptfenster, seitliche Navigation, eigenes Theme (hell und dunkel)
+- [x] `internal/ui/i18n` — **alle** Texte zentral, kein String im Widget-Code
+- [x] Einstellungen: Konto anlegen, Verbindung testen mit klarer Rückmeldung
+- [x] Ersteinrichtungs-Assistent nach 3.1
+- [x] Berichtstabelle mit Lazy-Datenquelle über `ReportQuery`
+- [x] Detailansicht eines Reports
+- [x] Sync-Knopf mit Fortschritt und Abbruch, I/O nie im UI-Thread,
       Rückweg über `fyne.Do()`
-- [ ] Leerzustände und Klartext-Fehlermeldungen nach 3.1
-- [ ] Tests mit `fyne.io/fyne/v2/test`: Aufbau, Navigation, Formularvalidierung
+- [x] Leerzustände und Klartext-Fehlermeldungen nach 3.1
+- [x] Tests mit `fyne.io/fyne/v2/test`: Aufbau, Navigation, Formularvalidierung
 
 **Fertig wenn:** Ein Nutzer richtet ohne Dokumentation ein Konto ein und sieht
-seine Reports.
+seine Reports. ✅ Erreicht.
+
+**Abweichungen / Erkenntnisse:**
+- Eigenes Theme beschränkt sich bewusst auf eine Akzentfarbe
+  (`appTheme.Color` überschreibt nur `ColorNamePrimary`); Light/Dark-Kontrast
+  und -Umschaltung übernimmt unverändert Fynes `ThemeVariant`-System, da
+  dieses bereits geprüft barrierefrei ist — ein eigenes Kontrastsystem hätte
+  hier nur Risiko ohne Nutzen hinzugefügt.
+- Echter Bug gefunden und behoben: `settings.View.refreshContent()` schrieb
+  den neuen Listen-/Leerzustands-Inhalt fälschlich nach
+  `v.container.Objects[len(v.container.Objects)-1]`. Bei
+  `container.NewBorder(top, nil, nil, nil, center)` landet das variadic
+  `objects`-Argument (hier `center`) aber immer an Index 0 — die
+  Top/Bottom/Left/Right-Objekte werden erst danach angehängt. Dadurch wurde
+  bei jedem `Reload()` die Kopfzeile (Titel „Konten" + Hinzufügen-Button)
+  durch die Liste/den Leerzustand überschrieben, statt umgekehrt — sichtbar
+  wurde das erst durch den fehlschlagenden Shell-Navigationstest
+  `TestShell_SelectNav_SwitchesToSettings`. `reports.View` hatte dasselbe
+  Muster bereits korrekt (Index 0). Fix: beide Zweige schreiben jetzt auf
+  `Objects[0]`.
+- Fyne-Testtreiber führt `fyne.Do()` synchron auf der aufrufenden Goroutine
+  aus (anders als der echte Treiber) — ohne das injizierbare
+  `runBackground`-Feld (Default: echte Goroutine, in Tests synchron ersetzt)
+  hätten Tests unter `-race` echte Data Races gemeldet. Siehe AGENTS.md.
 
 ### AP 6 — Auswertung und Visualisierung
 

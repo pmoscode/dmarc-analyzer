@@ -52,6 +52,14 @@ linters:
         linters:
           - gosec
         text: "G20[12]"
+      # G101 (hartkodierte Credentials): internal/ui/i18n enthält
+      # ausschließlich UI-Beschriftungstexte, keine echten Geheimnisse —
+      # "Passwort" im Label-String ist hier immer nur ein Wort, keine
+      # hartkodierte Zugangsdaten.
+      - path: internal/ui/i18n/.*\.go
+        linters:
+          - gosec
+        text: "G101"
 
 formatters:
   enable:

@@ -159,3 +159,52 @@ Backing-Array mit dem Original — ein späteres `Zero()` beim Aufrufer leert
 dann auch den "gespeicherten" Wert. Immer `account.NewSecret(s.Expose())`
 statt `s` speichern. Gefunden über einen echten Testausfall in
 `cmd/dmarc-analyzer/cmd_account_test.go` (AP 4).
+
+## Fyne-Tests: TestMain mit test.NewApp() nicht vergessen
+
+Jedes `internal/ui/*`-Testpaket braucht eine laufende Headless-Test-App,
+sonst crasht schon `widget.Entry.SetText()` (Textmessung braucht
+`fyne.CurrentApp()`). Immer eine `main_test.go` mit
+`func TestMain(m *testing.M) { test.NewApp(); m.Run() }` anlegen, bevor
+Widget-Konstruktoren aufgerufen werden — nicht erst beim ersten
+Panic merken.
+
+## Fyne-Widgets mit Hintergrund-I/O: `runBackground` injizierbar machen
+
+Fynes Test-Treiber führt `fyne.Do()`/`fyne.DoAndWait()` **synchron auf der
+aufrufenden Goroutine** aus (`test/driver.go: DoFromGoroutine` ruft `f()`
+direkt) — anders als der echte Treiber, der auf die UI-Goroutine
+marshalt. Ein Widget, das im Konstruktor oder bei einer Aktion `go
+func() { ...; fyne.Do(...) }()` startet, und ein Test, der danach
+denselben Zustand liest (auch über Polling/`require.Eventually`), erzeugt
+dadurch einen **echten, von `-race` zu Recht gemeldeten Data Race** — die
+Hintergrund-Goroutine mutiert Widget-Felder unsynchronisiert parallel zum
+Testcode.
+
+Lösung: I/O-startende Methoden nie direkt `go func(){}()` aufrufen,
+sondern über ein Feld `runBackground func(f func())` (Default `func(f
+func()) { go f() }`), das ein internes Testpaket (`package <name>`, nicht
+`<name>_test`) vor dem Aufruf auf `func(f func()) { f() }` umstellen kann
+— macht Tests synchron und deterministisch, ganz ohne Polling. Siehe
+`internal/ui/settings/view.go` (`runBackground`-Feld) und
+`internal/ui/settings/view_test.go` (`newSyncTestView`). Gilt für jedes
+neue `internal/ui/*`-Widget mit eigener Hintergrund-I/O (onboarding,
+reports, Hauptfenster-Sync-Knopf).
+
+## `container.NewBorder`: Center-Objekt liegt an Index 0, nicht am Ende
+
+`container.NewBorder(top, bottom, left, right fyne.CanvasObject, objects
+...fyne.CanvasObject) *fyne.Container` baut `.Objects` als `objects`
+(die variadic Center-Objekte, in Reihenfolge) **gefolgt von** den
+nicht-nil top/bottom/left/right-Objekten. Wird nur `top` gesetzt und genau
+ein Center-Objekt übergeben, ist `.Objects[0]` das Center und
+`.Objects[len-1]` (hier `.Objects[1]`) die Kopfzeile — **nicht umgekehrt**.
+
+Ein Widget, das seinen Inhalt per `container.Objects[len(...)-1] = neu`
+austauschen will (z. B. Leerzustand ↔ Liste), trifft damit versehentlich
+die Kopfzeile statt des Centers. Genau dieser Bug steckte in
+`settings.View.refreshContent()` und wurde erst durch den
+Navigationstest `TestShell_SelectNav_SwitchesToSettings` sichtbar (Label
+„Konten" verschwand nach `Reload()`). Immer `Objects[0]` für den
+Center-Slot verwenden, wenn genau ein Objekt an `objects...` übergeben
+wurde — siehe `reports/list.go` (`setCenter`) als korrektes Vorbild.
