@@ -132,21 +132,31 @@ Die APs 0–4 sind vollständig ohne UI testbar.
 **Ziel:** `task check` läuft grün auf einem leeren, aber vollständig
 konfigurierten Projekt.
 
-- [ ] `go mod init github.com/pmoscode/dmarc-analyzer`
-- [ ] Verzeichnisbaum nach `IMPLEMENTIERUNG.md` Abschnitt 5 anlegen
-- [ ] Abhängigkeiten ziehen und **auf konkrete Versionen pinnen** (Fyne, go-imap/v2,
-      go-message, modernc.org/sqlite, go-keyring, go-chart/v2, testify)
-- [ ] `Taskfile.yml` mit den 16 Tasks aus Abschnitt 13
-- [ ] `.golangci.yml`: govet, staticcheck, errcheck, revive, gosec, ineffassign,
-      misspell, gocritic
-- [ ] `.github/workflows/ci.yml`: `task check` auf ubuntu/macos/windows
-- [ ] `internal/platform/logging` (slog, Textformat lokal, JSON in CI)
-- [ ] `internal/platform/paths` (DB-, Log-, Konfigpfad plattformkonform)
-- [ ] `cmd/dmarc-analyzer/main.go` — startet, loggt Version, beendet sich
-- [ ] `README.md` und `CHANGELOG.md` als Rohfassung, `LICENSE` (MIT)
+- [x] `go mod init github.com/pmoscode/dmarc-analyzer`
+- [x] Verzeichnisbaum nach `IMPLEMENTIERUNG.md` Abschnitt 5 anlegen
+- [x] Abhängigkeiten recherchiert und **auf konkrete Versionen gepinnt** (Fyne, go-imap/v2,
+      go-message, modernc.org/sqlite, go-keyring, go-chart/v2, testify) — Details und eine
+      Abweichung von der ursprünglichen Idee in `docs/DEPENDENCIES.md`: nur `testify` steht
+      bereits in `go.mod`, weil es ab AP 0 tatsächlich in Tests importiert wird. Die übrigen
+      fünf sind dort mit Zielversion für ihre jeweilige Phase dokumentiert statt ungenutzt in
+      `go.mod` erzwungen — sonst entfernt sie der nächste `task tidy` wieder, und `go.mod`
+      würde über den Ist-Zustand lügen.
+- [x] `Taskfile.yml` mit den 16 Tasks aus Abschnitt 13
+- [x] `.golangci.yml`: govet, staticcheck, errcheck, revive, gosec, ineffassign, gocritic —
+      **`misspell` bewusst weggelassen**: die deutschen Kommentare (Projektkonvention, siehe
+      1.3) erzeugen mit einem englischen Wörterbuch ständig Fehlalarme
+      (`Konfiguration` → `Configuration`), begründet in `.golangci.yml`.
+- [x] `.github/workflows/ci.yml`: `task check` + `task build` auf ubuntu/macos/windows,
+      zusätzlich Prüfung auf gofmt-/goimports-Drift
+- [x] `internal/platform/logging` (slog, Textformat lokal, JSON per Option)
+- [x] `internal/platform/paths` (DB-, Log-, Konfigpfad plattformkonform, mit Tests)
+- [x] `cmd/dmarc-analyzer/main.go` — startet, loggt Version, beendet sich, mit Tests
+- [x] `README.md` und `CHANGELOG.md` als Rohfassung, `LICENSE` (MIT)
 
 **Fertig wenn:** `task build` erzeugt eine lauffähige Binärdatei, `task check`
-ist grün, CI ist auf allen drei Plattformen grün.
+ist grün, CI ist auf allen drei Plattformen grün. — Lokal erreicht (`task check`,
+`task build` beide grün, Coverage `platform/*` 83 %). CI-Grün auf allen drei
+Plattformen lässt sich erst nach dem ersten Push/PR verifizieren.
 
 ### AP 1 — Domäne und Parser
 
@@ -282,12 +292,13 @@ getestet sein — sonst werden UI-Fehler und Logikfehler ununterscheidbar.
 
 ## 6. Vor dem ersten Commit zu entscheiden
 
-| Nr. | Frage | Vorbelegung, wenn keine Antwort kommt |
-| --- | --- | --- |
-| E-1 | Modulpfad `github.com/pmoscode/dmarc-analyzer`? | ja |
-| E-2 | Keyring-Service `de.pmoscode.dmarc-analyzer`? | ja |
-| E-3 | Lizenz MIT? | ja |
-| E-4 | Echte Beispiel-Reports für die Fixtures verfügbar? | nein → synthetische aus RFC-Beispielen |
-| E-5 | Umfang v1: APs 0–7 wie oben, oder Schnitt nach AP 5? | voller Umfang bis AP 7 |
+| Nr. | Frage | Vorbelegung, wenn keine Antwort kommt | Status |
+| --- | --- | --- | --- |
+| E-1 | Modulpfad `github.com/pmoscode/dmarc-analyzer`? | ja | **umgesetzt** (AP 0) |
+| E-2 | Keyring-Service `de.pmoscode.dmarc-analyzer`? | ja | **umgesetzt** (AP 0, in README dokumentiert; Adapter folgt AP 3) |
+| E-3 | Lizenz MIT? | ja | **umgesetzt** (AP 0, `LICENSE`) |
+| E-4 | Echte Beispiel-Reports für die Fixtures verfügbar? | nein → synthetische aus RFC-Beispielen | offen — vor AP 1 klären |
+| E-5 | Umfang v1: APs 0–7 wie oben, oder Schnitt nach AP 5? | voller Umfang bis AP 7 | offen (Vorbelegung gilt vorerst) |
 
-E-1 bis E-3 sind nachträglich nur mit Migrationsaufwand änderbar.
+E-1 bis E-3 sind nachträglich nur mit Migrationsaufwand änderbar — sie sind mit
+AP 0 jetzt fixiert.

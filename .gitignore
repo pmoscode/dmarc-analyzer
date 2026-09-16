@@ -27,3 +27,15 @@ go.work.sum
 
 .idea
 .juni
+
+### Projektspezifisch
+# Build-Ausgabe von "task build" / "task release"
+/bin/
+coverage.html
+
+# Packaging-Ausgaben von "task package:*" (fyne package)
+*.app/
+*.tar.xz
+
+# Checksumm-Cache von go-task (Grundlage für "sources"/"generates")
+.task/

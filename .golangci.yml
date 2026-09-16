@@ -1,0 +1,60 @@
+version: "2"
+
+linters:
+  default: none
+  # misspell ist bewusst nicht aktiv: Kommentare und Fehlertexte sind
+  # projektweit deutsch (IMPLEMENTIERUNG.md Abschnitt 1.3), ein auf
+  # Englisch trainierter Spellchecker markiert dort ständig Fehlalarme
+  # ("Konfiguration" -> "Configuration" u. ä.).
+  enable:
+    - govet
+    - staticcheck
+    - errcheck
+    - ineffassign
+    - unused
+    - revive
+    - gosec
+    - gocritic
+    - bodyclose
+    - noctx
+    - unconvert
+    - unparam
+    - wastedassign
+    - whitespace
+    - nolintlint
+  settings:
+    revive:
+      rules:
+        - name: package-comments
+        - name: exported
+        - name: error-strings
+        - name: error-naming
+    gosec:
+      excludes:
+        # G304 (dateipfad aus Variable): Konfig-/Importpfade sind
+        # anwendungsgesteuert, nicht roh aus Netz-Eingaben.
+        - G304
+  exclusions:
+    rules:
+      # Testcode darf offensichtlichere Fehlerbehandlung haben; require/
+      # assert übernehmen das Melden.
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/pmoscode/dmarc-analyzer
+
+run:
+  timeout: 5m
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
