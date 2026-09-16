@@ -69,9 +69,19 @@ func NewFilterBar() *FilterBar {
 
 	f.apply = widget.NewButton(i18n.FilterApply, f.notifyChanged)
 
+	// domainWrap erzwingt eine Mindestbreite für das Domain-Feld — ein
+	// Entry ohne das schrumpft in der HBox auf die Breite seines
+	// Platzhaltertexts ("Alle") und ist dann zu schmal, um eine
+	// eingegebene Domain zu lesen (dieselbe Ursache wie die zu schmale
+	// Sidebar-Navigation, siehe internal/ui/app.go).
+	domainWrap := container.NewGridWrap(
+		fyne.NewSize(220, f.domain.MinSize().Height),
+		f.domain,
+	)
+
 	f.container = container.NewHBox(
 		widget.NewLabel(i18n.FilterPeriodLabel), f.period,
-		widget.NewLabel(i18n.FilterDomainLabel), f.domain,
+		widget.NewLabel(i18n.FilterDomainLabel), domainWrap,
 		f.apply,
 	)
 

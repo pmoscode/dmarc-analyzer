@@ -25,6 +25,13 @@ type SourceVolume struct {
 	SourceIP report.SourceIP
 	Total    int
 	PassRate float64
+	// Label ist die für Menschen sprechende Bezeichnung dieser Quelle —
+	// erkannter Diensteanbieter, sonst PTR-Hostname, sonst leer (dann
+	// zeigt der Chart-Renderer die IP-Adresse selbst). Wird von
+	// app/statistics.UseCase.Dashboard() über sources.Enricher befüllt —
+	// dieselbe Anreicherung wie in der Sendequellen-Ansicht
+	// (app/sourcestats), hier nur zusätzlich fürs Dashboard-Diagramm.
+	Label string
 }
 
 // HeatmapCell ist die Pass-Rate einer Quelle an einem Tag. HasData ist
@@ -41,8 +48,13 @@ type HeatmapCell struct {
 // = Pass-Rate"). Cells[i][j] gehört zu Sources[i] am Tag Days[j].
 type Heatmap struct {
 	Sources []report.SourceIP
-	Days    []time.Time
-	Cells   [][]HeatmapCell
+	// SourceLabels sind die zu Sources parallelen, für Menschen
+	// sprechenden Bezeichnungen (siehe SourceVolume.Label) — leer (oder
+	// kürzer als Sources), wenn keine Anreicherung stattgefunden hat;
+	// der Chart-Renderer fällt dann auf die IP-Adresse zurück.
+	SourceLabels []string
+	Days         []time.Time
+	Cells        [][]HeatmapCell
 }
 
 // ChartRenderer rendert Diagramm-Daten als image.Image zur Einbettung in

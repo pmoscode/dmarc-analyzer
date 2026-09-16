@@ -12,6 +12,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/pmoscode/dmarc-analyzer/internal/app/exportdata"
@@ -37,7 +38,12 @@ type View struct {
 	filterPeriod report.DateRange
 	filterDomain string
 
-	tileTotal, tilePass, tileDKIM, tileSPF, tileSources, tileTrend *widget.Label
+	tileTotal, tilePass, tileDKIM, tileSPF, tileSources, tileTrendLabel *widget.Label
+	// tileTrendIcon: der Trendpfeil ist ein Fyne-Icon (Vektorgrafik) statt
+	// eines Unicode-Pfeilzeichens ("→"/"▲"/"▼") im Label-Text — die von
+	// Fyne gebündelte Standardschrift deckt diese Symbole nicht ab und
+	// zeigt stattdessen ein Ersatzzeichen (Tofu-Box, "�").
+	tileTrendIcon *widget.Icon
 
 	dailyPanel *chartPanel
 	topPanel   *chartPanel
@@ -65,7 +71,8 @@ func NewView(stats *statistics.UseCase, charts analysis.ChartRenderer, window fy
 	v.tileDKIM = widget.NewLabel("")
 	v.tileSPF = widget.NewLabel("")
 	v.tileSources = widget.NewLabel("")
-	v.tileTrend = widget.NewLabel("")
+	v.tileTrendLabel = widget.NewLabel("")
+	v.tileTrendIcon = widget.NewIcon(nil)
 
 	tiles := container.NewGridWithColumns(3,
 		newTile(i18n.DashboardTileTotalMessages, "", v.tileTotal, window),
@@ -75,13 +82,41 @@ func NewView(stats *statistics.UseCase, charts analysis.ChartRenderer, window fy
 		newTile(i18n.DashboardTileDistinctSources, "Quell-IP", v.tileSources, window),
 	)
 
-	v.dailyPanel = newChartPanel(i18n.DashboardChartDailyVolume, v.exportChart(func() image.Image { return v.dailyPanel.image() }))
-	v.topPanel = newChartPanel(i18n.DashboardChartTopSources, v.exportChart(func() image.Image { return v.topPanel.image() }))
-	v.dispPanel = newChartPanel(i18n.DashboardChartDisposition, v.exportChart(func() image.Image { return v.dispPanel.image() }))
-	v.heatPanel = newChartPanel(i18n.DashboardChartHeatmap, v.exportChart(func() image.Image { return v.heatPanel.image() }))
+	v.dailyPanel = newChartPanel(i18n.DashboardChartDailyVolume, v.exportChart(func() image.Image { return v.dailyPanel.image() }), window)
+	v.topPanel = newChartPanel(i18n.DashboardChartTopSources, v.exportChart(func() image.Image { return v.topPanel.image() }), window)
+	v.dispPanel = newChartPanel(i18n.DashboardChartDisposition, v.exportChart(func() image.Image { return v.dispPanel.image() }), window)
+	v.heatPanel = newChartPanel(i18n.DashboardChartHeatmap, v.exportChart(func() image.Image { return v.heatPanel.image() }), window)
+
+	// Panels von Anfang an mit einem leeren, aber KORREKT GROSSEN Platzhalter
+	// füllen (statt img.Image nil zu lassen): so bekommt jedes Panel schon
+	// beim allerersten, echten Resize-Durchlauf (Fenster wird erzeugt/
+	// gezeigt) seine endgültige Höhe zugewiesen. Würde stattdessen erst
+	// später — nachdem die echten Daten asynchron geladen sind — auf die
+	// richtige Größe hochgewachsen (über setImage()/Refresh()), hängt das
+	// von einer Refresh-Kaskade durch mehrere verschachtelte Container
+	// (Scroll → VBox → Panel) ab, die im echten (GPU-beschleunigten)
+	// Fenster beobachtet unzuverlässig war (der untere Rand blieb
+	// abgeschnitten, obwohl dieselbe Kaskade in Tests korrekt griff) —
+	// mutmaßlich Dirty-Region-Tracking, das eine nachträglich größer
+	// werdende Fläche nicht neu zeichnet. Ein von Anfang an korrekt
+	// dimensioniertes Bild braucht diese Kaskade gar nicht erst.
+	if img, err := charts.DailyVolumeChart(nil); err == nil {
+		v.dailyPanel.setImage(img)
+	}
+	if img, err := charts.TopSourcesChart(nil); err == nil {
+		v.topPanel.setImage(img)
+	}
+	if img, err := charts.DispositionChart(nil); err == nil {
+		v.dispPanel.setImage(img)
+	}
+	if img, err := charts.HeatmapChart(analysis.Heatmap{}); err == nil {
+		v.heatPanel.setImage(img)
+	}
+
+	trendRow := container.NewHBox(v.tileTrendIcon, v.tileTrendLabel)
 
 	v.content = container.NewVBox(
-		tiles, v.tileTrend,
+		tiles, trendRow,
 		v.dailyPanel.container, v.topPanel.container, v.dispPanel.container, v.heatPanel.container,
 	)
 
@@ -158,12 +193,24 @@ func (v *View) apply(dash statistics.Dashboard, dailyImg, topImg, dispImg, heatI
 	v.tileDKIM.SetText(percent(stats.DKIMAlignmentRate))
 	v.tileSPF.SetText(percent(stats.SPFAlignmentRate))
 	v.tileSources.SetText(fmt.Sprintf("%d", stats.DistinctSources))
-	v.tileTrend.SetText(trendText(dash.Comparison))
+	v.tileTrendLabel.SetText(trendText(dash.Comparison))
+	v.tileTrendIcon.SetResource(trendIcon(dash.Comparison))
 
 	v.dailyPanel.setImage(dailyImg)
 	v.topPanel.setImage(topImg)
 	v.dispPanel.setImage(dispImg)
 	v.heatPanel.setImage(heatImg)
+
+	// Die Panel-Container wachsen durch setImage() auf die volle
+	// Diagrammhöhe (siehe chartPanel.setImage), aber v.content (die VBox
+	// aus Kacheln + allen vier Panels) und v.scroll bemerken das nicht von
+	// selbst: container.Refresh() liest nur die bereits zugewiesene eigene
+	// Size(), nicht die frisch gewachsenen Kind-Mindestgrößen. Ohne diese
+	// beiden Refreshs bleibt v.scroll auf der alten, zu kleinen
+	// Scrollfläche stehen und schneidet die unteren Diagrammbereiche
+	// (Achsen-/IP-Beschriftungen) ab.
+	v.content.Refresh()
+	v.scroll.Refresh()
 }
 
 // setCenter tauscht den mittleren Border-Slot aus. NewBorder ordnet
@@ -179,18 +226,31 @@ func percent(rate float64) string {
 	return fmt.Sprintf("%.1f%%", rate*100)
 }
 
+// trendIcon liefert die Pfeil-Vektorgrafik zum Trend — ein Fyne-Icon statt
+// eines Unicode-Pfeilzeichens im Label-Text: die von Fyne gebündelte
+// Standardschrift deckt Pfeil-/Pfeilspitzen-Symbole ("→"/"▲"/"▼") nicht ab
+// und zeigt ohne automatischen Font-Fallback stattdessen ein
+// Ersatzzeichen ("�"). nil bedeutet "kein Pfeil anzeigen" (unverändert
+// oder keine Vorperiode).
+func trendIcon(c statistics.Comparison) fyne.Resource {
+	if !c.HasPreviousPeriodData {
+		return nil
+	}
+	switch {
+	case c.PassRateTrend > 0.0005:
+		return theme.MoveUpIcon()
+	case c.PassRateTrend < -0.0005:
+		return theme.MoveDownIcon()
+	default:
+		return nil
+	}
+}
+
 func trendText(c statistics.Comparison) string {
 	if !c.HasPreviousPeriodData {
 		return i18n.DashboardTrendNoData
 	}
-	arrow := i18n.DashboardTrendFlat
-	switch {
-	case c.PassRateTrend > 0.0005:
-		arrow = i18n.DashboardTrendUp
-	case c.PassRateTrend < -0.0005:
-		arrow = i18n.DashboardTrendDown
-	}
-	return fmt.Sprintf(i18n.DashboardTrendFmt, arrow, c.PassRateTrend*100)
+	return fmt.Sprintf(i18n.DashboardTrendFmt, c.PassRateTrend*100)
 }
 
 // newTile baut eine Kennzahlen-Kachel. glossaryTerm verlinkt optional
@@ -238,11 +298,18 @@ type chartPanel struct {
 	container *fyne.Container
 }
 
-func newChartPanel(title string, onExport func()) *chartPanel {
+// newChartPanel baut ein Diagramm mit Titel, Erklär-Knopf ("?", siehe
+// internal/ui/glossary) und Export-Knopf — title muss ein Begriff aus
+// glossary.Terms sein (siehe glossary.terms.go).
+func newChartPanel(title string, onExport func(), window fyne.Window) *chartPanel {
 	p := &chartPanel{img: &canvas.Image{FillMode: canvas.ImageFillOriginal}}
 	exportButton := widget.NewButton(i18n.DashboardExportChartPNG, onExport)
-	p.container = container.NewVBox(
+	titleRow := container.NewHBox(
 		widget.NewLabelWithStyle(title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		glossary.NewInfoButton(title, window),
+	)
+	p.container = container.NewVBox(
+		titleRow,
 		p.img,
 		exportButton,
 	)
@@ -253,6 +320,7 @@ func (p *chartPanel) setImage(img image.Image) {
 	p.current = img
 	p.img.Image = img
 	p.img.Refresh()
+	p.container.Refresh()
 }
 
 func (p *chartPanel) image() image.Image { return p.current }

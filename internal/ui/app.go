@@ -88,8 +88,9 @@ type shell struct {
 	settingsView  *settings.View
 	filterBar     *components.FilterBar
 
-	nav     *widget.List
-	content *fyne.Container
+	nav       *widget.List
+	navScroll *container.Scroll
+	content   *fyne.Container
 
 	syncButton *widget.Button
 	cancelSync context.CancelFunc
@@ -122,6 +123,14 @@ func newShell(deps Dependencies, window fyne.Window) *shell {
 	)
 	s.nav.OnSelected = func(id widget.ListItemID) { s.selectNav(navItem(id)) }
 
+	// navScroll: widget.List meldet nur eine minimale Breite nach oben,
+	// unabhängig von der Länge der Einträge (navLabels) — ohne explizite
+	// Mindestbreite wird die Navigation so schmal, dass die Labels
+	// abgeschnitten werden ("Übe" statt "Übersicht"). navWidth ist
+	// großzügig für den längsten Eintrag (i18n.NavSources) bemessen.
+	s.navScroll = container.NewVScroll(s.nav)
+	s.navScroll.SetMinSize(fyne.NewSize(160, 0))
+
 	s.syncButton = widget.NewButton(i18n.SyncButton, s.startSync)
 	s.syncButton.Importance = widget.HighImportance
 
@@ -136,7 +145,7 @@ func newShell(deps Dependencies, window fyne.Window) *shell {
 
 	s.container = container.NewBorder(
 		header,
-		nil, container.NewVScroll(s.nav), nil,
+		nil, s.navScroll, nil,
 		s.content,
 	)
 
@@ -197,13 +206,13 @@ func (s *shell) showOnboarding() {
 	wiz.OnComplete = s.showMain
 	s.content.Objects = []fyne.CanvasObject{wiz}
 	s.content.Refresh()
-	s.nav.Hide()
+	s.navScroll.Hide()
 	s.syncButton.Hide()
 	s.filterBar.Hide()
 }
 
 func (s *shell) showMain() {
-	s.nav.Show()
+	s.navScroll.Show()
 	s.syncButton.Show()
 	s.filterBar.Show()
 	s.settingsView.Reload()

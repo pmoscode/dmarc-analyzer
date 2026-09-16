@@ -9,6 +9,7 @@ import (
 	"github.com/wcharczuk/go-chart/v2/drawing"
 
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/analysis"
+	"github.com/pmoscode/dmarc-analyzer/internal/domain/report"
 )
 
 // Heatmaps sind in go-chart kein eigener Diagrammtyp — die Zellen werden
@@ -19,9 +20,14 @@ import (
 const (
 	heatmapCellWidth       = 36
 	heatmapCellHeight      = 22
-	heatmapLabelGutterLeft = 90
+	heatmapLabelGutterLeft = 150
 	heatmapLabelGutterTop  = 24
 	heatmapMargin          = 8
+	// heatmapLabelMaxChars begrenzt die Zeilenbeschriftung — Dienstnamen/
+	// Hostnamen (siehe analysis.Heatmap.SourceLabels) können länger als
+	// eine IP-Adresse sein und würden sonst in die Zellenfläche
+	// hineinlaufen.
+	heatmapLabelMaxChars = 22
 )
 
 var colorNoData = drawing.Color{R: 0xe4, G: 0xe4, B: 0xe4, A: 0xff}
@@ -29,7 +35,7 @@ var colorNoData = drawing.Color{R: 0xe4, G: 0xe4, B: 0xe4, A: 0xff}
 // HeatmapChart zeichnet die Quelle-×-Tag-Pass-Rate-Matrix.
 func (Renderer) HeatmapChart(data analysis.Heatmap) (image.Image, error) {
 	if len(data.Sources) == 0 || len(data.Days) == 0 {
-		return blankImage(defaultHeight), nil
+		return blankImage(defaultWidth, defaultHeight), nil
 	}
 
 	width := heatmapLabelGutterLeft + len(data.Days)*heatmapCellWidth + heatmapMargin
@@ -52,7 +58,7 @@ func (Renderer) HeatmapChart(data analysis.Heatmap) (image.Image, error) {
 
 	for si, source := range data.Sources {
 		y := heatmapLabelGutterTop + si*heatmapCellHeight
-		_, _ = gc.FillStringAt(source.String(), 2, float64(y+heatmapCellHeight-6))
+		_, _ = gc.FillStringAt(heatmapSourceLabel(data, si, source), 2, float64(y+heatmapCellHeight-6))
 
 		for di := range data.Days {
 			x := heatmapLabelGutterLeft + di*heatmapCellWidth
@@ -78,4 +84,19 @@ func (Renderer) HeatmapChart(data analysis.Heatmap) (image.Image, error) {
 // Pfad-API — für einfache Rechtecke direkter und ohne Path-Konstruktion).
 func drawFill(dst draw.Image, src image.Image) {
 	draw.Draw(dst, dst.Bounds(), src, image.Point{}, draw.Src)
+}
+
+// heatmapSourceLabel zeigt den von app/statistics angereicherten Namen
+// (erkannter Dienst oder PTR-Hostname) für Zeile si, fällt ohne
+// Anreicherung auf die IP-Adresse zurück, und kürzt zu lange Namen, damit
+// sie nicht in die Zellenfläche hineinlaufen.
+func heatmapSourceLabel(data analysis.Heatmap, si int, source report.SourceIP) string {
+	label := source.String()
+	if si < len(data.SourceLabels) && data.SourceLabels[si] != "" {
+		label = data.SourceLabels[si]
+	}
+	if len(label) > heatmapLabelMaxChars {
+		label = label[:heatmapLabelMaxChars-1] + "…"
+	}
+	return label
 }

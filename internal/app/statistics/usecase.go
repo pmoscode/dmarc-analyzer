@@ -11,11 +11,17 @@ import (
 
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/analysis"
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/report"
+	"github.com/pmoscode/dmarc-analyzer/internal/domain/sources"
 )
 
 // UseCase orchestriert Statistics-Abfragen.
 type UseCase struct {
 	Repository analysis.Repository
+	// Enricher reichert Top-Sendequellen und Heatmap-Zeilen mit
+	// PTR-Hostname/erkanntem Dienst an (siehe SourceVolume.Label) —
+	// optional: nil überspringt die Anreicherung (z. B. in Tests), das
+	// Dashboard-Diagramm zeigt dann weiterhin nur die IP-Adresse.
+	Enricher sources.Enricher
 }
 
 // Comparison stellt Statistics für einen Zeitraum den Statistics der
@@ -98,12 +104,52 @@ func (uc *UseCase) Dashboard(ctx context.Context, q analysis.Query) (Dashboard, 
 		return Dashboard{}, fmt.Errorf("heatmap konnte nicht berechnet werden: %w", err)
 	}
 
+	uc.enrichSources(ctx, topSources, &heatmap)
+
 	return Dashboard{
 		Comparison:   comparison,
 		DailyVolumes: dailyVolumes,
 		TopSources:   topSources,
 		Heatmap:      heatmap,
 	}, nil
+}
+
+// enrichSources füllt SourceVolume.Label (Top-Sendequellen-Diagramm) und
+// Heatmap.SourceLabels (Heatmap-Zeilen) über den optionalen Enricher —
+// dieselbe PTR-/Dienst-Anreicherung wie in der Sendequellen-Ansicht
+// (app/sourcestats.UseCase.List), hier zusätzlich fürs Dashboard.
+// uc.Enricher == nil (z. B. in Tests) überspringt das schlicht — die
+// Diagramme zeigen dann weiterhin die IP-Adresse.
+func (uc *UseCase) enrichSources(ctx context.Context, topSources []analysis.SourceVolume, heatmap *analysis.Heatmap) {
+	if uc.Enricher == nil {
+		return
+	}
+
+	labels := make(map[string]string, len(topSources))
+	for i := range topSources {
+		label := sourceLabel(uc.Enricher.Enrich(ctx, topSources[i].SourceIP))
+		topSources[i].Label = label
+		labels[topSources[i].SourceIP.String()] = label
+	}
+
+	heatmap.SourceLabels = make([]string, len(heatmap.Sources))
+	for i, ip := range heatmap.Sources {
+		if label, ok := labels[ip.String()]; ok {
+			heatmap.SourceLabels[i] = label
+			continue
+		}
+		heatmap.SourceLabels[i] = sourceLabel(uc.Enricher.Enrich(ctx, ip))
+	}
+}
+
+// sourceLabel priorisiert den erkannten Dienst vor dem reinen
+// PTR-Hostname — "Google Workspace" ist aussagekräftiger als
+// "mail-sor-f41.google.com".
+func sourceLabel(e sources.Enrichment) string {
+	if e.Service != "" {
+		return e.Service
+	}
+	return e.Hostname
 }
 
 // previousPeriodQuery liefert dieselbe Query, aber mit einem Zeitraum

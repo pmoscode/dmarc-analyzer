@@ -147,11 +147,8 @@ const (
 	DashboardTileDKIMAlignment   = "DKIM-Alignment-Rate"
 	DashboardTileSPFAlignment    = "SPF-Alignment-Rate"
 	DashboardTileDistinctSources = "Unterschiedliche Quellen"
-	DashboardTrendUp             = "▲"
-	DashboardTrendDown           = "▼"
-	DashboardTrendFlat           = "→"
 	DashboardTrendNoData         = "kein Vergleich zur Vorperiode möglich"
-	DashboardTrendFmt            = "%s %+.1f Prozentpunkte ggü. Vorperiode"
+	DashboardTrendFmt            = "%+.1f Prozentpunkte ggü. Vorperiode"
 
 	DashboardChartDailyVolume = "Nachrichtenvolumen pro Tag"
 	DashboardChartTopSources  = "Top-Sendequellen"

@@ -75,6 +75,10 @@ func newApp(ctx context.Context, cmd string) (*app, error) {
 	decoder := mailmime.NewDecoder()
 	parsers := []domainsync.ReportParser{dmarcxml.NewParser()}
 	newSource := func() domainsync.MessageSource { return imap.NewAdapter() }
+	// enricher: eine gemeinsame Instanz für Dashboard und Sendequellen-
+	// Ansicht — beide reichern dieselben Quell-IPs an, ein gemeinsamer
+	// Cache spart doppelte PTR-Lookups.
+	enricher := sourceinfo.NewEnricher()
 
 	a := &app{
 		db:      db,
@@ -85,10 +89,10 @@ func newApp(ctx context.Context, cmd string) (*app, error) {
 			Decoder:       decoder,
 			Parsers:       parsers,
 		},
-		stats: &statistics.UseCase{Repository: statsRepo},
+		stats: &statistics.UseCase{Repository: statsRepo, Enricher: enricher},
 		sourceStats: &sourcestats.UseCase{
 			Sources:  sourceStatsRepo,
-			Enricher: sourceinfo.NewEnricher(),
+			Enricher: enricher,
 		},
 	}
 

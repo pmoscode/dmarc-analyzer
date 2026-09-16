@@ -61,6 +61,22 @@ var Terms = []Term{
 		Name:       "rDNS / PTR",
 		Definition: "Reverse-DNS-Auflösung einer IP-Adresse zu einem Hostnamen — hilft, eine Quell-IP einem bekannten Diensteanbieter zuzuordnen.",
 	},
+	{
+		Name:       "Nachrichtenvolumen pro Tag",
+		Definition: "Ein Balken je Tag, gestapelt aus bestandenen (grün) und fehlgeschlagenen (rot) Nachrichten nach DMARC. Zeigt, ob es an einzelnen Tagen Ausreißer beim Volumen oder bei Fehlschlägen gab.",
+	},
+	{
+		Name:       "Top-Sendequellen",
+		Definition: "Die Sendequellen (IP-Adressen) mit dem größten Nachrichtenvolumen im gewählten Zeitraum. Die Balkenhöhe zeigt die Nachrichtenanzahl, die Farbe die Pass-Rate dieser Quelle (rot = 0 %, grün = 100 %). Eine Quelle kann alle anderen im Volumen deutlich überragen — das ist normal, wenn ein großer Mailanbieter den Großteil der Nachrichten sendet.",
+	},
+	{
+		Name:       "Verteilung nach Disposition",
+		Definition: "Donut-Diagramm der von den Empfängern tatsächlich angewendeten Maßnahme (siehe Begriff „Disposition“): Keine Maßnahme, Quarantäne, Zurückgewiesen oder Unbekannt.",
+	},
+	{
+		Name:       "Sendequelle × Tag (Pass-Rate)",
+		Definition: "Jede Zeile ist eine Sendequelle, jede Spalte ein Tag im gewählten Zeitraum. Die Farbe einer Zelle zeigt die Pass-Rate dieser Quelle an diesem Tag (rot = niedrig, grün = hoch). Eine leere Zelle bedeutet: An diesem Tag hat diese Quelle keine Nachrichten gesendet.",
+	},
 }
 
 // ByName sucht einen Begriff nach Name. ok ist false, wenn der Begriff
