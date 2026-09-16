@@ -23,3 +23,4 @@
 - Follow the Clean Architecture principles
 - Follow the Clean Code principles
 - Follow the Fyne framework best practices
+- Benutzerfreundliche Oberfläche für einfache Navigation und Bedienung
