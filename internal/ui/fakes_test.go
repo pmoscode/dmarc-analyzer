@@ -2,10 +2,13 @@ package ui
 
 import (
 	"context"
+	"image"
 	"iter"
 
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/account"
+	"github.com/pmoscode/dmarc-analyzer/internal/domain/analysis"
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/report"
+	domainsources "github.com/pmoscode/dmarc-analyzer/internal/domain/sources"
 	domainsync "github.com/pmoscode/dmarc-analyzer/internal/domain/sync"
 )
 
@@ -145,4 +148,58 @@ type fakeDecoder struct{}
 
 func (fakeDecoder) Decode(data []byte) ([]domainsync.RawAttachment, error) {
 	return []domainsync.RawAttachment{{Filename: string(data), Data: data}}, nil
+}
+
+// --- analysis.Repository / analysis.ChartRenderer (AP 6) ------------------
+
+type fakeAnalysisRepository struct{}
+
+func (fakeAnalysisRepository) Compute(context.Context, analysis.Query) (analysis.Statistics, error) {
+	return analysis.Statistics{}, nil
+}
+
+func (fakeAnalysisRepository) DailyVolumes(context.Context, analysis.Query) ([]analysis.DailyVolume, error) {
+	return nil, nil
+}
+
+func (fakeAnalysisRepository) TopSources(context.Context, analysis.Query, int) ([]analysis.SourceVolume, error) {
+	return nil, nil
+}
+
+func (fakeAnalysisRepository) Heatmap(context.Context, analysis.Query, int) (analysis.Heatmap, error) {
+	return analysis.Heatmap{}, nil
+}
+
+type fakeChartRenderer struct{}
+
+func (fakeChartRenderer) tinyImage() image.Image { return image.NewRGBA(image.Rect(0, 0, 2, 2)) }
+
+func (f fakeChartRenderer) DailyVolumeChart([]analysis.DailyVolume) (image.Image, error) {
+	return f.tinyImage(), nil
+}
+
+func (f fakeChartRenderer) TopSourcesChart([]analysis.SourceVolume) (image.Image, error) {
+	return f.tinyImage(), nil
+}
+
+func (f fakeChartRenderer) DispositionChart(map[report.Disposition]int) (image.Image, error) {
+	return f.tinyImage(), nil
+}
+
+func (f fakeChartRenderer) HeatmapChart(analysis.Heatmap) (image.Image, error) {
+	return f.tinyImage(), nil
+}
+
+// --- domainsources.Repository / domainsources.Enricher (AP 6) -------------
+
+type fakeSourcesRepository struct{}
+
+func (fakeSourcesRepository) Query(context.Context, domainsources.Query) (domainsources.Page, error) {
+	return domainsources.Page{}, nil
+}
+
+type fakeEnricher struct{}
+
+func (fakeEnricher) Enrich(context.Context, report.SourceIP) domainsources.Enrichment {
+	return domainsources.Enrichment{}
 }

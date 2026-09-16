@@ -60,6 +60,52 @@ func (uc *UseCase) ComputeWithTrend(ctx context.Context, q analysis.Query) (Comp
 	return comparison, nil
 }
 
+// topSourcesLimit ist die Anzahl Sendequellen für das Balkendiagramm und
+// die Heatmap (IMPLEMENTIERUNG.md Abschnitt 10.3: "Top-10-Sendequellen").
+const topSourcesLimit = 10
+
+// Dashboard bündelt alle für die Übersicht benötigten Daten in einem
+// Aufruf: Kennzahlen inklusive Trend, Zeitreihe, Top-Sendequellen und
+// Heatmap (IMPLEMENTIERUNG.md Abschnitt 10.2/10.3) — eine Ansicht, ein
+// Ladevorgang, statt dass internal/ui/dashboard vier Use-Case-Methoden
+// einzeln koordinieren müsste.
+type Dashboard struct {
+	Comparison   Comparison
+	DailyVolumes []analysis.DailyVolume
+	TopSources   []analysis.SourceVolume
+	Heatmap      analysis.Heatmap
+}
+
+// Dashboard lädt alle Übersichtsdaten für q.
+func (uc *UseCase) Dashboard(ctx context.Context, q analysis.Query) (Dashboard, error) {
+	comparison, err := uc.ComputeWithTrend(ctx, q)
+	if err != nil {
+		return Dashboard{}, err
+	}
+
+	dailyVolumes, err := uc.Repository.DailyVolumes(ctx, q)
+	if err != nil {
+		return Dashboard{}, fmt.Errorf("zeitreihe konnte nicht berechnet werden: %w", err)
+	}
+
+	topSources, err := uc.Repository.TopSources(ctx, q, topSourcesLimit)
+	if err != nil {
+		return Dashboard{}, fmt.Errorf("top-sendequellen konnten nicht berechnet werden: %w", err)
+	}
+
+	heatmap, err := uc.Repository.Heatmap(ctx, q, topSourcesLimit)
+	if err != nil {
+		return Dashboard{}, fmt.Errorf("heatmap konnte nicht berechnet werden: %w", err)
+	}
+
+	return Dashboard{
+		Comparison:   comparison,
+		DailyVolumes: dailyVolumes,
+		TopSources:   topSources,
+		Heatmap:      heatmap,
+	}, nil
+}
+
 // previousPeriodQuery liefert dieselbe Query, aber mit einem Zeitraum
 // gleicher Länge unmittelbar vor q.Period.
 func previousPeriodQuery(q analysis.Query) (analysis.Query, error) {

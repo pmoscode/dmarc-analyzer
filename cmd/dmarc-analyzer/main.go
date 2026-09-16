@@ -17,6 +17,9 @@ var version = "dev"
 
 const usage = `dmarc-analyzer ` + `%s` + `
 
+Ohne Argumente startet das grafische Programm. Für den Kommandozeilen-
+Betrieb (z. B. Cron/launchd) stehen folgende Unterbefehle bereit:
+
 Verwendung:
   dmarc-analyzer sync [--headless]          Alle konfigurierten Konten synchronisieren
   dmarc-analyzer import <pfad>...           DMARC-Reports aus Dateien importieren (.eml, .xml, .xml.gz, .zip)
@@ -26,13 +29,29 @@ Verwendung:
   dmarc-analyzer account list               Konfigurierte Konten auflisten
   dmarc-analyzer account test <id>          Verbindung zu einem Konto testen
   dmarc-analyzer account delete <id>        Konto entfernen (Metadaten und Zugangsdaten)
-
-Das grafische Programm (AP 5) startet, sobald kein Unterbefehl erkannt wird
-und eine UI existiert. Bis dahin zeigt der Aufruf ohne Argumente diese Hilfe.
 `
 
+// main entscheidet zwischen grafischem und Kommandozeilen-Betrieb — bewusst
+// hier und nicht in run(): run() wird von cmd_*_test.go direkt mit leeren
+// Argumenten aufgerufen (TestRun_NoArgs_PrintsUsageWithoutError) und darf
+// dabei nie ein echtes Fenster öffnen, siehe cmd_gui.go.
 func main() {
-	if err := run(context.Background(), os.Args[1:]); err != nil {
+	args := os.Args[1:]
+
+	if len(args) == 1 && (args[0] == "--help" || args[0] == "-h") {
+		fmt.Printf(usage, version)
+		return
+	}
+
+	if len(args) == 0 {
+		if err := runGUI(context.Background()); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if err := run(context.Background(), args); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

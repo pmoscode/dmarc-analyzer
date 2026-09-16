@@ -29,6 +29,22 @@ func (f *fakeStatsRepository) Compute(_ context.Context, q analysis.Query) (anal
 	return f.byPeriod[q.Period.Begin], nil
 }
 
+// DailyVolumes/TopSources/Heatmap: von den ComputeWithTrend-Tests in
+// dieser Datei nicht ausgeübt — leere Stubs, nur damit fakeStatsRepository
+// analysis.Repository weiterhin vollständig erfüllt. Dashboard-Tests mit
+// echten Erwartungen an diese drei Methoden stehen in dashboard_test.go.
+func (f *fakeStatsRepository) DailyVolumes(context.Context, analysis.Query) ([]analysis.DailyVolume, error) {
+	return nil, nil
+}
+
+func (f *fakeStatsRepository) TopSources(context.Context, analysis.Query, int) ([]analysis.SourceVolume, error) {
+	return nil, nil
+}
+
+func (f *fakeStatsRepository) Heatmap(context.Context, analysis.Query, int) (analysis.Heatmap, error) {
+	return analysis.Heatmap{}, nil
+}
+
 func period(t *testing.T, begin, end time.Time) report.DateRange {
 	t.Helper()
 	dr, err := report.NewDateRange(begin, end)
@@ -136,6 +152,18 @@ func (r *erroringOnSecondCallRepository) Compute(context.Context, analysis.Query
 		return analysis.Statistics{}, errTest
 	}
 	return analysis.Statistics{TotalMessages: 10}, nil
+}
+
+func (r *erroringOnSecondCallRepository) DailyVolumes(context.Context, analysis.Query) ([]analysis.DailyVolume, error) {
+	return nil, nil
+}
+
+func (r *erroringOnSecondCallRepository) TopSources(context.Context, analysis.Query, int) ([]analysis.SourceVolume, error) {
+	return nil, nil
+}
+
+func (r *erroringOnSecondCallRepository) Heatmap(context.Context, analysis.Query, int) (analysis.Heatmap, error) {
+	return analysis.Heatmap{}, nil
 }
 
 func TestComputeWithTrend_PreviousPeriodError_IsForwarded(t *testing.T) {

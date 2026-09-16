@@ -16,9 +16,10 @@ import (
 )
 
 type fakeReportRepository struct {
-	pages   []report.Page
-	callIdx int
-	byID    map[report.ReportID]*report.AggregateReport
+	pages     []report.Page
+	callIdx   int
+	byID      map[report.ReportID]*report.AggregateReport
+	lastQuery report.Query
 }
 
 func (f *fakeReportRepository) Save(context.Context, *report.AggregateReport) error { return nil }
@@ -31,7 +32,8 @@ func (f *fakeReportRepository) FindByID(_ context.Context, id report.ReportID) (
 	return nil, errNotFound
 }
 
-func (f *fakeReportRepository) Query(context.Context, report.Query) (report.Page, error) {
+func (f *fakeReportRepository) Query(_ context.Context, q report.Query) (report.Page, error) {
+	f.lastQuery = q
 	if f.callIdx >= len(f.pages) {
 		return report.Page{}, nil
 	}
@@ -115,6 +117,37 @@ func TestView_LoadMore_AppendsSecondPage(t *testing.T) {
 	require.False(t, v.loadMore.Visible(), "ohne weiteren Cursor darf der Button nicht mehr sichtbar sein")
 }
 
+func TestView_SetFilter_ForwardsPeriodAndDomainToQuery(t *testing.T) {
+	repo := &fakeReportRepository{pages: []report.Page{{}}}
+	w := test.NewWindow(nil)
+	defer w.Close()
+
+	v := newSyncTestView(repo, w)
+	w.SetContent(v)
+
+	dr, err := report.NewDateRange(time.Now().Add(-time.Hour), time.Now())
+	require.NoError(t, err)
+
+	v.SetFilter(&dr, "example.com")
+
+	require.Equal(t, "example.com", repo.lastQuery.Domain)
+	require.NotNil(t, repo.lastQuery.Period)
+	require.True(t, repo.lastQuery.Period.Begin.Equal(dr.Begin))
+}
+
+func TestView_SetFilter_NoMatches_ShowsFilterSpecificEmptyText(t *testing.T) {
+	repo := &fakeReportRepository{pages: []report.Page{{}}}
+	w := test.NewWindow(nil)
+	defer w.Close()
+
+	v := newSyncTestView(repo, w)
+	w.SetContent(v)
+
+	v.SetFilter(nil, "andere-domain.example")
+
+	require.NotNil(t, uitest.FindLabel(v, i18n.ReportsEmptyNoMatch))
+}
+
 func TestView_Reload_ResetsPreviousData(t *testing.T) {
 	repo := &fakeReportRepository{pages: []report.Page{
 		{Reports: []report.AggregateReport{testReport(t, 1, "r1")}, NextCursor: "cursor-1"},
@@ -133,6 +166,35 @@ func TestView_Reload_ResetsPreviousData(t *testing.T) {
 
 	require.Len(t, v.data, 1)
 	require.Equal(t, "r2", v.data[0].Metadata.ReportID)
+}
+
+func TestNewView_ConstructsWithoutPanicking_GroupSelectDefaultDoesNotTriggerPrematureLoad(t *testing.T) {
+	// Regressionstest: widget.Select.SetSelected() löst OnChanged synchron
+	// aus. Wird OnChanged vor v.container gesetzt, greift der erste
+	// Aufruf über Reload()/setCenter() auf ein noch nicht zugewiesenes
+	// v.container zu (Nil-Pointer-Panic direkt im Konstruktor).
+	repo := &fakeReportRepository{}
+	w := test.NewWindow(nil)
+	defer w.Close()
+
+	require.NotPanics(t, func() {
+		v := NewView(&queryreports.UseCase{Reports: repo}, w)
+		w.SetContent(v)
+	})
+}
+
+func TestView_GroupSelected_ForwardsGroupByToQueryAndReloads(t *testing.T) {
+	repo := &fakeReportRepository{pages: []report.Page{{}, {}}}
+	w := test.NewWindow(nil)
+	defer w.Close()
+
+	v := newSyncTestView(repo, w)
+	w.SetContent(v)
+	v.Reload()
+
+	v.group.SetSelected(i18n.ReportsGroupDomain)
+
+	require.Equal(t, report.GroupByDomain, repo.lastQuery.GroupBy)
 }
 
 func TestView_ShowDetail_LoadsFullReport(t *testing.T) {

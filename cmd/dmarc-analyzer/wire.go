@@ -10,6 +10,8 @@ import (
 
 	"github.com/pmoscode/dmarc-analyzer/internal/app/importfiles"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/manageaccount"
+	"github.com/pmoscode/dmarc-analyzer/internal/app/queryreports"
+	"github.com/pmoscode/dmarc-analyzer/internal/app/sourcestats"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/statistics"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/syncreports"
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/account"
@@ -18,6 +20,7 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/infra/imap"
 	"github.com/pmoscode/dmarc-analyzer/internal/infra/keyring"
 	"github.com/pmoscode/dmarc-analyzer/internal/infra/mailmime"
+	"github.com/pmoscode/dmarc-analyzer/internal/infra/sourceinfo"
 	"github.com/pmoscode/dmarc-analyzer/internal/infra/sqlite"
 	"github.com/pmoscode/dmarc-analyzer/internal/platform/paths"
 )
@@ -29,10 +32,12 @@ import (
 type app struct {
 	db *sql.DB
 
-	accounts *manageaccount.UseCase
-	sync     *syncreports.UseCase
-	importer *importfiles.UseCase
-	stats    *statistics.UseCase
+	accounts    *manageaccount.UseCase
+	queries     *queryreports.UseCase
+	sync        *syncreports.UseCase
+	importer    *importfiles.UseCase
+	stats       *statistics.UseCase
+	sourceStats *sourcestats.UseCase
 }
 
 // credentialAwareCommands sind die einzigen Unterbefehle, die Zugangsdaten
@@ -40,8 +45,10 @@ type app struct {
 // z. B. ein harmloses "dmarc-analyzer stats" unnötig den echten
 // OS-Schlüsselbund ansprechen (bei fehlendem Schlüsselbund sogar
 // interaktiv nach einer Master-Passphrase fragen), obwohl stats gar keine
-// Zugangsdaten braucht.
-var credentialAwareCommands = map[string]bool{"sync": true, "account": true}
+// Zugangsdaten braucht. "gui" ist Zugangsdaten-bewusst, weil sowohl die
+// Konten- als auch die Sync-Ansicht des grafischen Programms Konten
+// verwalten bzw. abgleichen können (siehe cmd_gui.go).
+var credentialAwareCommands = map[string]bool{"sync": true, "account": true, "gui": true}
 
 // newApp öffnet die Datenbank und verdrahtet die für cmd tatsächlich
 // benötigten Adapter mit den Use Cases. Einziger Ort im Programm, der
@@ -63,13 +70,15 @@ func newApp(ctx context.Context, cmd string) (*app, error) {
 	stateRepo := sqlite.NewSyncStateRepository(db)
 	failedRepo := sqlite.NewFailedImportRepository(db)
 	statsRepo := sqlite.NewStatisticsRepository(db)
+	sourceStatsRepo := sqlite.NewSourceStatsRepository(db)
 
 	decoder := mailmime.NewDecoder()
 	parsers := []domainsync.ReportParser{dmarcxml.NewParser()}
 	newSource := func() domainsync.MessageSource { return imap.NewAdapter() }
 
 	a := &app{
-		db: db,
+		db:      db,
+		queries: &queryreports.UseCase{Reports: reportRepo},
 		importer: &importfiles.UseCase{
 			Reports:       reportRepo,
 			FailedImports: failedRepo,
@@ -77,6 +86,10 @@ func newApp(ctx context.Context, cmd string) (*app, error) {
 			Parsers:       parsers,
 		},
 		stats: &statistics.UseCase{Repository: statsRepo},
+		sourceStats: &sourcestats.UseCase{
+			Sources:  sourceStatsRepo,
+			Enricher: sourceinfo.NewEnricher(),
+		},
 	}
 
 	if credentialAwareCommands[cmd] {

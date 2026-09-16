@@ -14,20 +14,31 @@ import (
 
 	"github.com/pmoscode/dmarc-analyzer/internal/app/manageaccount"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/queryreports"
+	"github.com/pmoscode/dmarc-analyzer/internal/app/sourcestats"
+	"github.com/pmoscode/dmarc-analyzer/internal/app/statistics"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/syncreports"
+	"github.com/pmoscode/dmarc-analyzer/internal/domain/analysis"
+	"github.com/pmoscode/dmarc-analyzer/internal/domain/report"
+	"github.com/pmoscode/dmarc-analyzer/internal/ui/components"
+	"github.com/pmoscode/dmarc-analyzer/internal/ui/dashboard"
+	"github.com/pmoscode/dmarc-analyzer/internal/ui/glossary"
 	"github.com/pmoscode/dmarc-analyzer/internal/ui/i18n"
 	"github.com/pmoscode/dmarc-analyzer/internal/ui/onboarding"
 	"github.com/pmoscode/dmarc-analyzer/internal/ui/reports"
 	"github.com/pmoscode/dmarc-analyzer/internal/ui/settings"
+	"github.com/pmoscode/dmarc-analyzer/internal/ui/sources"
 )
 
 // Dependencies bündelt die Use Cases, die das Hauptfenster braucht — die
-// Composition Root (cmd/dmarc-analyzer, künftig auch der grafische
-// Einstiegspunkt) verdrahtet sie gegen die echten Adapter.
+// Composition Root (cmd/dmarc-analyzer) verdrahtet sie gegen die echten
+// Adapter.
 type Dependencies struct {
-	Accounts *manageaccount.UseCase
-	Queries  *queryreports.UseCase
-	Sync     *syncreports.UseCase
+	Accounts   *manageaccount.UseCase
+	Queries    *queryreports.UseCase
+	Sync       *syncreports.UseCase
+	Statistics *statistics.UseCase
+	Sources    *sourcestats.UseCase
+	Charts     analysis.ChartRenderer
 }
 
 // BuildMainWindow erzeugt das Hauptfenster: eigenes Theme, dann je nach
@@ -48,14 +59,18 @@ func BuildMainWindow(a fyne.App, deps Dependencies) fyne.Window {
 
 // navItem sind die Einträge der seitlichen Navigation
 // (IMPLEMENTIERUNG.md Abschnitt 10.1: "container.NewBorder + widget.List").
+// Reihenfolge und Standardauswahl (navDashboard) folgen der Tabelle dort:
+// Übersicht steht an erster Stelle.
 type navItem int
 
 const (
-	navReports navItem = iota
+	navDashboard navItem = iota
+	navReports
+	navSources
 	navSettings
 )
 
-var navLabels = []string{i18n.NavReports, i18n.NavSettings}
+var navLabels = []string{i18n.NavDashboard, i18n.NavReports, i18n.NavSources, i18n.NavSettings}
 
 // shell ist das Hauptfenster nach der Ersteinrichtung: Navigation links,
 // Inhalt rechts, Sync-Knopf oben.
@@ -67,8 +82,11 @@ type shell struct {
 	// runBackground: siehe internal/ui/settings.View (AGENTS.md).
 	runBackground func(f func())
 
-	reportsView  *reports.View
-	settingsView *settings.View
+	dashboardView *dashboard.View
+	reportsView   *reports.View
+	sourcesView   *sources.View
+	settingsView  *settings.View
+	filterBar     *components.FilterBar
 
 	nav     *widget.List
 	content *fyne.Container
@@ -86,9 +104,14 @@ func newShell(deps Dependencies, window fyne.Window) *shell {
 		runBackground: func(f func()) { go f() },
 	}
 
+	s.dashboardView = dashboard.NewView(deps.Statistics, deps.Charts, window)
 	s.reportsView = reports.NewView(deps.Queries, window)
+	s.sourcesView = sources.NewView(deps.Sources, window)
 	s.settingsView = settings.NewView(deps.Accounts, window)
-	s.settingsView.OnAccountsChanged = s.reportsView.Reload
+	s.settingsView.OnAccountsChanged = s.reloadFilteredViews
+
+	s.filterBar = components.NewFilterBar()
+	s.filterBar.OnChanged = func(report.DateRange, string) { s.reloadFilteredViews() }
 
 	s.nav = widget.NewList(
 		func() int { return len(navLabels) },
@@ -102,10 +125,17 @@ func newShell(deps Dependencies, window fyne.Window) *shell {
 	s.syncButton = widget.NewButton(i18n.SyncButton, s.startSync)
 	s.syncButton.Importance = widget.HighImportance
 
+	glossaryButton := widget.NewButton(i18n.GlossaryButtonLabel, func() { glossary.ShowDialog(s.window) })
+
 	s.content = container.NewStack()
 
+	header := container.NewVBox(
+		container.NewHBox(widget.NewLabelWithStyle(i18n.AppTitle, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}), glossaryButton, s.syncButton),
+		s.filterBar,
+	)
+
 	s.container = container.NewBorder(
-		container.NewHBox(widget.NewLabelWithStyle(i18n.AppTitle, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}), s.syncButton),
+		header,
 		nil, container.NewVScroll(s.nav), nil,
 		s.content,
 	)
@@ -123,10 +153,27 @@ func (s *shell) selectNav(item navItem) {
 	switch item {
 	case navSettings:
 		s.content.Objects = []fyne.CanvasObject{s.settingsView}
-	default:
+	case navSources:
+		s.content.Objects = []fyne.CanvasObject{s.sourcesView}
+	case navReports:
 		s.content.Objects = []fyne.CanvasObject{s.reportsView}
+	default: // navDashboard
+		s.content.Objects = []fyne.CanvasObject{s.dashboardView}
 	}
 	s.content.Refresh()
+}
+
+// reloadFilteredViews lädt Übersicht, Berichte und Sendequellen mit dem
+// aktuell in der Filterleiste gewählten Zeitraum/Domain neu
+// (UMSETZUNGSPLAN.md AP-6-Checkliste: "Filter- ... -leiste, wirkt auf
+// alle Ansichten") — Einstellungen ist von Filtern unbetroffen.
+func (s *shell) reloadFilteredViews() {
+	period := s.filterBar.CurrentPeriod()
+	domain := s.filterBar.CurrentDomain()
+
+	s.dashboardView.SetFilter(period, domain)
+	s.reportsView.SetFilter(&period, domain)
+	s.sourcesView.SetFilter(&period, domain)
 }
 
 // start entscheidet zwischen Ersteinrichtung und normaler Ansicht — je
@@ -152,14 +199,16 @@ func (s *shell) showOnboarding() {
 	s.content.Refresh()
 	s.nav.Hide()
 	s.syncButton.Hide()
+	s.filterBar.Hide()
 }
 
 func (s *shell) showMain() {
 	s.nav.Show()
 	s.syncButton.Show()
+	s.filterBar.Show()
 	s.settingsView.Reload()
-	s.reportsView.Reload()
-	s.nav.Select(int(navReports))
+	s.reloadFilteredViews()
+	s.nav.Select(int(navDashboard))
 }
 
 // startSync gleicht alle konfigurierten Konten ab — I/O läuft über
@@ -217,6 +266,6 @@ func (s *shell) finishSync(result *syncreports.Result, err error) {
 		} else if result != nil {
 			dialog.ShowInformation(i18n.SyncButton, fmt.Sprintf(i18n.SyncResultFmt, result.New, result.Skipped, result.Failed), s.window)
 		}
-		s.reportsView.Reload()
+		s.reloadFilteredViews()
 	})
 }

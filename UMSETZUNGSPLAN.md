@@ -461,18 +461,105 @@ seine Reports. ✅ Erreicht.
 
 **Ziel:** Die in `FEATURES.md` geforderte Visualisierung steht.
 
-- [ ] Dashboard mit Kennzahlen-Kacheln inkl. Trend zur Vorperiode
-- [ ] `ChartRenderer`-Port + go-chart-Adapter
-- [ ] Zeitreihe, Top-10-Balken, Disposition-Donut, Heatmap Quelle × Tag
-- [ ] Sendequellen-Ansicht, aggregiert nach Quell-IP
-- [ ] rDNS/PTR-Auflösung mit Cache (Vorschlag 11.2)
-- [ ] Erkennung bekannter Dienste über PTR und IP-Bereiche (Vorschlag 11.3)
-- [ ] Filter- und Gruppierungsleiste, wirkt auf alle Ansichten
-- [ ] Glossar und Tooltips für DMARC-Begriffe
-- [ ] Export: gefilterte Ansicht als CSV, Diagramm als PNG (Vorschlag 11.4)
+- [x] Dashboard mit Kennzahlen-Kacheln inkl. Trend zur Vorperiode
+- [x] `ChartRenderer`-Port + go-chart-Adapter
+- [x] Zeitreihe, Top-10-Balken, Disposition-Donut, Heatmap Quelle × Tag
+- [x] Sendequellen-Ansicht, aggregiert nach Quell-IP
+- [x] rDNS/PTR-Auflösung mit Cache (Vorschlag 11.2)
+- [x] Erkennung bekannter Dienste über PTR und IP-Bereiche (Vorschlag 11.3)
+- [x] Filter- und Gruppierungsleiste, wirkt auf alle Ansichten
+- [x] Glossar und Tooltips für DMARC-Begriffe
+- [x] Export: gefilterte Ansicht als CSV, Diagramm als PNG (Vorschlag 11.4)
 
 **Fertig wenn:** Aus dem Dashboard ist ohne Zwischenschritt erkennbar, welche
-Sendequelle fehlschlägt und wie viele Nachrichten betroffen sind.
+Sendequelle fehlschlägt und wie viele Nachrichten betroffen sind. ✅ Erreicht.
+
+**Abweichungen / Erkenntnisse:**
+- `analysis.Repository` (AP 2/4) um `DailyVolumes`, `TopSources`, `Heatmap`
+  erweitert statt eines neuen Ports — bleibt der eine Ort für
+  SQL-aggregierte Lesezugriffe auf Kennzahlen, konsistent mit `Compute`.
+  Ein Report wird für die Zeitreihe/Heatmap dem Tag von `date_begin`
+  zugeordnet, nicht anteilig verteilt — DMARC-Aggregate-Reports sind nach
+  RFC 7489 praktisch immer Ein-Tages-Zeiträume, eine anteilige Verteilung
+  hätte keinen belastbaren fachlichen Mehrwert gegenüber dem Aufwand
+  gehabt.
+- Neuer Domänen-Port `domain/sources` (Paketname `sources`, wie
+  `internal/ui/sources` — unterschiedliche Importpfade, im UI-Code per
+  Alias `domainsources` importiert, demselben Muster wie `domainsync`
+  folgend) für die nach Quell-IP aggregierte Sicht plus `Enricher`-Port
+  (PTR + Diensterkennung). SQL-Aggregation (Repository) und
+  Netzwerk-Anreicherung (Enricher) sind bewusst getrennte Ports und laufen
+  in unterschiedlichen Schichten (Repository in `infra/sqlite`, Enrich-Loop
+  in `app/sourcestats`) — zwei grundverschiedene I/O-Arten, die ein
+  gemeinsamer Adapter vermischt hätte.
+- `internal/infra/sourceinfo.Enricher`: nur hostnamenbasierte
+  Diensterkennung (PTR-Suffix), bewusst **ohne** zusätzliche
+  IP-Bereichs-Erkennung trotz FEATURES.md-Wortlaut ("über PTR und
+  IP-Bereiche") — fest einprogrammierte CIDR-Listen großer Anbieter wären
+  nach kurzer Zeit unbemerkt veraltet, ohne einen Pflegeprozess dafür ist
+  das schlechter als gar keine Angabe. Cache ist ein unbegrenzter
+  In-Prozess-`sync.Map` (kein TTL) — für eine Desktop-Anwendung mit kurzen
+  Laufzeiten ausreichend.
+- go-chart/v2 hat keinen Heatmap-Diagrammtyp. Die Heatmap wird deshalb
+  nicht über go-chart, sondern direkt mit `image/draw` gezeichnet
+  (Rechtecke) plus go-charts eigenem `drawing.RasterGraphicContext` für
+  Text (Achsenbeschriftung) — spart eine zusätzliche
+  Font-Rendering-Abhängigkeit nur für dieses eine Diagramm.
+- `ChartRenderer` liefert bei leeren Eingabedaten ein leeres weißes Bild
+  statt eines Fehlers — die aufrufende `dashboard.View` zeigt in diesem
+  Fall ohnehin einen Leerzustand statt eines Diagramms an; ein Fehler wäre
+  hier unnötig streng gewesen.
+- Diagrammbeschriftungen (z. B. "Bestanden"/"Fehlgeschlagen",
+  Disposition-Namen) sind als literale deutsche Zeichenketten direkt in
+  `internal/infra/charts` gehalten, nicht aus `internal/ui/i18n`
+  importiert — `i18n` ist eine UI-Schicht-Abhängigkeit, die `infra` laut
+  Abhängigkeitsrichtung nicht importieren darf. Kleine, bewusst in Kauf
+  genommene Textdopplung.
+- "Tooltips" (Checklistenpunkt) sind kein Hover-Tooltip — Fyne v2.8 hat
+  keinen eingebauten Tooltip-Mechanismus (geprüft: kein Treffer im
+  gesamten Modul). Ersatz: ein kleiner "?"-Knopf neben einzelnen
+  Dashboard-Kacheln bzw. im Hauptfenster-Kopf öffnet denselben
+  Glossar-Text als Dialog (`internal/ui/glossary`).
+- "Gruppierungsleiste" wurde nicht in die gemeinsame `FilterBar`
+  aufgenommen: `analysis.Query` und `sources.Query` kennen kein `GroupBy`
+  (Übersicht/Sendequellen sind bereits aggregiert, eine zusätzliche
+  Gruppierung ergäbe dort keinen Sinn). Stattdessen bekam ausschließlich
+  `reports.View` einen eigenen Gruppierungs-`Select` (Keine/Domain/
+  Organisation), der das seit AP 2 vorhandene `report.Query.GroupBy`
+  endlich an die UI anschließt.
+- Export exportiert die aktuell geladene(n) Seite(n) (`reports.View`/
+  `sources.View`), nicht zwangsläufig jeden Datensatz, der dem Filter
+  insgesamt entspricht — alle Seiten nur für den Export vorab zu laden
+  wäre bei großen Beständen selbst eine Performance-Falle und würde der
+  in AP 2/5 bewusst gewählten Lazy-Datenquelle widersprechen.
+- **Echter Bug gefunden und behoben** (Konstruktionsreihenfolge, kein
+  Testartefakt): `widget.Select.SetSelected()` löst `OnChanged` synchron
+  aus, auch im Konstruktor. Das neue Gruppierungs-`Select` in
+  `reports.View` rief `SetSelected()` auf, bevor `v.container` zugewiesen
+  war — der synchron ausgelöste `OnChanged`-Handler griff über
+  `Reload()`/`setCenter()` auf das noch nil `v.container` zu und
+  panickte direkt beim `NewView()`-Aufruf. Aufgedeckt durch einen simplen
+  Konstruktionstest (`NewView()` + `SetContent`), nicht durch komplexe
+  Fixtures. Fix: `Select` zunächst ohne `OnChanged` aufbauen, `OnChanged`
+  erst zuweisen, nachdem der Rest des Widgets fertig ist — siehe
+  AGENTS.md.
+- **AP-5-Lücke geschlossen:** Es gab bislang keinen Weg, das grafische
+  Programm tatsächlich zu starten — `ui.BuildMainWindow` existierte, aber
+  `main.go` rief es nirgends auf (nur `run()`/Unterbefehle). Jetzt startet
+  `dmarc-analyzer` ohne Argumente die GUI (`cmd_gui.go`, `fyneapp.New()` +
+  `window.ShowAndRun()`); `--help`/`-h` zeigt weiterhin nur die
+  Kommandozeilen-Hilfe. Bewusst **nicht** in `run()` verdrahtet, da
+  `run()` von `cmd_*_test.go` direkt mit leeren Argumenten aufgerufen wird
+  (`TestRun_NoArgs_PrintsUsageWithoutError`) und dabei nie ein echtes
+  Fenster öffnen darf — die GUI-Startentscheidung liegt deshalb
+  ausschließlich in `main()`, das nicht unit-getestet wird. `"gui"` wurde
+  zu `credentialAwareCommands` ergänzt, da sowohl Kontoverwaltung als auch
+  Sync-Knopf im Hauptfenster Zugangsdaten brauchen. Ein echter Start der
+  GUI in einer Desktop-Umgebung wurde in dieser Session **nicht**
+  verifiziert (keine Anzeige im Entwicklungscontainer verfügbar) — nur
+  `--help` und alle bestehenden Unterbefehle wurden am gebauten Binary
+  geprüft; die Fyne-Widget-Ebene selbst ist durchgängig per
+  `fyne.io/fyne/v2/test` (Headless-Treiber) getestet.
 
 ### AP 7 — Feinschliff und Release 1.0.0
 

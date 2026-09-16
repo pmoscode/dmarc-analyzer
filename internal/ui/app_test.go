@@ -10,6 +10,8 @@ import (
 
 	"github.com/pmoscode/dmarc-analyzer/internal/app/manageaccount"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/queryreports"
+	"github.com/pmoscode/dmarc-analyzer/internal/app/sourcestats"
+	"github.com/pmoscode/dmarc-analyzer/internal/app/statistics"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/syncreports"
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/account"
 	domainsync "github.com/pmoscode/dmarc-analyzer/internal/domain/sync"
@@ -51,13 +53,18 @@ func newTestDeps(setup *testSetup) Dependencies {
 			Decoder:     fakeDecoder{},
 			NewSource:   newSource,
 		},
+		Statistics: &statistics.UseCase{Repository: fakeAnalysisRepository{}},
+		Sources:    &sourcestats.UseCase{Sources: fakeSourcesRepository{}, Enricher: fakeEnricher{}},
+		Charts:     fakeChartRenderer{},
 	}
 }
 
 func newSyncTestShell(setup *testSetup, w fyne.Window) *shell {
 	sh := newShell(newTestDeps(setup), w)
 	sh.runBackground = func(f func()) { f() }
+	sh.dashboardView.SetRunBackgroundForTest(func(f func()) { f() })
 	sh.reportsView.SetRunBackgroundForTest(func(f func()) { f() })
+	sh.sourcesView.SetRunBackgroundForTest(func(f func()) { f() })
 	sh.settingsView.SetRunBackgroundForTest(func(f func()) { f() })
 	return sh
 }
@@ -91,8 +98,8 @@ func TestShell_WithAccounts_StartShowsMainView(t *testing.T) {
 	sh.start()
 
 	require.Nil(t, uitest.FindLabel(sh, i18n.OnboardingStepAccount))
-	require.NotNil(t, uitest.FindLabel(sh, i18n.ReportsEmptyTitle),
-		"ohne Berichte muss die Berichtsansicht (Standardauswahl) ihren Leerzustand zeigen")
+	require.NotNil(t, uitest.FindLabel(sh, i18n.DashboardEmptyTitle),
+		"ohne Kennzahlen muss die Übersicht (Standardauswahl, IMPLEMENTIERUNG.md Abschnitt 10.1) ihren Leerzustand zeigen")
 }
 
 func TestShell_SelectNav_SwitchesToSettings(t *testing.T) {
@@ -107,6 +114,37 @@ func TestShell_SelectNav_SwitchesToSettings(t *testing.T) {
 	sh.selectNav(navSettings)
 
 	require.NotNil(t, uitest.FindLabel(sh, i18n.SettingsTitle))
+}
+
+func TestShell_SelectNav_SwitchesToSources(t *testing.T) {
+	setup := &testSetup{accountsRepo: newFakeAccountRepository(testAccount(t))}
+	w := test.NewWindow(nil)
+	defer w.Close()
+
+	sh := newSyncTestShell(setup, w)
+	w.SetContent(sh)
+	sh.start()
+
+	sh.selectNav(navSources)
+
+	require.NotNil(t, uitest.FindLabel(sh, i18n.SourcesTitle))
+}
+
+func TestShell_FilterBar_Changed_ReloadsDashboardReportsAndSources(t *testing.T) {
+	setup := &testSetup{accountsRepo: newFakeAccountRepository(testAccount(t))}
+	w := test.NewWindow(nil)
+	defer w.Close()
+
+	sh := newSyncTestShell(setup, w)
+	w.SetContent(sh)
+	sh.start()
+
+	// Filterleiste anwenden löst denselben Codepfad wie ein Tipp auf
+	// "Filter anwenden" aus (OnChanged) — synchron dank runBackground.
+	sh.filterBar.OnChanged(sh.filterBar.CurrentPeriod(), "example.com")
+
+	require.NotNil(t, uitest.FindLabel(sh, i18n.DashboardEmptyTitle),
+		"Übersicht muss mit dem geänderten Filter neu geladen worden sein")
 }
 
 func TestShell_StartSync_Success_ShowsResultAndReloadsReports(t *testing.T) {

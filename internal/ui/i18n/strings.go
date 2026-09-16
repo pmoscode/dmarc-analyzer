@@ -16,8 +16,10 @@ const (
 
 // Navigation (Hauptfenster, linke Leiste).
 const (
-	NavReports  = "Berichte"
-	NavSettings = "Einstellungen"
+	NavDashboard = "Übersicht"
+	NavReports   = "Berichte"
+	NavSources   = "Sendequellen"
+	NavSettings  = "Einstellungen"
 )
 
 // Ersteinrichtungs-Assistent (UMSETZUNGSPLAN.md Abschnitt 3.1: geführte
@@ -84,6 +86,11 @@ const (
 	ReportsEmptyAction  = "Jetzt abgleichen"
 	ReportsEmptyNoMatch = "Keine Berichte für diese Filterung."
 
+	ReportsGroupLabel  = "Gruppieren nach"
+	ReportsGroupNone   = "Keine"
+	ReportsGroupDomain = "Domain"
+	ReportsGroupOrg    = "Organisation"
+
 	ReportDetailTitle       = "Berichtsdetails"
 	ReportDetailMetadata    = "Metadaten"
 	ReportDetailPolicy      = "Veröffentlichte Richtlinie"
@@ -111,4 +118,76 @@ const (
 	ErrorGenericTitle  = "Etwas ist schiefgelaufen"
 	ErrorLoadFailed    = "Daten konnten nicht geladen werden."
 	ErrorConnectFailed = "Verbindung fehlgeschlagen — bitte Host, Port und Zugangsdaten prüfen."
+)
+
+// Filter-/Gruppierungsleiste — wirkt laut UMSETZUNGSPLAN.md AP-6-Checkliste
+// auf Übersicht, Berichte und Sendequellen gemeinsam.
+const (
+	FilterPeriodLabel  = "Zeitraum"
+	FilterPeriod7Days  = "Letzte 7 Tage"
+	FilterPeriod30Days = "Letzte 30 Tage"
+	FilterPeriod90Days = "Letzte 90 Tage"
+	FilterPeriod1Year  = "Letztes Jahr"
+	FilterDomainLabel  = "Domain"
+	FilterDomainHint   = "Alle Domains"
+	FilterApply        = "Filter anwenden"
+)
+
+// Übersicht (Dashboard) — Kennzahlen-Kacheln und Diagramme
+// (IMPLEMENTIERUNG.md Abschnitt 10.2/10.3).
+const (
+	DashboardTitle               = "Übersicht"
+	DashboardTileTotalMessages   = "Nachrichten gesamt"
+	DashboardTilePassRate        = "DMARC-Pass-Rate"
+	DashboardTileDKIMAlignment   = "DKIM-Alignment-Rate"
+	DashboardTileSPFAlignment    = "SPF-Alignment-Rate"
+	DashboardTileDistinctSources = "Unterschiedliche Quellen"
+	DashboardTrendUp             = "▲"
+	DashboardTrendDown           = "▼"
+	DashboardTrendFlat           = "→"
+	DashboardTrendNoData         = "kein Vergleich zur Vorperiode möglich"
+	DashboardTrendFmt            = "%s %+.1f Prozentpunkte ggü. Vorperiode"
+
+	DashboardChartDailyVolume = "Nachrichtenvolumen pro Tag"
+	DashboardChartTopSources  = "Top-Sendequellen"
+	DashboardChartDisposition = "Verteilung nach Disposition"
+	DashboardChartHeatmap     = "Sendequelle × Tag (Pass-Rate)"
+
+	DashboardEmptyTitle  = "Noch keine Daten für diesen Zeitraum"
+	DashboardEmptyDetail = "Nach dem ersten Abgleich erscheinen hier Kennzahlen und Diagramme."
+
+	DashboardExportChartPNG = "Diagramm als PNG exportieren"
+)
+
+// Sendequellen — aggregiert nach Quell-IP (IMPLEMENTIERUNG.md Abschnitt
+// 10.1).
+const (
+	SourcesTitle          = "Sendequellen"
+	SourcesColumnIP       = "Quell-IP"
+	SourcesColumnVolume   = "Volumen"
+	SourcesColumnPassRate = "Pass-Rate"
+	SourcesColumnHostname = "Hostname (PTR)"
+	SourcesColumnService  = "Erkannter Dienst"
+	SourcesUnknownValue   = "—"
+	SourcesLoadMore       = "Weitere laden"
+	SourcesEmptyTitle     = "Noch keine Sendequellen"
+	SourcesEmptyDetail    = "Nach dem ersten Abgleich erscheinen hier die erkannten Sendequellen."
+)
+
+// Export gefilterter Ansichten (FEATURES.md Vorschlag 11.4).
+const (
+	ExportCSV          = "Als CSV exportieren"
+	ExportSuccessTitle = "Export erfolgreich"
+	ExportSuccessFmt   = "Gespeichert unter %s"
+	ExportFailedTitle  = "Export fehlgeschlagen"
+)
+
+// Glossar — Begriffe rund um DMARC (UMSETZUNGSPLAN.md AP-6-Checkliste:
+// "Glossar und Tooltips für DMARC-Begriffe"). Fyne v2.8 hat keine
+// eingebauten Hover-Tooltips (geprüft) — ein "?"-Knopf neben Kennzahlen
+// öffnet stattdessen denselben Text als Dialog, siehe
+// internal/ui/glossary.
+const (
+	GlossaryTitle       = "Glossar"
+	GlossaryButtonLabel = "?"
 )

@@ -18,6 +18,21 @@ func (f *fakeStatsRepository) Compute(context.Context, analysis.Query) (analysis
 	return f.stats, nil
 }
 
+// DailyVolumes/TopSources/Heatmap: runStats (cmd_stats.go) ruft nur
+// Compute auf — leere Stubs, nur damit fakeStatsRepository
+// analysis.Repository weiterhin vollständig erfüllt.
+func (f *fakeStatsRepository) DailyVolumes(context.Context, analysis.Query) ([]analysis.DailyVolume, error) {
+	return nil, nil
+}
+
+func (f *fakeStatsRepository) TopSources(context.Context, analysis.Query, int) ([]analysis.SourceVolume, error) {
+	return nil, nil
+}
+
+func (f *fakeStatsRepository) Heatmap(context.Context, analysis.Query, int) (analysis.Heatmap, error) {
+	return analysis.Heatmap{}, nil
+}
+
 func TestRunStats_InvalidDays_ReturnsError(t *testing.T) {
 	t.Parallel()
 

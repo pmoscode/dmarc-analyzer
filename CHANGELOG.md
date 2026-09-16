@@ -100,3 +100,47 @@ die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
   Liste, weil bei `container.NewBorder` der Center-Slot an Index 0 liegt,
   nicht am Ende von `.Objects` — aufgedeckt durch den Navigationstest
   `TestShell_SelectNav_SwitchesToSettings`.
+- Auswertung und Visualisierung (AP 6): Übersicht (`internal/ui/dashboard`)
+  mit Kennzahlen-Kacheln inklusive Trendpfeil zur Vorperiode sowie vier
+  Diagrammen (Zeitreihe gestapelt nach Pass/Fail, Top-10-Sendequellen nach
+  Volumen und Pass-Rate eingefärbt, Disposition-Donut, Quelle-×-Tag-
+  Heatmap). `analysis.ChartRenderer`-Port gegen
+  `github.com/wcharczuk/go-chart/v2` implementiert
+  (`internal/infra/charts`); die Heatmap wird mangels go-chart-Unter-
+  stützung direkt mit `image/draw` gezeichnet. `analysis.Repository` um
+  `DailyVolumes`/`TopSources`/`Heatmap` erweitert (SQL-Aggregation wie
+  `Compute`), `statistics.UseCase.Dashboard` bündelt alle Übersichtsdaten
+  in einem Ladevorgang.
+- Sendequellen-Ansicht (`internal/ui/sources`): nach Quell-IP aggregierte,
+  lazy-ladende Tabelle (Volumen, Pass-Rate, PTR-Hostname, erkannter
+  Dienst) über den neuen Domänen-Port `domain/sources`
+  (`SourceStatsRepository` in `internal/infra/sqlite`, Keyset-Pagination
+  wie bei Reports). rDNS/PTR-Auflösung mit Prozess-Cache sowie
+  hostnamenbasierte Erkennung bekannter Diensteanbieter (Google
+  Workspace, Microsoft 365, Mailchimp, SendGrid, Brevo, Postmark) in
+  `internal/infra/sourceinfo` — bewusst ohne zusätzliche
+  IP-Bereichs-Listen, siehe UMSETZUNGSPLAN.md für die Begründung.
+- Gemeinsame Filterleiste (`components.FilterBar`: Zeitraum-Voreinstellung
+  + Domain) wirkt jetzt auf Übersicht, Berichte und Sendequellen
+  gleichzeitig. `reports.View` bekam zusätzlich einen eigenen
+  Gruppierungs-`Select` (Keine/Domain/Organisation), der das seit AP 2
+  vorhandene `report.Query.GroupBy` erstmals an die UI anschließt.
+- Glossar (`internal/ui/glossary`) mit den wichtigsten DMARC-Begriffen,
+  erreichbar über einen Kopfzeilen-Knopf sowie kleine "?"-Knöpfe an
+  einzelnen Kennzahlen-Kacheln — Ersatz für Hover-Tooltips, die Fyne v2.8
+  nicht unterstützt.
+- Export: `exportdata.WriteChartPNG` (Diagramme als PNG) und
+  `exportdata.WriteSourceStatsCSV` (Sendequellen als CSV) ergänzen den
+  bestehenden Report-/Record-CSV-Export; `reports.View`/`sources.View`/
+  jedes Diagramm-Panel haben je einen Export-Knopf.
+- Das grafische Programm ist jetzt tatsächlich startbar: `dmarc-analyzer`
+  ohne Argumente öffnet das Hauptfenster (`cmd_gui.go`), `--help`/`-h`
+  zeigt die Kommandozeilen-Hilfe. Vorher existierte `ui.BuildMainWindow`
+  zwar vollständig getestet, war aber nirgends verdrahtet — eine seit
+  AP 5 offene Lücke.
+- Echter Bug behoben (Konstruktionsreihenfolge): `widget.Select.
+  SetSelected()` löst `OnChanged` synchron aus, auch im Konstruktor. Das
+  neue Gruppierungs-`Select` in `reports.View` griff dadurch beim
+  `NewView()`-Aufruf über den vorzeitig ausgelösten Handler auf das noch
+  nicht zugewiesene `v.container` zu (Nil-Pointer-Panic) — aufgedeckt
+  durch einen einfachen Konstruktionstest.

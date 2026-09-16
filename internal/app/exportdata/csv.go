@@ -1,11 +1,13 @@
-// Package exportdata exportiert gefilterte Ansichten als CSV
-// (FEATURES.md Vorschlag 11.4). Der PNG-Export von Diagrammen ist
-// bewusst nicht Teil von AP 4: er braucht den ChartRenderer-Port, der
-// erst in AP 6 entsteht (siehe UMSETZUNGSPLAN.md).
+// Package exportdata exportiert gefilterte Ansichten als CSV sowie
+// Diagramme als PNG (FEATURES.md Vorschlag 11.4).
 //
 // Reine Formatierungsfunktionen ohne eigene Ports: sie schreiben in einen
 // vom Aufrufer übergebenen io.Writer (Datei, HTTP-Response, Puffer für
-// einen Zwischenspeicher-Export) und lösen selbst keine I/O aus.
+// einen Zwischenspeicher-Export) und lösen selbst keine I/O aus. Der
+// PNG-Export nimmt bewusst ein bereits gerendertes image.Image entgegen,
+// nicht den ChartRenderer-Port selbst — das Rendern ist Sache des
+// Aufrufers (internal/ui/dashboard hat das Bild ohnehin schon für die
+// Anzeige erzeugt), dieses Paket kümmert sich nur um die Kodierung.
 package exportdata
 
 import (

@@ -208,3 +208,21 @@ Navigationstest `TestShell_SelectNav_SwitchesToSettings` sichtbar (Label
 „Konten" verschwand nach `Reload()`). Immer `Objects[0]` für den
 Center-Slot verwenden, wenn genau ein Objekt an `objects...` übergeben
 wurde — siehe `reports/list.go` (`setCenter`) als korrektes Vorbild.
+
+## `widget.Select.SetSelected()` löst `OnChanged` synchron aus
+
+`widget.NewSelect(options, onChanged)` gefolgt von einem
+`select.SetSelected(default)` im Konstruktor ruft `onChanged` **sofort,
+synchron, noch im Konstruktor** auf, wenn sich der Wert ändert — nicht
+erst bei einer Nutzerinteraktion. Greift `onChanged` auf ein Feld zu, das
+der Konstruktor erst *danach* zuweist (typischerweise `v.container`, für
+`Reload()`/`setCenter()`), panict das mit Nil-Pointer, sobald die
+Standardauswahl gesetzt wird — reproduziert in `reports.View` (Gruppierung
+nach Domain/Organisation, AP 6): `v.group.SetSelected(...)` lief vor
+`v.container = container.NewBorder(...)`.
+
+Lösung: `widget.NewSelect(options, nil)` konstruieren, `SetSelected()` für
+die Standardauswahl aufrufen (harmlos ohne Callback), und `OnChanged` erst
+danach zuweisen, wenn der Rest des Widgets fertig aufgebaut ist — siehe
+`reports/list.go`. Gilt für jeden `widget.Select`, dessen `OnChanged` auf
+später im Konstruktor zugewiesene Felder zugreift.

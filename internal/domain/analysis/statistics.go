@@ -48,4 +48,15 @@ type Statistics struct {
 // Anwendungsfall statt als generische Erweiterung von report.Query.
 type Repository interface {
 	Compute(ctx context.Context, q Query) (Statistics, error)
+	// DailyVolumes liefert das Nachrichtenvolumen je Tag im Zeitraum von
+	// q, sortiert aufsteigend nach Tag — für die Zeitreihe (Abschnitt
+	// 10.3).
+	DailyVolumes(ctx context.Context, q Query) ([]DailyVolume, error)
+	// TopSources liefert die nach Volumen absteigend sortierten
+	// Sendequellen im Zeitraum von q, begrenzt auf limit Einträge.
+	TopSources(ctx context.Context, q Query, limit int) ([]SourceVolume, error)
+	// Heatmap liefert die Quelle-×-Tag-Matrix für die sourceLimit
+	// volumenstärksten Quellen im Zeitraum von q (dieselbe Reihenfolge
+	// wie TopSources mit demselben Limit).
+	Heatmap(ctx context.Context, q Query, sourceLimit int) (Heatmap, error)
 }

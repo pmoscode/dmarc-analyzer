@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/pmoscode/dmarc-analyzer/internal/app/exportdata"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/queryreports"
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/report"
 	"github.com/pmoscode/dmarc-analyzer/internal/ui/components"
@@ -38,6 +39,19 @@ type View struct {
 	nextCursor string
 	loading    bool
 
+	// filterPeriod/filterDomain kommen von der gemeinsamen Filterleiste
+	// (components.FilterBar) im Hauptfenster — siehe SetFilter. nil
+	// filterPeriod bedeutet: kein Zeitraum-Filter.
+	filterPeriod *report.DateRange
+	filterDomain string
+
+	// groupBy ist ansichtseigen (nicht Teil der gemeinsamen Filterleiste)
+	// — Gruppierung nach Domain/Organisation ist ein Konzept der
+	// Berichtstabelle, das sich auf Übersicht/Sendequellen nicht
+	// überträgt (deren Ports kennen kein GroupBy).
+	groupBy report.GroupBy
+	group   *widget.Select
+
 	list      *widget.List
 	loadMore  *widget.Button
 	container *fyne.Container
@@ -64,11 +78,26 @@ func NewView(queries *queryreports.UseCase, window fyne.Window) *View {
 	v.loadMore = widget.NewButton(i18n.ReportsLoadMore, v.loadMoreReports)
 	v.loadMore.Hide()
 
+	exportButton := widget.NewButton(i18n.ExportCSV, v.exportCSV)
+
+	// SetSelected löst OnChanged synchron aus (widget.Select) — deshalb
+	// hier zunächst ohne Callback konstruieren und OnChanged erst setzen,
+	// nachdem v.container existiert; sonst würde v.groupSelected() über
+	// Reload()/setCenter() auf v.container zugreifen, bevor es zugewiesen
+	// ist (Nil-Pointer).
+	groupLabels := []string{i18n.ReportsGroupNone, i18n.ReportsGroupDomain, i18n.ReportsGroupOrg}
+	v.group = widget.NewSelect(groupLabels, nil)
+	v.group.SetSelected(i18n.ReportsGroupNone)
+
 	v.container = container.NewBorder(
-		widget.NewLabelWithStyle(i18n.ReportsTitle, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		container.NewHBox(
+			widget.NewLabelWithStyle(i18n.ReportsTitle, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+			exportButton, widget.NewLabel(i18n.ReportsGroupLabel), v.group,
+		),
 		v.loadMore, nil, nil,
 		v.list,
 	)
+	v.group.OnChanged = v.groupSelected
 
 	v.ExtendBaseWidget(v)
 	return v
@@ -94,14 +123,37 @@ func (v *View) updateRow(id widget.ListItemID, obj fyne.CanvasObject) {
 
 // Reload verwirft den aktuellen Stand und lädt die erste Seite neu — für
 // den Aufruf nach einem Sync oder beim ersten Anzeigen der Ansicht.
+// Verwendet weiterhin den zuletzt per SetFilter gesetzten Filter.
 func (v *View) Reload() {
 	v.data = nil
 	v.nextCursor = ""
 	v.loadPage()
 }
 
+// SetFilter übernimmt Zeitraum und Domain aus der gemeinsamen
+// Filterleiste (UMSETZUNGSPLAN.md AP-6-Checkliste: "wirkt auf alle
+// Ansichten") und lädt die erste Seite neu. period nil bedeutet: kein
+// Zeitraum-Filter.
+func (v *View) SetFilter(period *report.DateRange, domain string) {
+	v.filterPeriod = period
+	v.filterDomain = domain
+	v.Reload()
+}
+
 func (v *View) loadMoreReports() {
 	v.loadPage()
+}
+
+func (v *View) groupSelected(label string) {
+	switch label {
+	case i18n.ReportsGroupDomain:
+		v.groupBy = report.GroupByDomain
+	case i18n.ReportsGroupOrg:
+		v.groupBy = report.GroupByOrg
+	default:
+		v.groupBy = report.GroupByNone
+	}
+	v.Reload()
 }
 
 func (v *View) loadPage() {
@@ -111,8 +163,10 @@ func (v *View) loadPage() {
 	v.loading = true
 
 	cursor := v.nextCursor
+	period, domain, groupBy := v.filterPeriod, v.filterDomain, v.groupBy
 	v.runBackground(func() {
 		page, err := v.queries.List(context.Background(), report.Query{
+			Period: period, Domain: domain, GroupBy: groupBy,
 			SortField: report.SortByDateBegin, SortDirection: report.SortDescending,
 			Limit: pageSize, Cursor: cursor,
 		})
@@ -135,7 +189,11 @@ func (v *View) loadPage() {
 // Handlungsaufforderung).
 func (v *View) refreshContent() {
 	if len(v.data) == 0 {
-		empty := components.NewEmptyState(i18n.ReportsEmptyTitle, i18n.ReportsEmptyDetail, "", nil)
+		detail := i18n.ReportsEmptyDetail
+		if v.filterPeriod != nil || v.filterDomain != "" {
+			detail = i18n.ReportsEmptyNoMatch
+		}
+		empty := components.NewEmptyState(i18n.ReportsEmptyTitle, detail, "", nil)
 		v.setCenter(empty)
 		v.loadMore.Hide()
 		return
@@ -177,6 +235,29 @@ func (v *View) showDetail(r report.AggregateReport) {
 			d.Show()
 		})
 	})
+}
+
+// exportCSV exportiert die aktuell geladenen Reports (also die sichtbare,
+// gefilterte Seite, nicht zwangsläufig jeden Report, der dem Filter
+// insgesamt entspricht — Laden aller Seiten nur für den Export wäre bei
+// großen Beständen selbst eine Performance-Falle, siehe
+// UMSETZUNGSPLAN.md Abschnitt 3.3 zur Lazy-Datenquelle) als CSV
+// (FEATURES.md Vorschlag 11.4).
+func (v *View) exportCSV() {
+	data := v.data
+	dialog.ShowFileSave(func(writer fyne.URIWriteCloser, err error) {
+		if err != nil {
+			dialog.ShowInformation(i18n.ExportFailedTitle, err.Error(), v.window)
+			return
+		}
+		if writer == nil {
+			return // Nutzer hat abgebrochen.
+		}
+		defer func() { _ = writer.Close() }()
+		if err := exportdata.WriteReportsCSV(writer, data); err != nil {
+			dialog.ShowInformation(i18n.ExportFailedTitle, err.Error(), v.window)
+		}
+	}, v.window)
 }
 
 // SetRunBackgroundForTest ersetzt die interne Hintergrund-Ausführung —
