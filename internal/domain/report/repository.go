@@ -36,11 +36,20 @@ const (
 // GroupBy ist die Gruppierungsdimension für Query.
 type GroupBy string
 
-// Gruppierungsdimensionen für Query.GroupBy.
+// Gruppierungsdimensionen für Query.GroupBy. Wirkt als zusätzlicher,
+// primärer Sortierschlüssel (gleiche Gruppe steht zusammen), nicht als
+// SQL-Aggregation — Query liefert weiterhin eine Seite von AggregateReport,
+// keine aggregierten Kennzahlen. Echte Aggregationen (Kennzahlen,
+// Gruppierung über Records statt Reports) sind ein eigener,
+// anwendungsseitiger Anwendungsfall (AP 4/6), kein Teil dieses Ports.
 const (
-	GroupByNone     GroupBy = ""
-	GroupByDomain   GroupBy = "domain"
-	GroupByOrg      GroupBy = "org"
+	GroupByNone   GroupBy = ""
+	GroupByDomain GroupBy = "domain"
+	GroupByOrg    GroupBy = "org"
+	// GroupBySourceIP gruppiert nach Quell-IP eines Records — das ist eine
+	// Eigenschaft von Records, nicht von Reports, und lässt sich auf eine
+	// Seite von AggregateReport-Werten nicht sinnvoll abbilden. Adapter
+	// lehnen diesen Wert mit einem Fehler ab (siehe reportquery.go).
 	GroupBySourceIP GroupBy = "source_ip"
 )
 
@@ -78,6 +87,14 @@ type Repository interface {
 	Save(ctx context.Context, r *AggregateReport) error
 	// Exists prüft die fachliche Identität, Grundlage der Deduplizierung.
 	Exists(ctx context.Context, key Key) (bool, error)
+	// FindByID lädt einen Report vollständig, inklusive aller Records —
+	// für die Bericht-Detailansicht (IMPLEMENTIERUNG.md Abschnitt 10.1).
 	FindByID(ctx context.Context, id ReportID) (*AggregateReport, error)
+	// Query liefert eine Seite von Reports für die Berichtstabelle. Die
+	// zurückgegebenen AggregateReport-Werte haben bewusst ein leeres
+	// Records-Feld: die Tabelle zeigt eine Zeile pro Report, nicht pro
+	// Record, ein Laden aller Records jeder sichtbaren Seite wäre reine
+	// Verschwendung (siehe IMPLEMENTIERUNG.md Abschnitt 10.4 zur
+	// Lazy-Datenquelle). Records eines einzelnen Reports lädt FindByID.
 	Query(ctx context.Context, q Query) (Page, error)
 }

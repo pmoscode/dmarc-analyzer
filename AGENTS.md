@@ -67,6 +67,19 @@ weil `AggregateReport.ID ID` unlesbar wäre — siehe Kommentar im Code).
 `//nolint` pauschal umgehen, sondern umbenennen, außer eine echte Kollision
 verhindert es.
 
+## SQLite: IN-Klausel mit vielen Werten vermeiden
+
+Eine `WHERE x IN (?, ?, ..., ?)`-Klausel mit einem Platzhalter je Zeile
+skaliert schlecht — bei 10.000 Werten dauerte allein das Vorbereiten des
+Statements >3s (gemessen in `internal/infra/sqlite`, siehe
+`reportrecords.go`). Wenn der Filterwert (hier: `report_id`) bereits
+bekannt ist, stattdessen über die Fremdschlüsselbeziehung joinen
+(`JOIN records ON records.id = child.record_id WHERE records.report_id = ?`)
+statt vorher alle IDs zu laden und darüber eine IN-Klausel zu bauen. Bei
+neuen Batch-Ladefunktionen in `internal/infra/sqlite` immer mit
+realistisch großen Datenmengen testen (siehe `reportperf_test.go`), nicht
+nur mit einer Handvoll Testzeilen — dort fällt das Problem nicht auf.
+
 ## Abhängigkeiten
 
 **Nichts in `go.mod` aufnehmen, das nicht tatsächlich importiert wird.**

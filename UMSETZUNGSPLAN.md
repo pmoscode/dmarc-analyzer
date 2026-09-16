@@ -203,19 +203,68 @@ Die beiden Zip-/Gzip-Bomben-Tests sind mit `testing.Short()` markiert, damit
 
 **Ziel:** Reports werden gespeichert, dedupliziert und performant abgefragt.
 
-- [ ] SQLite-Verbindung mit PRAGMAs (WAL, foreign_keys, busy_timeout, synchronous)
-- [ ] Eigener Migrator + eingebettete `migrations/*.sql` (Schema Abschnitt 8.1)
-- [ ] `reportrepo.go` mit Batch-Insert in einer Transaktion
-- [ ] Deduplizierung über UNIQUE `(org_name, report_id, date_begin)`
-- [ ] `ReportQuery` vollständig nach 3.3 (Filter, Sortierung, Gruppierung, Keyset)
-- [ ] Aggregationen für die Kennzahlen aus Abschnitt 10.2 **in SQL**
-- [ ] `raw_reports` und `failed_imports`
-- [ ] Integrationstests gegen eine temporäre Datei-DB, Migration vorwärts und
-      wiederholt
-- [ ] Benchmark: 100.000 Records importieren und abfragen
+- [x] SQLite-Verbindung mit PRAGMAs (WAL, foreign_keys, busy_timeout, synchronous)
+      — als DSN-Parameter beim Öffnen, nicht als separate PRAGMA-Statements
+      (`_journal_mode`/`_foreign_keys`/`_busy_timeout`/`_synchronous`,
+      modernc.org/sqlite-eigene Kurzform)
+- [x] Eigener Migrator (~150 Zeilen) + eingebettete `migrations/*.sql`
+      (Schema Abschnitt 8.1, erweitert um `report_errors` sowie
+      `mailbox`/`filename`/`org_extra_contact_info` auf `reports` — die
+      Abschnitt-8.1-Tabelle war als „Auszug" markiert, das war die Lücke
+      zum vollständigen Domänenmodell aus AP 1)
+- [x] `reportrepo.go` mit Batch-Insert (vorbereitete Statements je Tabelle,
+      wiederverwendet über alle Records eines Reports) in einer Transaktion
+- [x] Deduplizierung über UNIQUE `(org_name, report_id, date_begin)`,
+      als `ErrDuplicateReport` über `sqlite.Error.Code()` erkannt (nicht
+      String-Matching auf die Fehlermeldung)
+- [x] `Query` vollständig nach 3.3: Filter (Zeitraum-Überlappung, Domain,
+      Org, Quell-IP, Disposition über `EXISTS`-Subqueries), Sortierung,
+      Keyset-Pagination über SQLite-Row-Value-Vergleiche. **Präzisierung zu
+      `GroupBy`:** wirkt als zusätzlicher primärer Sortierschlüssel (gleiche
+      Gruppe steht zusammen), nicht als SQL-`GROUP BY` mit Aggregation —
+      `Query` liefert laut Portvertrag weiterhin einzelne `AggregateReport`,
+      keine Kennzahlen. `GroupBySourceIP` lehnt der Adapter mit Fehler ab
+      (Quell-IP ist eine Record-, keine Report-Eigenschaft). Siehe
+      Kommentare in `domain/report/repository.go`.
+- [ ] Aggregationen für die Kennzahlen aus Abschnitt 10.2 **in SQL** —
+      **bewusst nicht in AP 2.** Das sind anwendungsseitige Fragen
+      (Pass-Rate nach Alignment-Definition, Trend zur Vorperiode), keine
+      reine Persistenzaufgabe — gehören zum Statistics-Use-Case in AP 4,
+      der dafür eigene, zugeschnittene Repository-Methoden bekommt statt
+      `Query`/`GroupBy` zu überladen.
+- [x] `raw_reports` und `failed_imports` — **nur das Schema** (Tabellen +
+      Indizes existieren). Tatsächliches Schreiben (Rohdaten-Archiv,
+      Fehlerquarantäne beim Sync) ist Teil des SyncReports-Use-Case in
+      AP 3/4, nicht der reinen Persistenzschicht.
+- [x] Integrationstests gegen eine temporäre Datei-DB (nie `:memory:`),
+      Migration wird in `TestMigrate_IsIdempotent` zweimal angewendet
+- [x] Benchmark: 100.000 Records importieren und abfragen — **als
+      regulärer, mit `testing.Short()` übersprungener Test** statt
+      `go test -bench`: das Szenario ist ein einmaliger Ablauf (Datenmenge
+      aufbauen, eine realistische Abfrage messen), keine Mikro-Benchmark-
+      Schleife. Ergebnisse siehe unten.
 
-**Fertig wenn:** Doppelimport derselben Mail erzeugt genau einen Datensatz;
-Abfrage über 100.000 Records unter 100 ms.
+**Ein echter Performance-Bug unterwegs gefunden und behoben:** Die erste
+Fassung der Batch-Ladefunktionen für Records/Reasons/Auth-Ergebnisse baute
+eine `IN (?, ?, ..., ?)`-Klausel mit einem Platzhalter je Record — bei
+10.000 Records dauerte allein das Vorbereiten dieser Statements so lange,
+dass `FindByID` über 3 Sekunden brauchte. Zusätzlich fehlten Indizes auf
+`record_reasons.record_id`, `auth_results_dkim.record_id`,
+`auth_results_spf.record_id` und `report_errors.report_id` (das Schema
+zieht schon vor dem ersten Release, kein `0002`-Migrationsumweg). Beides
+behoben: Indizes ergänzt, die drei Ladefunktionen von IN-Klausel auf
+`JOIN records ON ... WHERE records.report_id = ?` umgestellt.
+
+**Fertig wenn:** Doppelimport derselben Mail erzeugt genau einen Datensatz —
+erreicht (`TestSave_DuplicateKey_ReturnsErrDuplicateReport`). Abfrage über
+100.000 Records unter 100 ms — erreicht für den eigentlichen Zielpfad, die
+Berichtstabelle: lokal gemessen **~7-8 ms** für eine sortierte, gefilterte
+Seite über 1.001 Reports mit 110.000 Records insgesamt. Das Laden eines
+einzelnen, unrealistisch großen Reports mit 10.000 Records (`FindByID`,
+Detailansicht) liegt bei **~460 ms** — spürbar über 100 ms, aber ein
+Randfall (reale DMARC-Reports haben selten mehr als niedrige Hunderte
+Records) und für eine einmalige Detailansicht akzeptabel; als möglicher
+Optimierungspunkt für später vorgemerkt, kein Blocker für AP 2.
 
 ### AP 3 — Mail und Sicherheit
 

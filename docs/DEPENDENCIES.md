@@ -13,11 +13,12 @@ Ist-Zustand und wird beim nächsten `task tidy` ohnehin wieder entfernt.
 Die Tabelle unten ist deshalb der **Bestellzettel für die jeweilige Phase**,
 nicht der aktuelle `go.mod`-Inhalt.
 
-## Bereits eingebunden (AP 0)
+## Bereits eingebunden
 
 | Modul | Version | Verwendung |
 | --- | --- | --- |
 | `github.com/stretchr/testify` | `v1.12.1` | `require` in allen Tests ab AP 0 (siehe IMPLEMENTIERUNG.md Abschnitt 12.4) |
+| `modernc.org/sqlite` | `v1.59.0` | Persistenz (AP 2), CGO-frei — genau die hier vorab recherchierte Version |
 
 ## Gepinnt für spätere Arbeitspakete
 
@@ -32,8 +33,7 @@ Ausgangspunkt, kein Dogma.
 | --- | --- | --- | --- |
 | `fyne.io/fyne/v2` | `v2.8.1` | AP 5 | UI-Framework, Vorgabe aus `FEATURES.md` |
 | `github.com/emersion/go-imap/v2` | `v2.0.0-beta.8` | AP 3 | Noch Beta — siehe Risiko in IMPLEMENTIERUNG.md Abschnitt 16, Version fest pinnen |
-| `github.com/emersion/go-message` | `v0.18.2` | AP 1 (MIME-Anhänge) / AP 3 (IMAP-Nachrichten) | |
-| `modernc.org/sqlite` | `v1.59.0` | AP 2 | CGO-frei |
+| `github.com/emersion/go-message` | `v0.18.2` | AP 3 | MIME-Zerlegung roher IMAP-Nachrichten. **Korrektur:** ursprünglich auch für AP 1 vorgesehen, aber `dmarcxml.Parser` arbeitet auf bereits extrahierten Anhang-Bytes (`sync.RawAttachment`), nicht auf rohen MIME-Mails — die MIME-Zerlegung ist ausschließlich Aufgabe des IMAP-Adapters in AP 3. |
 | `github.com/zalando/go-keyring` | `v0.2.8` | AP 3 | OS-Schlüsselbund |
 | `github.com/wcharczuk/go-chart/v2` | `v2.1.2` | AP 6 | Hinter `ChartRenderer`-Port gekapselt |
 

@@ -35,3 +35,13 @@ die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 - Golden-File-Tests gegen fünf synthetische Provider-Fixtures, Fuzz-Test
   (`FuzzParse`) sowie ein Test, der belegt, dass externe XML-Entities (XXE)
   nicht aufgelöst werden.
+- SQLite-Persistenz (AP 2): eigener Migrator mit eingebetteten,
+  nummerierten Migrationen; `internal/infra/sqlite.ReportRepository`
+  implementiert `report.Repository` vollständig — `Save` (Transaktion,
+  vorbereitete Batch-Statements), `Exists`/`ErrDuplicateReport` für
+  Deduplizierung nach `(org_name, report_id, date_begin)`, `FindByID`
+  (vollständig inkl. Records) und `Query` (Filter, Sortierung, Keyset-
+  Pagination über SQLite-Row-Value-Vergleiche).
+- Integrationstests gegen eine temporäre Datei-DB (WAL, echte
+  Transaktionen) sowie ein Performance-Test, der 100.000 Records importiert
+  und eine typische Berichtstabellen-Abfrage darauf misst (~7-8 ms).

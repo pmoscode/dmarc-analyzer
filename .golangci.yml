@@ -42,6 +42,16 @@ linters:
         linters:
           - errcheck
           - gosec
+      # G201/G202 (SQL-String-Bau): internal/infra/sqlite setzt WHERE-,
+      # ORDER-BY- und IN-Klauseln aus einer festen, internen Menge von
+      # Spaltennamen und generierten "?"-Platzhaltern zusammen — nie aus
+      # rohen externen Werten. Die tatsächlichen Werte laufen ausnahmslos
+      # über gebundene Parameter (siehe buildWhere/buildOrderBy/
+      # buildCursorWhere und die batch-IN-Ladefunktionen).
+      - path: internal/infra/sqlite/.*\.go
+        linters:
+          - gosec
+        text: "G20[12]"
 
 formatters:
   enable:
