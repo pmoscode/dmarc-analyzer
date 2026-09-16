@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<feedback>
+  <report_metadata>
+    <org_name>quirky.example</org_name>
+    <email>dmarc@quirky.example</email>
+    <report_id>quirky-zero-records</report_id>
+    <date_range><begin>1735689600</begin><end>1735776000</end></date_range>
+  </report_metadata>
+  <policy_published>
+    <domain>example.com</domain>
+    <p>reject</p>
+    <pct>100</pct>
+  </policy_published>
+</feedback>

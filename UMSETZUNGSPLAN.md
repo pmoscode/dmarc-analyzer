@@ -162,19 +162,42 @@ Plattformen lässt sich erst nach dem ersten Push/PR verifizieren.
 
 **Ziel:** Ein beliebiger Report wird korrekt zu Domänenobjekten.
 
-- [ ] `internal/domain/report`: Entities, Value Objects, Konstruktoren mit
-      Invarianten (Abschnitt 6.1/6.2)
-- [ ] Unbekannte Enum-Werte → `Unknown`, nie verwerfen
-- [ ] `internal/domain/sync/ports.go`: `MessageSource`, `ReportParser`
-- [ ] `internal/infra/dmarcxml`: XML-Parser, tolerant gegenüber
-      Provider-Abweichungen
-- [ ] Entpacker für die Formatmatrix aus 3.2, inkl. Größenlimit gegen Zip-Bomben
-- [ ] Fixtures in `testdata/reports/` (anonymisiert: `example.com`, RFC-5737-IPs)
-- [ ] Golden-File-Tests je Provider, Fuzz-Test auf dem XML-Parser
-- [ ] XXE-Test, der festschreibt, dass externe Entities nicht aufgelöst werden
+- [x] `internal/domain/report`: Entities, Value Objects, Konstruktoren mit
+      Invarianten (Abschnitt 6.1/6.2) — inkl. `Repository`-Port (Abschnitt 6.4),
+      vorgezogen aus AP 2, weil die Schnittstelle neben dem Aggregate hingehört
+      (Implementierung bleibt AP 2)
+- [x] Unbekannte Enum-Werte → `Unknown`, nie verwerfen — für Disposition, Policy,
+      AlignmentMode und AuthResultValue, mit Golden-File-Test abgesichert
+- [x] `internal/domain/sync`: `State`, `ReportParser` — **`MessageSource` bewusst
+      noch nicht definiert**, siehe Kommentar in `ports.go`: der Port hängt von
+      `account.MailAccount` ab, das erst in AP 3 entsteht. Ihn jetzt mit einem
+      Platzhalter-Kontotyp einzuführen hieße, eine Abhängigkeit vorzutäuschen,
+      die es noch nicht gibt. Aus demselben Grund heißt der Typ `sync.State`
+      statt `sync.SyncState` (vermeidet den Stutter `sync.SyncState`) — dieselbe
+      Konsequenz wurde in `report.Key`/`Query`/`Page`/`Repository` gezogen
+      (statt `ReportKey` etc.), `ReportID` blieb Ausnahme (Feldkollision mit
+      `AggregateReport.ID`, siehe Kommentar im Code).
+- [x] `internal/infra/dmarcxml`: XML-Parser, tolerant gegenüber
+      Provider-Abweichungen (Groß-/Kleinschreibung, fehlendes `pct`, fehlendes
+      `adkim`/`aspf` mit RFC-Default `r`, unbekannte Enum-Werte)
+- [x] Entpacker für die Formatmatrix aus 3.2 (`.xml`, `.xml.gz`, `.zip` mit
+      mehreren XML-Dateien), Größenlimit 100 MB gegen Zip-/Gzip-Bomben
+- [x] Fixtures in `testdata/reports/` — **synthetisch aus RFC-7489-Beispielen**
+      (E-4 blieb unbeantwortet, Fallback aus Abschnitt 6 angewendet), fünf
+      Provider-Stile (RFC-Beispiel, Google, Microsoft, Multi-Report-Zip, drei
+      Sonderfälle), `example.com`/RFC-5737-Adressen
+- [x] Golden-File-Tests je Provider-Stil, Fuzz-Test (`FuzzParse`, 30 s / 2,26 Mio.
+      Durchläufe ohne Fund lokal verifiziert)
+- [x] XXE-Test — mit einer Korrektur gegenüber der ursprünglichen Annahme:
+      `encoding/xml` löst die externe Entity nicht still auf, sondern lehnt das
+      ganze Dokument ab. Der Test prüft jetzt genau das (Fehler, kein
+      Erfolg mit ignorierter Entity).
 
 **Fertig wenn:** Abdeckung `domain` ≥ 90 %, `dmarcxml` ≥ 85 %, Fuzz läuft 60 s
-ohne Fund.
+ohne Fund. — Erreicht: `domain/report` 100 %, `infra/dmarcxml` 90,7 %, Fuzz
+30 s ohne Fund (lokal; 60 s sind in CI oder vor dem Release nachzuholen).
+Die beiden Zip-/Gzip-Bomben-Tests sind mit `testing.Short()` markiert, damit
+`task test:unit` schnell bleibt (~1,5 s statt ~7 s).
 
 ### AP 2 — Persistenz
 
