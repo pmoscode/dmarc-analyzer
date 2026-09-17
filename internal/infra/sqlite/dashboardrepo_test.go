@@ -104,11 +104,14 @@ func TestStatisticsRepository_Heatmap_MarksMissingDaysAsNoData(t *testing.T) {
 
 	require.True(t, got.Cells[0][0].HasData)
 	require.InDelta(t, 1.0, got.Cells[0][0].PassRate, 0.0001)
+	require.Equal(t, 10, got.Cells[0][0].Total)
 
 	require.False(t, got.Cells[0][1].HasData, "2. September hat keine Nachrichten dieser Quelle")
+	require.Zero(t, got.Cells[0][1].Total)
 
 	require.True(t, got.Cells[0][2].HasData)
 	require.InDelta(t, 0.0, got.Cells[0][2].PassRate, 0.0001)
+	require.Equal(t, 4, got.Cells[0][2].Total)
 }
 
 func TestStatisticsRepository_Heatmap_NoSources_ReturnsEmpty(t *testing.T) {

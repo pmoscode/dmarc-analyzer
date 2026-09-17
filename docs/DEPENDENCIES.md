@@ -27,6 +27,25 @@ nicht der aktuelle `go.mod`-Inhalt.
 | `fyne.io/fyne/v2` | `v2.8.1` | UI-Framework (AP 5), jetzt zusätzlich `fyne.io/fyne/v2/app` (AP 6, `cmd/dmarc-analyzer/cmd_gui.go`) für den echten (nicht Test-)Treiber — genau die vorab recherchierte Version, jetzt direkt importiert. |
 | `github.com/wcharczuk/go-chart/v2` | `v2.1.2` | `ChartRenderer`-Adapter (AP 6, `internal/infra/charts`) — genau die vorab recherchierte Version, jetzt direkt importiert. |
 
+### Frontend (Web-Migration, `internal/web/static/vendor/`) — kein Go-Modul, minifizierte Dateien im Repository
+
+`MIGRATIONSPLAN.md` E-7: statt CDN werden htmx, Chart.js und dessen Plugins
+als minifizierte UMD-Bündel direkt im Repository abgelegt (offline-fähig,
+passt zur Content-Security-Policy `default-src 'self'`). Lizenzen liegen
+jeweils als `LICENSE.<name>.txt` daneben.
+
+| Datei | Version | Lizenz | Verwendung |
+| --- | --- | --- | --- |
+| `chart.umd.min.js` | `4.5.1` | MIT | Diagramme im Browser (`internal/web/static/charts.js`, MIGRATIONSPLAN.md Abschnitt 6a) |
+| `chartjs-chart-matrix.min.js` | `3.1.0` | MIT | Heatmap-Diagrammtyp (`matrix`) — Kompatibilität zu Chart.js 4.x geprüft (Peer-Dependency `^4.0.0`) |
+| `chartjs-plugin-zoom.min.js` | `2.2.0` | MIT | Zoom/Verschieben in der Zeitreihe — Kompatibilität zu Chart.js 4.x geprüft (Peer-Dependency `^4.0.0`); braucht kein `hammerjs` für Maus-/Touch-Pad-Zoom, nur für Pinch-Gesten auf Touch-Geräten (hier nicht eingebunden, Zoom per Mausrad/Trackpad reicht) |
+| `htmx.min.js` | `2.0.10` | BSD-0-Clause (Zero-Clause BSD) | Serverseitig gerenderte Teilaktualisierungen (Paginierung, Dialoge — ab Meilenstein M2/M3) |
+
+Bei einem Versions-Update: alle drei Chart.js-Dateien (Kern + beide
+Plugins) gemeinsam aktualisieren und gegeneinander testen (Plugins folgen
+nicht zwingend demselben Versionsschema wie Chart.js selbst) — siehe
+MIGRATIONSPLAN.md Risiko-Tabelle Abschnitt 13.
+
 ## Gepinnt für spätere Arbeitspakete
 
 Bei Einführung in der jeweiligen Phase exakt diese Version anfragen

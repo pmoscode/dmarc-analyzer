@@ -1,0 +1,66 @@
+{{define "content"}}
+<form class="filter-bar" method="get" action="/" aria-label="Filter">
+  <label>Zeitraum
+    <select name="zeitraum">
+      {{range .PeriodOptions}}<option value="{{.Days}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
+    </select>
+  </label>
+  <label>Domain
+    <input type="text" name="domain" value="{{.Domain}}" placeholder="Alle" autocomplete="off">
+  </label>
+  <button type="submit">Filter anwenden</button>
+</form>
+
+<section class="tiles" aria-label="Kennzahlen">
+  <div class="tile">
+    <span class="tile-label">Nachrichten gesamt</span>
+    <span class="tile-value">{{.TotalMessages}}</span>
+  </div>
+  <div class="tile">
+    <span class="tile-label">DMARC-Pass-Rate</span>
+    <span class="tile-value">{{.PassRatePercent}}</span>
+  </div>
+  <div class="tile">
+    <span class="tile-label">DKIM-Alignment-Rate</span>
+    <span class="tile-value">{{.DKIMAlignmentPercent}}</span>
+  </div>
+  <div class="tile">
+    <span class="tile-label">SPF-Alignment-Rate</span>
+    <span class="tile-value">{{.SPFAlignmentPercent}}</span>
+  </div>
+  <div class="tile">
+    <span class="tile-label">Unterschiedliche Quellen</span>
+    <span class="tile-value">{{.DistinctSources}}</span>
+  </div>
+</section>
+
+{{if .HasTrend}}
+<p class="trend {{if .TrendUp}}trend-up{{else}}trend-down{{end}}">{{.TrendText}}</p>
+{{else}}
+<p class="trend trend-none">kein Vergleich zur Vorperiode möglich</p>
+{{end}}
+
+<section class="charts">
+  <div class="chart-card">
+    <h2>Nachrichtenvolumen pro Tag</h2>
+    <p class="chart-hint">Mausrad zum Zoomen, Ziehen zum Verschieben. Klick auf einen Tag zeigt die Berichte dieses Tages.</p>
+    <canvas id="chart-verlauf" aria-label="Gestapeltes Balkendiagramm: Nachrichtenvolumen pro Tag, aufgeteilt nach bestanden und fehlgeschlagen" role="img"></canvas>
+    <details class="chart-table-toggle">
+      <summary>Als Tabelle anzeigen</summary>
+      <table id="chart-verlauf-table" class="chart-table"></table>
+    </details>
+  </div>
+
+  <div class="chart-card">
+    <h2>Sendequelle × Tag (Pass-Rate)</h2>
+    <p class="chart-hint">Klick auf eine Zelle zeigt die Berichte dieser Quelle an diesem Tag.</p>
+    <div class="chart-scroll">
+      <canvas id="chart-heatmap" aria-label="Heatmap: Pass-Rate je Sendequelle und Tag" role="img"></canvas>
+    </div>
+    <details class="chart-table-toggle">
+      <summary>Als Tabelle anzeigen</summary>
+      <table id="chart-heatmap-table" class="chart-table"></table>
+    </details>
+  </div>
+</section>
+{{end}}

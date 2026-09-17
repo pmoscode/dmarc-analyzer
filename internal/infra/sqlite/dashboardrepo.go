@@ -147,7 +147,7 @@ func (r *StatisticsRepository) Heatmap(ctx context.Context, q analysis.Query, so
 		if !ok {
 			continue
 		}
-		heatmap.Cells[si][di] = analysis.HeatmapCell{PassRate: rate(c.passed, c.total), HasData: true}
+		heatmap.Cells[si][di] = analysis.HeatmapCell{PassRate: rate(c.passed, c.total), HasData: true, Total: int(c.total)}
 	}
 
 	return heatmap, nil

@@ -21,6 +21,9 @@ Ohne Argumente startet das grafische Programm. Für den Kommandozeilen-
 Betrieb (z. B. Cron/launchd) stehen folgende Unterbefehle bereit:
 
 Verwendung:
+  dmarc-analyzer web [--adresse H:P] [--kein-browser] [--entwicklung]
+                                             Web-Oberfläche starten (siehe MIGRATIONSPLAN.md) — vorerst
+                                             neben dem grafischen Programm, das ohne Argumente startet
   dmarc-analyzer sync [--headless]          Alle konfigurierten Konten synchronisieren
   dmarc-analyzer import <pfad>...           DMARC-Reports aus Dateien importieren (.eml, .xml, .xml.gz, .zip)
   dmarc-analyzer stats [--days N] [--domain D]
@@ -90,6 +93,7 @@ func run(ctx context.Context, args []string) error {
 
 // subcommands bildet Unterbefehlsnamen auf ihre Handler ab.
 var subcommands = map[string]func(context.Context, *app, []string) error{
+	"web":     runWeb,
 	"sync":    runSync,
 	"import":  runImport,
 	"stats":   runStats,

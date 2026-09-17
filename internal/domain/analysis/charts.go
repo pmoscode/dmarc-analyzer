@@ -41,6 +41,11 @@ type SourceVolume struct {
 type HeatmapCell struct {
 	PassRate float64
 	HasData  bool
+	// Total ist die Nachrichtenzahl dieser Quelle an diesem Tag — für die
+	// Heatmap-Tooltips im Web-Frontend (MIGRATIONSPLAN.md Abschnitt 6a:
+	// "Tooltip mit Quelle, Tag, Pass-Rate und Nachrichtenzahl"). 0, wenn
+	// HasData false ist.
+	Total int
 }
 
 // Heatmap ist die Matrix Quelle × Tag für die Top-Quellen im Zeitraum

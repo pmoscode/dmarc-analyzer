@@ -1,0 +1,252 @@
+/* Farbwerte identisch zur früheren Fyne-Oberfläche (internal/ui/theme.go)
+   und zu internal/infra/charts — dieselbe, mit der dataviz-Skill
+   validierte Referenzpalette (Kategorie-Slot 1 als Primärfarbe, feste
+   Statusfarben). Siehe MIGRATIONSPLAN.md Abschnitt 8: "dieselben
+   Farbwerte (dataviz-Referenzpalette)". */
+:root {
+  color-scheme: light;
+
+  --primary: #2a78d6;
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-critical: #d03b3b;
+
+  --page-bg: #f7f7f5;
+  --surface: #ffffff;
+  --ink: #0b0b0b;
+  --ink-secondary: #52514e;
+  --ink-muted: #89878f;
+  --gridline: #e1e0d9;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --primary: #3987e5;
+    --page-bg: #141414;
+    --surface: #1f1f1e;
+    --ink: #f5f5f3;
+    --ink-secondary: #c3c2b7;
+    --ink-muted: #8f8d87;
+    --gridline: #333331;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0 16px 32px;
+  background: var(--page-bg);
+  color: var(--ink);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+a {
+  color: var(--primary);
+}
+
+.app-header {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--gridline);
+  margin-bottom: 24px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 24px;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.app-nav ul {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+}
+
+.app-nav a {
+  display: inline-block;
+  padding: 6px 10px;
+  border-radius: 8px;
+  color: var(--ink-secondary);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.app-nav a:hover {
+  background: var(--gridline);
+}
+
+.app-nav a.active {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.placeholder {
+  background: var(--surface);
+  border: 1px solid var(--gridline);
+  border-radius: 12px;
+  padding: 24px;
+  color: var(--ink-secondary);
+}
+
+.app-main {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.filter-bar label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ink-secondary);
+}
+
+.filter-bar select,
+.filter-bar input[type="text"] {
+  padding: 6px 8px;
+  border: 1px solid var(--gridline);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.filter-bar button {
+  padding: 7px 14px;
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  background: var(--primary);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.filter-bar button:hover {
+  filter: brightness(1.08);
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.tile {
+  background: var(--surface);
+  border: 1px solid var(--gridline);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tile-label {
+  font-size: 12px;
+  color: var(--ink-secondary);
+}
+
+.tile-value {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.trend {
+  margin: 4px 0 24px;
+  font-size: 13px;
+  color: var(--ink-secondary);
+}
+
+.trend-up {
+  color: var(--status-good);
+}
+
+.trend-down {
+  color: var(--status-critical);
+}
+
+.charts {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--gridline);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.chart-card h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.chart-hint {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+
+.chart-scroll {
+  overflow-x: auto;
+}
+
+.chart-table-toggle {
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.chart-table-toggle summary {
+  cursor: pointer;
+  color: var(--primary);
+}
+
+.chart-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.chart-table caption {
+  text-align: left;
+  color: var(--ink-secondary);
+  margin-bottom: 4px;
+}
+
+.chart-table th,
+.chart-table td {
+  border-bottom: 1px solid var(--gridline);
+  padding: 4px 8px;
+  text-align: left;
+}
+
+.chart-table a {
+  text-decoration: none;
+}
+
+.chart-table a:hover {
+  text-decoration: underline;
+}

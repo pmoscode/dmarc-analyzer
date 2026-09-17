@@ -2,7 +2,7 @@
 
 > Stand: 2026-09-17. Ergänzt `UMSETZUNGSPLAN.md` und ist dort **vor AP 7**
 > einzuordnen (Packaging und Feinschliff hängen vom Ergebnis ab).
-> Status aller Punkte: offen, nichts davon ist umgesetzt.
+> Fortschritt: M0 und M1 umgesetzt (siehe Abschnitt 10), M2 offen.
 
 ## 1. Anlass und Ziel
 
@@ -265,32 +265,55 @@ Größenangaben relativ: S (klein), M (mittel), L (groß).
 
 ### M0 — Entscheidungen und Durchstich (S)
 
-- [ ] Entscheidungen E-1 bis E-8 bestätigt
-- [ ] `internal/web` mit Server, Einmal-Anmeldung, Host-Prüfung, Browserstart
-- [ ] Eine Seite: Übersicht mit Kennzahlen-Kacheln aus `statistics.UseCase`
-- [ ] **Chart.js-Durchstich:** Heatmap (Matrix-Plugin) und Zeitreihe mit Zoom
+- [x] Entscheidungen E-1 bis E-8 bestätigt — implizit durch Umsetzung der
+  jeweiligen Empfehlung bestätigt (Chart.js, Strg+C/SIGTERM,
+  zufälliger Port, Datei-Import folgt M4, vendorierte JS-Bündel,
+  `chromedp`-Rauchtest folgt M2); nicht einzeln nachverhandelt.
+- [x] `internal/web` mit Server, Einmal-Anmeldung, Host-Prüfung, Browserstart
+- [x] Eine Seite: Übersicht mit Kennzahlen-Kacheln aus `statistics.UseCase`
+- [x] **Chart.js-Durchstich:** Heatmap (Matrix-Plugin) und Zeitreihe mit Zoom
   aus echten Daten, Tooltip, ein Drill-down-Klick — unter der geplanten
   Content-Security-Policy ohne `'unsafe-inline'`
-- [ ] Startpfad hinter Flag (`dmarc-analyzer web`), Fyne bleibt Standard
+- [x] Startpfad hinter Flag (`dmarc-analyzer web`), Fyne bleibt Standard
 
 **Fertig wenn:** Ein Start öffnet den Browser, zeigt echte Kennzahlen und zwei
 interaktive Diagramme, und eine Anfrage ohne Sitzung oder mit fremdem `Host`
 wird abgewiesen. Trägt die Chart.js-Plugin-Kombination nicht, fällt hier die
-Entscheidung für die Rückfallebene ECharts (E-2).
+Entscheidung für die Rückfallebene ECharts (E-2). — **Erreicht.**
 
 ### M1 — Grundgerüst (M)
 
-- [ ] Layout, Navigation, Kopfzeile, Theme hell/dunkel als CSS-Variablen
-- [ ] Filterleiste mit Werten in der URL
-- [ ] Sicherheits-Middleware vollständig (Abschnitt 5), CSRF, CSP
-- [ ] Einzelinstanz (`instance.json`), zweiter Start öffnet bestehende Instanz
-- [ ] Sauberes Herunterfahren per Strg+C/SIGTERM (E-3, `signal.NotifyContext` + `http.Server.Shutdown`), `--kein-browser`, `--adresse`, `--entwicklung`
-- [ ] `i18n` und Glossar-Daten verschoben; Leerzustand- und Fehler-Partials
-- [ ] htmx, Chart.js und Plugins eingebunden, Versionen und Lizenzen in `docs/DEPENDENCIES.md` gepinnt
+- [x] Layout, Navigation, Kopfzeile, Theme hell/dunkel als CSS-Variablen —
+  Navigation aktuell mit vier Platzhalter-Seiten (Berichte, Sendequellen,
+  Glossar, Einstellungen; Inhalt folgt M2/M3), Theme aus M0 unverändert.
+- [x] Filterleiste mit Werten in der URL — wirkt auf Übersicht
+  (Kennzahlen, beide Diagramme inkl. Drill-down-Ziele); Berichte/Quellen
+  übernehmen denselben Filter, sobald sie in M2 echten Inhalt bekommen.
+- [x] Sicherheits-Middleware vollständig (Abschnitt 5), CSRF, CSP —
+  `requireCSRF` (Origin/Sec-Fetch-Site + Token) ist bereits um den
+  gesamten geschützten Routenbaum gelegt, auch wenn noch kein Formular
+  es braucht (erster Verbraucher: Konten-Formular in M3).
+- [x] Einzelinstanz (`instance.json`), zweiter Start öffnet bestehende Instanz
+- [x] Sauberes Herunterfahren per Strg+C/SIGTERM (E-3, `signal.NotifyContext` + `http.Server.Shutdown`), `--kein-browser`, `--adresse`, `--entwicklung`
+- [ ] `i18n` und Glossar-Daten verschoben; Leerzustand- und Fehler-Partials —
+  **zurückgestellt auf M5.** Ein echter Verschub jetzt würde
+  `internal/ui` (bis M3 Standard-Oberfläche, siehe E-5) die Pakete unter
+  den Füßen wegziehen; ein `internal/ui` → `internal/web`-Import wäre
+  zudem eine verbotene Abhängigkeitsrichtung (AGENTS.md). Bis dahin
+  bleiben die wenigen bisher gebrauchten Texte (Navigation,
+  Filterleiste) direkt in `internal/web` als deutsche Literale — reale
+  Doppelpflege beginnt erst, wenn tatsächlich beide Oberflächen aus
+  derselben i18n-Quelle laufen müssten, und das ist nicht der Plan
+  (E-5: Umschalten, nicht Parallelbetrieb). Leerzustand-/Fehler-Partials
+  ebenfalls zurückgestellt: die einzige bisherige "leere" Situation sind
+  die M1-Platzhalterseiten selbst.
+- [x] htmx, Chart.js und Plugins eingebunden, Versionen und Lizenzen in `docs/DEPENDENCIES.md` gepinnt
 
 **Fertig wenn:** Navigation zwischen leeren Seiten funktioniert in hell und
 dunkel, ein zweiter Start öffnet nur einen weiteren Tab, und Strg+C/SIGTERM
 beendet den Prozess sauber (offene Anfragen fertig, `instance.json` entfernt).
+— **Erreicht** (Sichtprüfung in echten Browsern gemäß M6 steht noch aus,
+siehe dortiger Vorbehalt zu fehlendem Display in dieser Umgebung).
 
 ### M2 — Lesende Ansichten (L)
 
