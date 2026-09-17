@@ -3,29 +3,20 @@ package main
 import (
 	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"os"
 )
 
-// runSync synchronisiert alle konfigurierten Konten
-// (UMSETZUNGSPLAN.md AP 4: "dmarc-analyzer sync --headless").
-func runSync(ctx context.Context, a *app, args []string) error {
-	fs := flag.NewFlagSet("sync", flag.ContinueOnError)
-	// --headless ist aktuell ein no-op: die CLI kennt ohnehin keine UI.
-	// Das Flag existiert schon jetzt, damit AP 5 (grafisches Programm mit
-	// echtem --headless-Modus) keinen Aufrufer-Bruch verursacht.
-	_ = fs.Bool("headless", false, "ohne grafische Oberfläche ausführen (derzeit immer der Fall)")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-
+// runSync synchronisiert das per ENV konfigurierte Konto — für Diagnose/
+// Wartung per "docker exec" zusätzlich zum automatischen Hintergrund-Sync
+// (internal/app/syncscheduler, läuft nur unter "web").
+func runSync(ctx context.Context, a *app, _ []string) error {
 	accounts, err := a.accounts.List(ctx)
 	if err != nil {
 		return fmt.Errorf("konten konnten nicht geladen werden: %w", err)
 	}
 	if len(accounts) == 0 {
-		return errors.New("kein Konto konfiguriert — zuerst 'dmarc-analyzer account add' ausführen")
+		return errors.New("kein Konto konfiguriert — DMARC_IMAP_*-Umgebungsvariablen prüfen")
 	}
 
 	var runErrs []error

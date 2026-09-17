@@ -8,8 +8,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"github.com/pmoscode/dmarc-analyzer/internal/domain/account"
 )
 
 func postForm(t *testing.T, client *http.Client, addr, path string, values map[string]string) *http.Response {
@@ -18,25 +16,25 @@ func postForm(t *testing.T, client *http.Client, addr, path string, values map[s
 	for k, v := range values {
 		form.Set(k, v)
 	}
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://"+addr+path, strings.NewReader(form.Encode()))
-	require.NoError(t, err)
+	req := newRequest(t, http.MethodPost, "http://"+addr+path, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Origin", "http://"+addr)
+	req.Header.Set("Origin", "http://"+testPublicHost)
 
 	resp, err := client.Do(req)
 	require.NoError(t, err)
 	return resp
 }
 
-func csrfFormValues(srv *Server, extra map[string]string) map[string]string {
-	values := map[string]string{"csrf_token": srv.auth.csrfToken}
-	for k, v := range extra {
-		values[k] = v
-	}
-	return values
+// csrfFormValues liefert die Formularwerte mit einem gültigen CSRF-Token
+// für die Sitzung von client (siehe csrfTokenFor) — kein Formulartest in
+// diesem Paket braucht seit dem Umstieg auf reine ENV-Konfiguration
+// weitere Felder daneben.
+func csrfFormValues(t *testing.T, srv *Server, client *http.Client) map[string]string {
+	t.Helper()
+	return map[string]string{"csrf_token": csrfTokenFor(t, srv, client)}
 }
 
-func TestHandleSettings_RendersAccountsAndForm(t *testing.T) {
+func TestHandleSettings_RendersConfiguredAccountAndRuntimeSettings(t *testing.T) {
 	srv, _ := newTestServerWithAccounts(t, mustAccount(t, "Erstes Konto"))
 	client := authenticatedClient(t, srv)
 
@@ -49,117 +47,31 @@ func TestHandleSettings_RendersAccountsAndForm(t *testing.T) {
 	html := string(body)
 
 	require.Contains(t, html, "Erstes Konto")
-	require.Contains(t, html, `name="host"`)
-	require.Contains(t, html, `name="passwort"`)
+	require.Contains(t, html, "imap.example.com")
+	require.Contains(t, html, "24 Monate")
+	require.Contains(t, html, "alle 60 Minuten")
+	require.NotContains(t, html, `name="passwort"`, "es gibt kein Kontoformular mehr — Zugangsdaten kommen aus ENV")
 }
 
-func TestHandleAccountCreate_ValidData_CreatesAccountAndRedirects(t *testing.T) {
-	srv, fd := newTestServerWithAccounts(t)
-	client := authenticatedClient(t, srv)
-
-	resp := postForm(t, client, srv.Addr(), "/konten", csrfFormValues(srv, map[string]string{
-		"anzeigename":  "Mein Konto",
-		"host":         "imap.example.com",
-		"port":         "993",
-		"benutzername": "user@example.com",
-		"postfach":     "INBOX",
-		"tls":          "on",
-		"passwort":     "geheim123",
-	}))
-	defer func() { _ = resp.Body.Close() }()
-	require.Equal(t, http.StatusOK, resp.StatusCode) // Client folgt dem 303-Redirect
-
-	accounts, err := fd.accounts.FindAll(t.Context())
-	require.NoError(t, err)
-	require.Len(t, accounts, 1)
-	require.Equal(t, "Mein Konto", accounts[0].DisplayName)
-	require.Equal(t, "imap.example.com", accounts[0].Host)
-
-	secret, err := fd.credentials.Retrieve(accounts[0].ID)
-	require.NoError(t, err)
-	require.Equal(t, "geheim123", string(secret.Expose()))
-
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	require.Contains(t, string(body), "Konto gespeichert.")
-}
-
-func TestHandleAccountCreate_MissingHost_ShowsErrorWithoutCreating(t *testing.T) {
-	srv, fd := newTestServerWithAccounts(t)
-	client := authenticatedClient(t, srv)
-
-	resp := postForm(t, client, srv.Addr(), "/konten", csrfFormValues(srv, map[string]string{
-		"benutzername": "user@example.com",
-		"port":         "993",
-		"passwort":     "geheim123",
-	}))
-	defer func() { _ = resp.Body.Close() }()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	require.Contains(t, string(body), "Host darf nicht leer sein")
-
-	accounts, err := fd.accounts.FindAll(t.Context())
-	require.NoError(t, err)
-	require.Empty(t, accounts)
-}
-
-func TestHandleAccountCreate_MissingCSRFToken_Returns403(t *testing.T) {
+func TestHandleSettings_NoAccountConfigured_ShowsEmptyState(t *testing.T) {
 	srv, _ := newTestServerWithAccounts(t)
 	client := authenticatedClient(t, srv)
 
-	resp := postForm(t, client, srv.Addr(), "/konten", map[string]string{
-		"host": "imap.example.com", "port": "993", "benutzername": "u@example.com", "passwort": "x",
-	})
-	defer func() { _ = resp.Body.Close() }()
-	require.Equal(t, http.StatusForbidden, resp.StatusCode)
-}
-
-func TestHandleAccountListMailboxes_Success_PopulatesOptions(t *testing.T) {
-	srv, fd := newTestServerWithAccounts(t)
-	fd.source.mailboxes = []string{"INBOX", "INBOX/DMARC"}
-	client := authenticatedClient(t, srv)
-
-	resp := postForm(t, client, srv.Addr(), "/konten/ordner", csrfFormValues(srv, map[string]string{
-		"host": "imap.example.com", "port": "993", "benutzername": "u@example.com", "passwort": "x",
-	}))
+	resp := httpGet(t, client, "http://"+srv.Addr()+"/einstellungen")
 	defer func() { _ = resp.Body.Close() }()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	html := string(body)
-	require.Contains(t, html, "INBOX/DMARC")
-	require.Contains(t, html, "2 Postfächer gefunden.")
-
-	// Passwort darf im erneut angezeigten Formular nicht auftauchen.
-	require.NotContains(t, html, `value="x"`)
-}
-
-func TestHandleAccountListMailboxes_ConnectionFails_ShowsError(t *testing.T) {
-	srv, fd := newTestServerWithAccounts(t)
-	fd.source.connectErr = errTest
-	client := authenticatedClient(t, srv)
-
-	resp := postForm(t, client, srv.Addr(), "/konten/ordner", csrfFormValues(srv, map[string]string{
-		"host": "imap.example.com", "port": "993", "benutzername": "u@example.com", "passwort": "x",
-	}))
-	defer func() { _ = resp.Body.Close() }()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	require.Contains(t, string(body), "Postfächer konnten nicht abgerufen werden")
+	require.Contains(t, string(body), "Kein Konto konfiguriert")
 }
 
 func TestHandleAccountTest_Success_ShowsSuccessMessage(t *testing.T) {
 	acc := mustAccount(t, "Konto 1")
-	srv, fd := newTestServerWithAccounts(t, acc)
-	require.NoError(t, fd.credentials.Store(acc.ID, account.NewSecretFromString("pw")))
+	srv, _ := newTestServerWithAccounts(t, acc)
 	client := authenticatedClient(t, srv)
 
-	resp := postForm(t, client, srv.Addr(), "/konten/acc-1/test", csrfFormValues(srv, nil))
+	resp := postForm(t, client, srv.Addr(), "/konten/"+string(acc.ID)+"/test", csrfFormValues(t, srv, client))
 	defer func() { _ = resp.Body.Close() }()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -171,11 +83,10 @@ func TestHandleAccountTest_Success_ShowsSuccessMessage(t *testing.T) {
 func TestHandleAccountTest_ConnectionFails_ShowsErrorMessage(t *testing.T) {
 	acc := mustAccount(t, "Konto 1")
 	srv, fd := newTestServerWithAccounts(t, acc)
-	require.NoError(t, fd.credentials.Store(acc.ID, account.NewSecretFromString("pw")))
 	fd.source.connectErr = errTest
 	client := authenticatedClient(t, srv)
 
-	resp := postForm(t, client, srv.Addr(), "/konten/acc-1/test", csrfFormValues(srv, nil))
+	resp := postForm(t, client, srv.Addr(), "/konten/"+string(acc.ID)+"/test", csrfFormValues(t, srv, client))
 	defer func() { _ = resp.Body.Close() }()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -184,115 +95,12 @@ func TestHandleAccountTest_ConnectionFails_ShowsErrorMessage(t *testing.T) {
 	require.Contains(t, string(body), "Verbindung fehlgeschlagen.")
 }
 
-func TestHandleAccountDelete_RemovesAccount(t *testing.T) {
+func TestHandleAccountTest_MissingCSRFToken_Returns403(t *testing.T) {
 	acc := mustAccount(t, "Konto 1")
-	srv, fd := newTestServerWithAccounts(t, acc)
+	srv, _ := newTestServerWithAccounts(t, acc)
 	client := authenticatedClient(t, srv)
 
-	resp := postForm(t, client, srv.Addr(), "/konten/acc-1/loeschen", csrfFormValues(srv, nil))
+	resp := postForm(t, client, srv.Addr(), "/konten/"+string(acc.ID)+"/test", nil)
 	defer func() { _ = resp.Body.Close() }()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-
-	accounts, err := fd.accounts.FindAll(t.Context())
-	require.NoError(t, err)
-	require.Empty(t, accounts)
-
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	require.Contains(t, string(body), "Konto gelöscht.")
-}
-
-func TestHandleAccountCreate_CredentialsLocked_RedirectsToUnlock(t *testing.T) {
-	srv, fd := newTestServerWithAccounts(t)
-	fd.credentials.storeErr = account.ErrCredentialStoreLocked
-	client := authenticatedClient(t, srv)
-
-	// credentialsLocked() prüft per Typ-Assertion auf lockChecker — das
-	// fakeCredentialStore-Fake implementiert das nicht, deshalb hier
-	// direkt über einen echten LockableFileStore-artigen Test unten statt
-	// hier: dieser Test prüft nur, dass ein Store()-Fehler (z. B. weil
-	// tatsächlich gesperrt) sauber als Formularfehler auftaucht, nicht als
-	// 500er.
-	resp := postForm(t, client, srv.Addr(), "/konten", csrfFormValues(srv, map[string]string{
-		"host": "imap.example.com", "port": "993", "benutzername": "u@example.com", "passwort": "x",
-	}))
-	defer func() { _ = resp.Body.Close() }()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-
-	accounts, err := fd.accounts.FindAll(t.Context())
-	require.NoError(t, err)
-	require.Empty(t, accounts, "Konto darf bei fehlgeschlagenem Credential-Store nicht als gespeichert gelten")
-}
-
-func TestHandleSettings_ShowsCurrentRetentionAndSyncIntervalDefaults(t *testing.T) {
-	srv, _ := newTestServerWithAccounts(t)
-	client := authenticatedClient(t, srv)
-
-	resp := httpGet(t, client, "http://"+srv.Addr()+"/einstellungen")
-	defer func() { _ = resp.Body.Close() }()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	html := string(body)
-
-	require.Contains(t, html, `name="aufbewahrung_monate" value="24"`)
-	require.Contains(t, html, `name="sync_intervall_minuten" value="60"`)
-}
-
-func TestHandleGeneralSettingsUpdate_ValidData_PersistsAndRedirects(t *testing.T) {
-	srv, fd := newTestServerWithAccounts(t)
-	client := authenticatedClient(t, srv)
-
-	resp := postForm(t, client, srv.Addr(), "/einstellungen/allgemein", csrfFormValues(srv, map[string]string{
-		"aufbewahrung_monate":    "12",
-		"sync_intervall_minuten": "30",
-	}))
-	defer func() { _ = resp.Body.Close() }()
-	require.Equal(t, http.StatusOK, resp.StatusCode) // Client folgt dem 303-Redirect
-
-	got, err := fd.settings.Load(t.Context())
-	require.NoError(t, err)
-	require.Equal(t, 12, got.RetentionMonths)
-	require.Equal(t, 30, got.SyncIntervalMinutes)
-
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	require.Contains(t, string(body), "Einstellungen gespeichert.")
-}
-
-func TestHandleGeneralSettingsUpdate_NegativeValue_ShowsErrorWithoutSaving(t *testing.T) {
-	srv, fd := newTestServerWithAccounts(t)
-	client := authenticatedClient(t, srv)
-
-	resp := postForm(t, client, srv.Addr(), "/einstellungen/allgemein", csrfFormValues(srv, map[string]string{
-		"aufbewahrung_monate":    "-1",
-		"sync_intervall_minuten": "30",
-	}))
-	defer func() { _ = resp.Body.Close() }()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-
-	require.False(t, fd.settings.hasValue, "ungültige Eingabe darf nicht gespeichert werden")
-
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	html := string(body)
-	require.Contains(t, html, "form-error")
-	require.Contains(t, html, `name="aufbewahrung_monate" value="-1"`, "eingegebener Wert bleibt im Formular sichtbar")
-}
-
-func TestHandleGeneralSettingsUpdate_NonNumericValue_ShowsError(t *testing.T) {
-	srv, _ := newTestServerWithAccounts(t)
-	client := authenticatedClient(t, srv)
-
-	resp := postForm(t, client, srv.Addr(), "/einstellungen/allgemein", csrfFormValues(srv, map[string]string{
-		"aufbewahrung_monate":    "abc",
-		"sync_intervall_minuten": "30",
-	}))
-	defer func() { _ = resp.Body.Close() }()
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	require.Contains(t, string(body), "form-error")
+	require.Equal(t, http.StatusForbidden, resp.StatusCode)
 }

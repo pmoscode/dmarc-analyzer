@@ -20,52 +20,43 @@ import (
 // gebauten Server — als Struct statt einzelner Rückgabewerte, damit
 // Tests gezielt genau die Fakes benennen können, die sie brauchen.
 type fullDeps struct {
-	accounts    *fakeAccountRepository
-	credentials *fakeCredentialStore
-	source      *fakeMessageSource
-	syncer      *fakeJobSyncer
-	settings    *fakeSettingsRepository
+	accounts *fakeAccountRepository
+	source   *fakeMessageSource
+	syncer   *fakeJobSyncer
 }
 
 // newTestServerWithAccounts baut einen Server mit vollständig verdrahteten
-// Dependencies (Statistics/Accounts/Credentials/SyncJob) — für Tests von
-// /einstellungen, /einrichtung, /entsperren und /abgleich, die alle
-// mindestens Accounts brauchen (schon die Anmeldung leitet über "/" auf
-// /einrichtung um, wenn Accounts nil oder leer ist, siehe
-// handlers_dashboard.go).
+// Dependencies (Statistics/Accounts/SyncJob) — für Tests von
+// /einstellungen und /abgleich.
 func newTestServerWithAccounts(t *testing.T, accounts ...account.MailAccount) (*Server, *fullDeps) {
 	t.Helper()
-	isolateConfigDir(t)
 
 	fd := &fullDeps{
-		accounts:    newFakeAccountRepository(accounts...),
-		credentials: newFakeCredentialStore(),
-		source:      &fakeMessageSource{},
-		syncer:      &fakeJobSyncer{},
-		settings:    &fakeSettingsRepository{},
+		accounts: newFakeAccountRepository(accounts...),
+		source:   &fakeMessageSource{},
+		syncer:   &fakeJobSyncer{},
 	}
 
 	accountsUC := &manageaccount.UseCase{
-		Accounts:    fd.accounts,
-		Credentials: fd.credentials,
-		NewSource:   func() domainsync.MessageSource { return fd.source },
+		Accounts:  fd.accounts,
+		NewSource: func() domainsync.MessageSource { return fd.source },
 	}
 
 	deps := Dependencies{
-		Statistics:  &statistics.UseCase{Repository: &fakeRepository{}},
-		Reports:     &queryreports.UseCase{Reports: &fakeReportRepository{}},
-		Sources:     &sourcestats.UseCase{Sources: &fakeSourcesRepository{}, Enricher: &fakeEnricher{}},
-		Accounts:    accountsUC,
-		Credentials: fd.credentials,
-		SyncJob:     syncjob.NewRunner(context.Background(), fd.accounts, fd.syncer),
-		Retention:   &retention.UseCase{Settings: fd.settings, Reports: &fakePruner{}},
+		Statistics:          &statistics.UseCase{Repository: &fakeRepository{}},
+		Reports:             &queryreports.UseCase{Reports: &fakeReportRepository{}},
+		Sources:             &sourcestats.UseCase{Sources: &fakeSourcesRepository{}, Enricher: &fakeEnricher{}},
+		Accounts:            accountsUC,
+		SyncJob:             syncjob.NewRunner(context.Background(), fd.accounts, fd.syncer),
+		Retention:           &retention.UseCase{RetentionMonths: 24, Reports: &fakePruner{}},
+		SyncIntervalMinutes: 60,
 	}
 
-	srv, err := New(deps, Options{})
+	provider := newFakeOIDCProvider(t)
+	srv, err := New(context.Background(), deps, testOIDCOptions(provider.issuer()))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
 
-	_, err = srv.Start(context.Background())
-	require.NoError(t, err)
+	require.NoError(t, srv.Start(context.Background()))
 	return srv, fd
 }

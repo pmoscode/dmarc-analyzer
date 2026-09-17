@@ -13,7 +13,6 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/account"
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/analysis"
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/report"
-	"github.com/pmoscode/dmarc-analyzer/internal/domain/settings"
 	domainsources "github.com/pmoscode/dmarc-analyzer/internal/domain/sources"
 	domainsync "github.com/pmoscode/dmarc-analyzer/internal/domain/sync"
 )
@@ -142,35 +141,6 @@ func (f *fakeReportRepository) Query(_ context.Context, q report.Query) (report.
 	return f.page, nil
 }
 
-// fakeSettingsRepository implementiert settings.Repository in-memory —
-// für Tests von /einstellungen/allgemein (AP 7).
-type fakeSettingsRepository struct {
-	mu       sync.Mutex
-	s        settings.Settings
-	hasValue bool
-	saveErr  error
-}
-
-func (f *fakeSettingsRepository) Load(context.Context) (settings.Settings, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if !f.hasValue {
-		return settings.Default(), nil
-	}
-	return f.s, nil
-}
-
-func (f *fakeSettingsRepository) Save(_ context.Context, s settings.Settings) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.saveErr != nil {
-		return f.saveErr
-	}
-	f.s = s
-	f.hasValue = true
-	return nil
-}
-
 // fakePruner implementiert report.Pruner mit einem festen Rückgabewert —
 // die eigentliche Löschlogik ist bereits in internal/app/retention und
 // internal/infra/sqlite getestet, hier reicht ein einfacher Stub.
@@ -210,7 +180,7 @@ func (f *fakeEnricher) Enrich(context.Context, report.SourceIP) domainsources.En
 }
 
 // fakeAccountRepository implementiert account.Repository — für Tests von
-// /einstellungen und /einrichtung.
+// /einstellungen.
 type fakeAccountRepository struct {
 	mu         sync.Mutex
 	accounts   map[account.AccountID]account.MailAccount
@@ -256,62 +226,11 @@ func (f *fakeAccountRepository) FindAll(context.Context) ([]account.MailAccount,
 	return out, nil
 }
 
-func (f *fakeAccountRepository) Delete(_ context.Context, id account.AccountID) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	delete(f.accounts, id)
-	return nil
-}
-
-// fakeCredentialStore implementiert account.CredentialStore — für Tests
-// von /einstellungen und /einrichtung. Kopiert das Secret defensiv
-// (siehe AGENTS.md: ein Test-Fake, der es nur flach speichert, teilt
-// sonst das Backing-Array mit dem Aufrufer).
-type fakeCredentialStore struct {
-	mu       sync.Mutex
-	secrets  map[account.AccountID]account.Secret
-	storeErr error
-}
-
-func newFakeCredentialStore() *fakeCredentialStore {
-	return &fakeCredentialStore{secrets: map[account.AccountID]account.Secret{}}
-}
-
-func (f *fakeCredentialStore) Store(id account.AccountID, s account.Secret) error {
-	if f.storeErr != nil {
-		return f.storeErr
-	}
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.secrets[id] = account.NewSecret(s.Expose())
-	return nil
-}
-
-func (f *fakeCredentialStore) Retrieve(id account.AccountID) (account.Secret, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	s, ok := f.secrets[id]
-	if !ok {
-		return account.Secret{}, account.ErrCredentialNotFound
-	}
-	return s, nil
-}
-
-func (f *fakeCredentialStore) Delete(id account.AccountID) error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	delete(f.secrets, id)
-	return nil
-}
-
-// fakeMessageSource implementiert domainsync.MessageSource (+
-// MailboxLister) — für Tests, die manageaccount.UseCase.TestConnection/
-// ListMailboxes durchlaufen (Kontoformular: Verbindung testen, Ordner
-// auflisten).
+// fakeMessageSource implementiert domainsync.MessageSource — für Tests,
+// die manageaccount.UseCase.TestConnectionByID durchlaufen ("Verbindung
+// testen" auf der Status-Seite).
 type fakeMessageSource struct {
 	connectErr error
-	mailboxes  []string
-	listErr    error
 	closed     bool
 }
 
@@ -326,13 +245,6 @@ func (f *fakeMessageSource) FetchNew(context.Context, domainsync.State) (iter.Se
 func (f *fakeMessageSource) Close() error {
 	f.closed = true
 	return nil
-}
-
-func (f *fakeMessageSource) ListMailboxes(context.Context) ([]string, error) {
-	if f.listErr != nil {
-		return nil, f.listErr
-	}
-	return f.mailboxes, nil
 }
 
 // fakeJobSyncer implementiert syncjob.Syncer — für Tests, die einen

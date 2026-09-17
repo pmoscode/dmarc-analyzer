@@ -10,54 +10,58 @@ import (
 	"time"
 )
 
-// oneTimeCodeTTL begrenzt die Gültigkeit eines Einmal-Anmeldelinks
-// (MIGRATIONSPLAN.md Abschnitt 5: "60 s gültig").
-const oneTimeCodeTTL = 60 * time.Second
+// sessionTTL ist die feste Gültigkeitsdauer einer Sitzung nach der
+// Authentik-Anmeldung — kein Refresh, kein "angemeldet bleiben": nach
+// Ablauf meldet sich ein Admin erneut über /anmelden an (i. d. R.
+// transparent, weil Authentiks eigene SSO-Sitzung meist noch gültig ist).
+const sessionTTL = 12 * time.Hour
 
-// sessionCookieName ist der Name des Sitzungs-Cookies.
-const sessionCookieName = "dmarc_session"
+// pendingLoginTTL begrenzt, wie lange zwischen /anmelden (Redirect zu
+// Authentik) und /anmelden/callback vergehen darf — schützt vor einem
+// state/nonce-Wert, der beliebig lange wiederverwendet werden könnte.
+const pendingLoginTTL = 10 * time.Minute
 
-// auth verwaltet Instanz-Geheimnis, den aktuell ausstehenden Einmal-Code
-// und die eine Sitzung dieses Serverlaufs (MIGRATIONSPLAN.md Abschnitt 5).
-// Bewusst keine Mehrbenutzer-/Mehrsitzungs-Verwaltung: die Oberfläche ist
-// für genau einen Nutzer auf demselben Rechner gedacht — ein einziges,
-// beim Start erzeugtes Sitzungs-Token reicht.
-type auth struct {
-	// instanceSecret authentifiziert einen zweiten Programmstart gegenüber
-	// der bereits laufenden Instanz (POST /intern/code, Meilenstein M1) —
-	// hier schon erzeugt und in instance.json abgelegt, aber der Endpunkt
-	// selbst kommt erst mit der Einzelinstanz-Erkennung.
-	instanceSecret string
-	// sessionToken gilt für die gesamte Prozesslaufzeit — kein Ablauf,
-	// keine Erneuerung; das Beenden des Prozesses beendet die Sitzung.
-	sessionToken string
-	// csrfToken schützt zustandsändernde Anfragen zusätzlich zu
-	// SameSite=Strict (siehe middleware.go requireCSRF,
-	// MIGRATIONSPLAN.md Abschnitt 5). Wie sessionToken für die gesamte
-	// Prozesslaufzeit gültig — ein einzelner Nutzer, eine Sitzung.
+// sessionCookieName und pendingLoginCookieName sind die Namen der beiden
+// Cookies: eines für eine abgeschlossene Anmeldung (Sitzung), eines nur
+// während des OIDC-Umwegs über Authentik (siehe handlers_login.go).
+const (
+	sessionCookieName      = "dmarc_session"
+	pendingLoginCookieName = "dmarc_login"
+)
+
+// session ist eine abgeschlossene Anmeldung — mehrere gleichzeitig
+// möglich (verschiedene Admins/Browser), anders als das frühere
+// Ein-Sitzung-Modell der Desktop-Ära.
+type session struct {
+	username  string
 	csrfToken string
-
-	mu          sync.Mutex
-	pendingCode string
-	codeExpires time.Time
+	expiresAt time.Time
 }
 
-// newAuth erzeugt Instanz-Geheimnis und Sitzungs-Token aus
-// kryptografischem Zufall.
-func newAuth() (*auth, error) {
-	secret, err := randomHex(32)
-	if err != nil {
-		return nil, err
+// pendingLogin hält state/nonce/PKCE-Verifier eines laufenden
+// OIDC-Anmeldevorgangs (siehe handlers_login.go handleLoginStart/
+// handleLoginCallback) — kurzlebig, ein Eintrag pro noch nicht
+// abgeschlossenem Redirect zu Authentik.
+type pendingLogin struct {
+	state        string
+	nonce        string
+	pkceVerifier string
+	expiresAt    time.Time
+}
+
+// auth verwaltet alle aktiven Sitzungen und laufenden Anmeldevorgänge
+// dieses Serverlaufs.
+type auth struct {
+	mu       sync.Mutex
+	sessions map[string]session
+	pending  map[string]pendingLogin
+}
+
+func newAuth() *auth {
+	return &auth{
+		sessions: make(map[string]session),
+		pending:  make(map[string]pendingLogin),
 	}
-	session, err := randomHex(32)
-	if err != nil {
-		return nil, err
-	}
-	csrf, err := randomHex(32)
-	if err != nil {
-		return nil, err
-	}
-	return &auth{instanceSecret: secret, sessionToken: session, csrfToken: csrf}, nil
 }
 
 func randomHex(n int) (string, error) {
@@ -68,77 +72,185 @@ func randomHex(n int) (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// issueCode erzeugt einen neuen, oneTimeCodeTTL gültigen Einmal-Code.
-// Ein zuvor ausgestellter, noch nicht eingelöster Code wird dabei
-// verworfen — es gibt nie mehr als einen gültigen Code gleichzeitig.
-func (a *auth) issueCode() (string, error) {
-	code, err := randomHex(16)
+// beginLogin erzeugt einen neuen, pendingLoginTTL gültigen Anmeldevorgang
+// und liefert dessen ID (Cookie-Wert) sowie state/nonce/PKCE-Verifier für
+// die Authorization-Request an Authentik.
+func (a *auth) beginLogin() (id string, p pendingLogin, err error) {
+	id, err = randomHex(16)
 	if err != nil {
-		return "", err
+		return "", pendingLogin{}, err
+	}
+	state, err := randomHex(16)
+	if err != nil {
+		return "", pendingLogin{}, err
+	}
+	nonce, err := randomHex(16)
+	if err != nil {
+		return "", pendingLogin{}, err
+	}
+	verifier, err := randomHex(32)
+	if err != nil {
+		return "", pendingLogin{}, err
 	}
 
+	p = pendingLogin{state: state, nonce: nonce, pkceVerifier: verifier, expiresAt: time.Now().Add(pendingLoginTTL)}
+
 	a.mu.Lock()
-	a.pendingCode = code
-	a.codeExpires = time.Now().Add(oneTimeCodeTTL)
+	a.pending[id] = p
 	a.mu.Unlock()
 
-	return code, nil
+	return id, p, nil
 }
 
-// redeemCode prüft code gegen den aktuell ausstehenden Einmal-Code. Der
-// ausstehende Code wird in jedem Fall verworfen — bei Erfolg wie bei
-// Fehlschlag —, damit ein Code nie zweimal verwendet werden kann (auch
-// nicht durch einen zweiten, mitgehörten Versuch).
-func (a *auth) redeemCode(code string) bool {
+// redeemLogin prüft id+state gegen einen ausstehenden Anmeldevorgang und
+// verwirft ihn in jedem Fall — bei Erfolg wie bei Fehlschlag —, damit ein
+// Callback nie zweimal eingelöst werden kann.
+func (a *auth) redeemLogin(id, state string) (pendingLogin, bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	valid := code != "" &&
-		a.pendingCode != "" &&
-		subtle.ConstantTimeCompare([]byte(code), []byte(a.pendingCode)) == 1 &&
-		time.Now().Before(a.codeExpires)
+	p, ok := a.pending[id]
+	delete(a.pending, id)
 
-	a.pendingCode = ""
-	a.codeExpires = time.Time{}
-	return valid
+	if !ok || state == "" || subtle.ConstantTimeCompare([]byte(state), []byte(p.state)) != 1 {
+		return pendingLogin{}, false
+	}
+	if time.Now().After(p.expiresAt) {
+		return pendingLogin{}, false
+	}
+	return p, true
+}
+
+// createSession legt nach erfolgreicher OIDC-Anmeldung eine neue Sitzung
+// für username an und liefert Cookie-Wert und CSRF-Token.
+func (a *auth) createSession(username string) (cookieValue, csrfToken string, err error) {
+	cookieValue, err = randomHex(32)
+	if err != nil {
+		return "", "", err
+	}
+	csrfToken, err = randomHex(32)
+	if err != nil {
+		return "", "", err
+	}
+
+	a.mu.Lock()
+	a.sessions[cookieValue] = session{username: username, csrfToken: csrfToken, expiresAt: time.Now().Add(sessionTTL)}
+	a.mu.Unlock()
+
+	return cookieValue, csrfToken, nil
+}
+
+// sessionFromRequest liefert die Sitzung von r, falls das Cookie ein noch
+// gültiges Sitzungs-Cookie ist — abgelaufene Einträge werden dabei
+// gleich entfernt.
+func (a *auth) sessionFromRequest(r *http.Request) (session, bool) {
+	cookie, err := r.Cookie(sessionCookieName)
+	if err != nil {
+		return session{}, false
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	s, ok := a.sessions[cookie.Value]
+	if !ok {
+		return session{}, false
+	}
+	if time.Now().After(s.expiresAt) {
+		delete(a.sessions, cookie.Value)
+		return session{}, false
+	}
+	return s, true
 }
 
 // validSession meldet, ob r ein gültiges Sitzungs-Cookie mitbringt.
 func (a *auth) validSession(r *http.Request) bool {
+	_, ok := a.sessionFromRequest(r)
+	return ok
+}
+
+// csrfTokenForRequest liefert das CSRF-Token der Sitzung von r, oder einen
+// leeren String ohne gültige Sitzung — für views.go beim Rendern eines
+// Formulars.
+func (a *auth) csrfTokenForRequest(r *http.Request) string {
+	s, _ := a.sessionFromRequest(r)
+	return s.csrfToken
+}
+
+// validCSRFToken meldet, ob token mit dem CSRF-Token der Sitzung von r
+// übereinstimmt (siehe middleware.go requireCSRF).
+func (a *auth) validCSRFToken(r *http.Request, token string) bool {
+	s, ok := a.sessionFromRequest(r)
+	return ok && token != "" && subtle.ConstantTimeCompare([]byte(token), []byte(s.csrfToken)) == 1
+}
+
+// endSession entfernt die Sitzung von r, falls vorhanden — für /abmelden.
+func (a *auth) endSession(r *http.Request) {
 	cookie, err := r.Cookie(sessionCookieName)
 	if err != nil {
-		return false
+		return
 	}
-	return subtle.ConstantTimeCompare([]byte(cookie.Value), []byte(a.sessionToken)) == 1
+	a.mu.Lock()
+	delete(a.sessions, cookie.Value)
+	a.mu.Unlock()
 }
 
-// validInstanceSecret meldet, ob secret mit dem Instanz-Geheimnis dieses
-// Serverlaufs übereinstimmt — Grundlage für POST /intern/code
-// (Einzelinstanz-Erkennung, MIGRATIONSPLAN.md Abschnitt 3/7).
-func (a *auth) validInstanceSecret(secret string) bool {
-	return secret != "" && subtle.ConstantTimeCompare([]byte(secret), []byte(a.instanceSecret)) == 1
-}
-
-// validCSRFToken meldet, ob token mit dem CSRF-Token dieser Sitzung
-// übereinstimmt (siehe middleware.go requireCSRF).
-func (a *auth) validCSRFToken(token string) bool {
-	return token != "" && subtle.ConstantTimeCompare([]byte(token), []byte(a.csrfToken)) == 1
-}
-
-// setSessionCookie setzt das Sitzungs-Cookie nach erfolgreichem Einlösen
-// eines Einmal-Codes. HttpOnly + SameSite=Strict (MIGRATIONSPLAN.md
-// Abschnitt 5); kein Secure-Flag — der Server spricht bewusst nur
-// Klartext-HTTP auf 127.0.0.1, kein TLS geplant (siehe Migrationsplan,
-// offene Frage 4 für den Fall, dass sich das später ändert).
-func (a *auth) setSessionCookie(w http.ResponseWriter) {
-	//nolint:gosec // G124: kein Secure-Flag ist hier bewusst — reines
-	// Klartext-HTTP auf 127.0.0.1, kein TLS geplant (siehe Kommentar
-	// oben und MIGRATIONSPLAN.md offene Frage 4).
+// setSessionCookie setzt das Sitzungs-Cookie nach erfolgreicher
+// Authentik-Anmeldung. Secure+HttpOnly+SameSite=Lax: Lax statt Strict,
+// weil der Browser dieses Cookie beim zurückkehrenden Redirect von
+// Authentik (einem Cross-Site-Navigationsziel) mitschicken muss, damit
+// /anmelden/callback die Sitzung setzen kann; ein direkter Angreifer kann
+// über SameSite=Lax weiterhin keine zustandsändernde Anfrage auslösen
+// (siehe requireCSRF zusätzlich dazu).
+func setSessionCookie(w http.ResponseWriter, value string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
-		Value:    a.sessionToken,
+		Value:    value,
 		Path:     "/",
 		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   int(sessionTTL.Seconds()),
+	})
+}
+
+// clearSessionCookie löscht das Sitzungs-Cookie beim Browser (Ablaufzeit
+// in der Vergangenheit) — für /abmelden.
+func clearSessionCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1,
+	})
+}
+
+// setPendingLoginCookie/clearPendingLoginCookie verwalten das kurzlebige
+// Cookie, das die ID des laufenden OIDC-Anmeldevorgangs zwischen
+// /anmelden und /anmelden/callback transportiert.
+func setPendingLoginCookie(w http.ResponseWriter, id string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     pendingLoginCookieName,
+		Value:    id,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   int(pendingLoginTTL.Seconds()),
+	})
+}
+
+func clearPendingLoginCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     pendingLoginCookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1,
 	})
 }

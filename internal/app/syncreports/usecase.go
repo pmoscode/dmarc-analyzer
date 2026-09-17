@@ -24,8 +24,11 @@ const defaultConcurrency = 4
 // UseCase orchestriert SyncAccount. Alle Felder sind Ports — die
 // Composition Root (cmd/dmarc-analyzer) verdrahtet die konkreten Adapter.
 type UseCase struct {
-	Accounts      account.Repository
-	Credentials   account.CredentialStore
+	Accounts account.Repository
+	// Secret ist das aus ENV geladene IMAP-Passwort (siehe
+	// internal/infra/envconfig) — gilt für die gesamte Prozesslaufzeit, es
+	// gibt nur das eine konfigurierte Konto.
+	Secret        account.Secret
 	States        domainsync.StateRepository
 	Reports       report.Repository
 	FailedImports domainsync.FailedImportRepository
@@ -85,16 +88,10 @@ func (uc *UseCase) SyncAccount(ctx context.Context, accountID account.AccountID,
 		return Result{}, fmt.Errorf("konto %q konnte nicht geladen werden: %w", accountID, err)
 	}
 
-	secret, err := uc.Credentials.Retrieve(accountID)
-	if err != nil {
-		return Result{}, fmt.Errorf("zugangsdaten für konto %q konnten nicht geladen werden: %w", accountID, err)
-	}
-	defer secret.Zero()
-
 	source := uc.NewSource()
 	defer func() { _ = source.Close() }()
 
-	if err := source.Connect(ctx, *acc, secret); err != nil {
+	if err := source.Connect(ctx, *acc, uc.Secret); err != nil {
 		return Result{}, fmt.Errorf("verbindung zu konto %q konnte nicht aufgebaut werden: %w", accountID, err)
 	}
 

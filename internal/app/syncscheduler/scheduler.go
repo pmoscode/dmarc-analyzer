@@ -1,67 +1,57 @@
 // Package syncscheduler stößt automatische Hintergrund-Abgleiche nach
-// Zeitplan an (AP 7: "Hintergrund-Sync nach Zeitplan") — der manuell per
-// /abgleich gestartete Lauf (internal/app/syncjob) bleibt davon unberührt
-// und weiterhin jederzeit möglich.
+// einem festen Zeitplan an (AP 7: "Hintergrund-Sync nach Zeitplan") — der
+// manuell per /abgleich gestartete Lauf (internal/app/syncjob) bleibt
+// davon unberührt und weiterhin jederzeit möglich. Das Intervall kommt aus
+// envconfig.Config.SyncIntervalMinutes und ändert sich nicht zur Laufzeit
+// (12-factor, kein Nachladen nötig — anders als vor dem Umstieg auf reine
+// ENV-Konfiguration, siehe Git-Historie dieser Datei).
 package syncscheduler
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
-	"github.com/pmoscode/dmarc-analyzer/internal/domain/settings"
+	"github.com/pmoscode/dmarc-analyzer/internal/app/syncjob"
 )
 
 // Starter ist der Ausschnitt von syncjob.Runner, den Scheduler braucht.
-// ErrAlreadyRunning wird nicht gesondert behandelt — passiert es, tut das
-// gestartete Signal ohnehin nichts (ein Lauf läuft ja schon), also reicht
-// Starter.Start()s eigenes "kein Fehler, wenn schon einer läuft" hier
-// nicht: Scheduler ignoriert jeden Fehler von Start() bewusst, siehe tick().
 type Starter interface {
 	Start() error
-	Snapshot() Snapshot
 }
 
-// Snapshot ist der für den Scheduler relevante Ausschnitt von
-// syncjob.State — ein eigener, kleiner Typ statt einer Abhängigkeit auf
-// syncjob, damit dieses Paket unabhängig von dessen internem Status-Enum
-// bleibt (nur "läuft gerade" und "wann zuletzt beendet" zählen hier).
-type Snapshot struct {
-	Running bool
-	// LastActivity ist der Start- oder Endzeitpunkt des letzten Laufs,
-	// je nachdem was zuletzt gesetzt wurde — Zero, wenn seit dem Start des
-	// Programms noch nie synchronisiert wurde.
-	LastActivity time.Time
-}
-
-// Scheduler prüft in festen, kurzen Abständen (checkInterval), ob laut der
-// aktuell gespeicherten Einstellungen ein automatischer Abgleich fällig
-// ist. Die eigentliche Sync-Häufigkeit (settings.SyncIntervalMinutes) kann
-// sich jederzeit ändern (Einstellungen-Seite) — ein fester
-// time.Ticker(interval) würde das erst nach einem Neustart bemerken,
-// dieses Nachfragen bei jedem Tick dagegen sofort.
+// Scheduler löst nach jedem interval einen Lauf aus, solange keiner läuft
+// — läuft bereits einer, meldet syncjob.Runner.Start() harmlos
+// ErrAlreadyRunning, das Intervall lässt den nächsten Versuch dann
+// automatisch etwas später greifen.
 type Scheduler struct {
-	settings      settings.Repository
-	job           Starter
-	checkInterval time.Duration
-	logger        *slog.Logger
-
-	// now ist austauschbar für Tests mit einem festen Zeitpunkt.
-	now func() time.Time
+	job      Starter
+	interval time.Duration
+	logger   *slog.Logger
 }
 
 // NewScheduler erzeugt einen Scheduler. logger == nil verwendet
-// slog.Default().
-func NewScheduler(settingsRepo settings.Repository, job Starter, checkInterval time.Duration, logger *slog.Logger) *Scheduler {
+// slog.Default(). interval <= 0 bedeutet: automatischer Abgleich
+// deaktiviert (Run() kehrt dann sofort zurück).
+func NewScheduler(job Starter, interval time.Duration, logger *slog.Logger) *Scheduler {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Scheduler{settings: settingsRepo, job: job, checkInterval: checkInterval, logger: logger, now: time.Now}
+	return &Scheduler{job: job, interval: interval, logger: logger}
 }
 
-// Run blockiert, bis ctx endet.
+// Run blockiert, bis ctx endet — ein erster Lauf sofort beim Start (ein
+// frisch gestarteter Container soll nicht erst ein volles Intervall auf
+// den ersten Abgleich warten), danach alle interval.
 func (s *Scheduler) Run(ctx context.Context) {
-	ticker := time.NewTicker(s.checkInterval)
+	if s.interval <= 0 {
+		return
+	}
+
+	s.trigger()
+
+	ticker := time.NewTicker(s.interval)
 	defer ticker.Stop()
 
 	for {
@@ -69,34 +59,15 @@ func (s *Scheduler) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			s.tick(ctx)
+			s.trigger()
 		}
 	}
 }
 
-func (s *Scheduler) tick(ctx context.Context) {
-	cfg, err := s.settings.Load(ctx)
-	if err != nil {
-		s.logger.Error("einstellungen für geplanten abgleich konnten nicht gelesen werden", "error", err)
+func (s *Scheduler) trigger() {
+	err := s.job.Start()
+	if err == nil || errors.Is(err, syncjob.ErrAlreadyRunning) {
 		return
 	}
-	if cfg.SyncIntervalMinutes <= 0 {
-		return
-	}
-
-	snap := s.job.Snapshot()
-	if snap.Running {
-		return
-	}
-	if !snap.LastActivity.IsZero() && s.now().Sub(snap.LastActivity) < time.Duration(cfg.SyncIntervalMinutes)*time.Minute {
-		return
-	}
-
-	if err := s.job.Start(); err != nil {
-		// ErrAlreadyRunning ist harmlos (Race mit einem gerade manuell
-		// gestarteten Lauf) — jeder andere Fehler (z. B. Kontenliste nicht
-		// ladbar) landet ohnehin schon in syncjob.State.Err und wird dem
-		// Nutzer dort angezeigt, hier reicht ein Log-Eintrag.
-		s.logger.Warn("geplanter abgleich konnte nicht gestartet werden", "error", err)
-	}
+	s.logger.Warn("geplanter abgleich konnte nicht gestartet werden", "error", err)
 }

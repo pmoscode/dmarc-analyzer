@@ -3,37 +3,7 @@ package retention_test
 import (
 	"context"
 	"time"
-
-	"github.com/pmoscode/dmarc-analyzer/internal/domain/settings"
 )
-
-// fakeSettingsRepository implementiert settings.Repository in-memory.
-type fakeSettingsRepository struct {
-	stored   settings.Settings
-	hasValue bool
-
-	loadErr error
-	saveErr error
-}
-
-func (f *fakeSettingsRepository) Load(context.Context) (settings.Settings, error) {
-	if f.loadErr != nil {
-		return settings.Settings{}, f.loadErr
-	}
-	if !f.hasValue {
-		return settings.Default(), nil
-	}
-	return f.stored, nil
-}
-
-func (f *fakeSettingsRepository) Save(_ context.Context, s settings.Settings) error {
-	if f.saveErr != nil {
-		return f.saveErr
-	}
-	f.stored = s
-	f.hasValue = true
-	return nil
-}
 
 // fakePruner implementiert report.Pruner und merkt sich den zuletzt
 // übergebenen cutoff — für Tests, die prüfen, dass ApplyNow den

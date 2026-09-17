@@ -33,7 +33,6 @@ func testAccount(t *testing.T) account.MailAccount {
 // überschrieben werden können.
 type testDeps struct {
 	accounts      *fakeAccountRepository
-	credentials   *fakeCredentialStore
 	states        *fakeStateRepository
 	reports       *fakeReportRepository
 	failedImports *fakeFailedImportRepository
@@ -45,17 +44,15 @@ func newTestUseCase(t *testing.T, messages []domainsync.RawMessage, parserFailFo
 
 	deps := &testDeps{
 		accounts:      newFakeAccountRepository(testAccount(t)),
-		credentials:   newFakeCredentialStore(),
 		states:        newFakeStateRepository(),
 		reports:       newFakeReportRepository(),
 		failedImports: newFakeFailedImportRepository(),
 		source:        &fakeMessageSource{messages: messages},
 	}
-	require.NoError(t, deps.credentials.Store(testAccountID, account.NewSecretFromString("app-passwort")))
 
 	uc := &syncreports.UseCase{
 		Accounts:      deps.accounts,
-		Credentials:   deps.credentials,
+		Secret:        account.NewSecretFromString("app-passwort"),
 		States:        deps.states,
 		Reports:       deps.reports,
 		FailedImports: deps.failedImports,
@@ -229,16 +226,6 @@ func TestSyncAccount_UnknownAccount_ReturnsError(t *testing.T) {
 
 	uc, _ := newTestUseCase(t, nil, nil)
 	_, err := uc.SyncAccount(context.Background(), "nie-angelegt", nil)
-	require.Error(t, err)
-}
-
-func TestSyncAccount_MissingCredentials_ReturnsError(t *testing.T) {
-	t.Parallel()
-
-	uc, deps := newTestUseCase(t, nil, nil)
-	require.NoError(t, deps.credentials.Delete(testAccountID))
-
-	_, err := uc.SyncAccount(context.Background(), testAccountID, nil)
 	require.Error(t, err)
 }
 

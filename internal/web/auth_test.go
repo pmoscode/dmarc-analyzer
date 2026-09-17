@@ -10,88 +10,84 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestAuth_IssueAndRedeemCode_Success(t *testing.T) {
-	a, err := newAuth()
-	require.NoError(t, err)
+func TestAuth_BeginAndRedeemLogin_Success(t *testing.T) {
+	a := newAuth()
 
-	code, err := a.issueCode()
+	id, p, err := a.beginLogin()
 	require.NoError(t, err)
-	require.NotEmpty(t, code)
+	require.NotEmpty(t, id)
+	require.NotEmpty(t, p.state)
+	require.NotEmpty(t, p.nonce)
+	require.NotEmpty(t, p.pkceVerifier)
 
-	require.True(t, a.redeemCode(code))
+	got, ok := a.redeemLogin(id, p.state)
+	require.True(t, ok)
+	require.Equal(t, p, got)
 }
 
-func TestAuth_RedeemCode_WrongCode_Fails(t *testing.T) {
-	a, err := newAuth()
+func TestAuth_RedeemLogin_WrongState_Fails(t *testing.T) {
+	a := newAuth()
+	id, _, err := a.beginLogin()
 	require.NoError(t, err)
 
-	_, err = a.issueCode()
-	require.NoError(t, err)
-
-	require.False(t, a.redeemCode("definitiv-falscher-code"))
+	_, ok := a.redeemLogin(id, "definitiv-falscher-state")
+	require.False(t, ok)
 }
 
-func TestAuth_RedeemCode_IsSingleUse(t *testing.T) {
-	a, err := newAuth()
-	require.NoError(t, err)
+func TestAuth_RedeemLogin_UnknownID_Fails(t *testing.T) {
+	a := newAuth()
 
-	code, err := a.issueCode()
-	require.NoError(t, err)
-
-	require.True(t, a.redeemCode(code), "erster Versuch muss gelingen")
-	require.False(t, a.redeemCode(code), "zweiter Versuch mit demselben Code muss scheitern")
+	_, ok := a.redeemLogin("unbekannte-id", "irgendein-state")
+	require.False(t, ok)
 }
 
-func TestAuth_RedeemCode_ExpiredCode_Fails(t *testing.T) {
-	a, err := newAuth()
+func TestAuth_RedeemLogin_IsSingleUse(t *testing.T) {
+	a := newAuth()
+	id, p, err := a.beginLogin()
 	require.NoError(t, err)
 
-	code, err := a.issueCode()
+	_, ok := a.redeemLogin(id, p.state)
+	require.True(t, ok, "erster Versuch muss gelingen")
+
+	_, ok = a.redeemLogin(id, p.state)
+	require.False(t, ok, "zweiter Versuch mit derselben ID muss scheitern")
+}
+
+func TestAuth_RedeemLogin_Expired_Fails(t *testing.T) {
+	a := newAuth()
+	id, p, err := a.beginLogin()
 	require.NoError(t, err)
 
-	// Ablaufzeit künstlich in die Vergangenheit setzen, statt echte 60s
-	// im Test zu warten.
+	// Ablaufzeit künstlich in die Vergangenheit setzen, statt echte
+	// 10 Minuten im Test zu warten.
 	a.mu.Lock()
-	a.codeExpires = time.Now().Add(-time.Second)
+	expired := a.pending[id]
+	expired.expiresAt = time.Now().Add(-time.Second)
+	a.pending[id] = expired
 	a.mu.Unlock()
 
-	require.False(t, a.redeemCode(code))
+	_, ok := a.redeemLogin(id, p.state)
+	require.False(t, ok)
 }
 
-func TestAuth_IssueCode_InvalidatesPreviousCode(t *testing.T) {
-	a, err := newAuth()
+func TestAuth_RedeemLogin_EmptyState_Fails(t *testing.T) {
+	a := newAuth()
+	id, _, err := a.beginLogin()
 	require.NoError(t, err)
 
-	first, err := a.issueCode()
-	require.NoError(t, err)
-
-	_, err = a.issueCode()
-	require.NoError(t, err)
-
-	require.False(t, a.redeemCode(first), "ein neu ausgestellter Code muss den vorherigen ungültig machen")
-}
-
-func TestAuth_RedeemCode_EmptyCode_Fails(t *testing.T) {
-	a, err := newAuth()
-	require.NoError(t, err)
-
-	_, err = a.issueCode()
-	require.NoError(t, err)
-
-	require.False(t, a.redeemCode(""))
+	_, ok := a.redeemLogin(id, "")
+	require.False(t, ok)
 }
 
 func TestAuth_ValidSession_NoCookie_Fails(t *testing.T) {
-	a, err := newAuth()
-	require.NoError(t, err)
+	a := newAuth()
 
 	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	require.False(t, a.validSession(r))
 }
 
 func TestAuth_ValidSession_WrongCookie_Fails(t *testing.T) {
-	a, err := newAuth()
-	require.NoError(t, err)
+	a := newAuth()
 
 	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	r.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "fremdes-token"})
@@ -99,30 +95,54 @@ func TestAuth_ValidSession_WrongCookie_Fails(t *testing.T) {
 	require.False(t, a.validSession(r))
 }
 
-func TestAuth_SetSessionCookie_ThenValidSession_Succeeds(t *testing.T) {
-	a, err := newAuth()
+func TestAuth_CreateSession_ThenValidSession_Succeeds(t *testing.T) {
+	a := newAuth()
+
+	cookieValue, _, err := a.createSession("admin@example.com")
 	require.NoError(t, err)
 
-	rec := httptest.NewRecorder()
-	a.setSessionCookie(rec)
-
-	resp := rec.Result()
-	defer func() { _ = resp.Body.Close() }()
-
 	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
-	for _, c := range resp.Cookies() {
-		r.AddCookie(c)
-	}
+	r.AddCookie(&http.Cookie{Name: sessionCookieName, Value: cookieValue})
 
 	require.True(t, a.validSession(r))
 }
 
-func TestAuth_SetSessionCookie_IsHttpOnlyAndStrict(t *testing.T) {
-	a, err := newAuth()
+func TestAuth_CreateSession_MultipleConcurrentSessions(t *testing.T) {
+	a := newAuth()
+
+	cookie1, csrf1, err := a.createSession("admin1@example.com")
+	require.NoError(t, err)
+	cookie2, csrf2, err := a.createSession("admin2@example.com")
 	require.NoError(t, err)
 
+	require.NotEqual(t, cookie1, cookie2)
+	require.NotEqual(t, csrf1, csrf2)
+
+	r1 := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+	r1.AddCookie(&http.Cookie{Name: sessionCookieName, Value: cookie1})
+	require.True(t, a.validSession(r1))
+
+	r2 := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+	r2.AddCookie(&http.Cookie{Name: sessionCookieName, Value: cookie2})
+	require.True(t, a.validSession(r2))
+}
+
+func TestAuth_EndSession_RemovesSession(t *testing.T) {
+	a := newAuth()
+	cookieValue, _, err := a.createSession("admin@example.com")
+	require.NoError(t, err)
+
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
+	r.AddCookie(&http.Cookie{Name: sessionCookieName, Value: cookieValue})
+
+	a.endSession(r)
+
+	require.False(t, a.validSession(r))
+}
+
+func TestSetSessionCookie_IsHttpOnlySecureAndLax(t *testing.T) {
 	rec := httptest.NewRecorder()
-	a.setSessionCookie(rec)
+	setSessionCookie(rec, "wert")
 
 	resp := rec.Result()
 	defer func() { _ = resp.Body.Close() }()
@@ -130,16 +150,19 @@ func TestAuth_SetSessionCookie_IsHttpOnlyAndStrict(t *testing.T) {
 	cookies := resp.Cookies()
 	require.Len(t, cookies, 1)
 	require.True(t, cookies[0].HttpOnly)
-	require.Equal(t, http.SameSiteStrictMode, cookies[0].SameSite)
+	require.True(t, cookies[0].Secure)
+	require.Equal(t, http.SameSiteLaxMode, cookies[0].SameSite)
 }
 
-func TestNewAuth_GeneratesDistinctSecretsPerInstance(t *testing.T) {
-	a1, err := newAuth()
+func TestNewAuth_CreateSession_GeneratesDistinctValues(t *testing.T) {
+	a := newAuth()
+
+	cookie1, csrf1, err := a.createSession("a@example.com")
 	require.NoError(t, err)
-	a2, err := newAuth()
+	cookie2, csrf2, err := a.createSession("b@example.com")
 	require.NoError(t, err)
 
-	require.NotEqual(t, a1.instanceSecret, a2.instanceSecret)
-	require.NotEqual(t, a1.sessionToken, a2.sessionToken)
-	require.NotEqual(t, a1.instanceSecret, a1.sessionToken)
+	require.NotEqual(t, cookie1, cookie2)
+	require.NotEqual(t, csrf1, csrf2)
+	require.NotEqual(t, cookie1, csrf1)
 }

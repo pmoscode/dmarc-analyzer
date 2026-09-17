@@ -38,7 +38,7 @@ func TestRunSync_NoAccounts_ReturnsError(t *testing.T) {
 	t.Parallel()
 
 	accounts := newFakeAccountRepository()
-	a := &app{accounts: &manageaccount.UseCase{Accounts: accounts, Credentials: newFakeCredentialStore()}}
+	a := &app{accounts: &manageaccount.UseCase{Accounts: accounts}}
 
 	err := runSync(context.Background(), a, nil)
 	require.Error(t, err)
@@ -51,19 +51,18 @@ func TestRunSync_SyncsAllConfiguredAccounts(t *testing.T) {
 	require.NoError(t, err)
 
 	accountsRepo := newFakeAccountRepository(*acc)
-	creds := newFakeCredentialStore()
-	require.NoError(t, creds.Store("acc-1", account.NewSecretFromString("x")))
+	secret := account.NewSecretFromString("x")
 
 	a := &app{
-		accounts: &manageaccount.UseCase{Accounts: accountsRepo, Credentials: creds},
+		accounts: &manageaccount.UseCase{Accounts: accountsRepo, Secret: secret},
 		sync: &syncreports.UseCase{
-			Accounts:    accountsRepo,
-			Credentials: creds,
-			States:      fakeStateRepository{},
-			Reports:     newFakeReportRepository(),
-			Decoder:     fakeDecoder{},
-			Parsers:     []domainsync.ReportParser{fakeParser{}},
-			NewSource:   func() domainsync.MessageSource { return fakeMessageSource{} },
+			Accounts:  accountsRepo,
+			Secret:    secret,
+			States:    fakeStateRepository{},
+			Reports:   newFakeReportRepository(),
+			Decoder:   fakeDecoder{},
+			Parsers:   []domainsync.ReportParser{fakeParser{}},
+			NewSource: func() domainsync.MessageSource { return fakeMessageSource{} },
 		},
 	}
 

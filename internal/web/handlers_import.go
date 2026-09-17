@@ -50,7 +50,7 @@ func (s *Server) handleImportForm(w http.ResponseWriter, r *http.Request) {
 		Skipped:   parseIntOrZero(q.Get("uebersprungen")),
 		Failed:    parseIntOrZero(q.Get("fehlerhaft")),
 	}
-	if err := s.views.render(w, "import.html", data); err != nil {
+	if err := s.views.render(w, r, "import.html", data); err != nil {
 		s.serverError(w, r, err)
 	}
 }

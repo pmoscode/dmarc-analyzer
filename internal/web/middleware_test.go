@@ -20,8 +20,7 @@ func okHandler() http.Handler {
 }
 
 func TestRequireHost_AllowedHost_PassesThrough(t *testing.T) {
-	allowed := func() map[string]bool { return map[string]bool{"127.0.0.1:1234": true} }
-	handler := requireHost(allowed, okHandler())
+	handler := requireHost("127.0.0.1:1234", okHandler())
 
 	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1:1234/", nil)
 	r.Host = "127.0.0.1:1234"
@@ -32,8 +31,7 @@ func TestRequireHost_AllowedHost_PassesThrough(t *testing.T) {
 }
 
 func TestRequireHost_ForeignHost_Rejected(t *testing.T) {
-	allowed := func() map[string]bool { return map[string]bool{"127.0.0.1:1234": true} }
-	handler := requireHost(allowed, okHandler())
+	handler := requireHost("127.0.0.1:1234", okHandler())
 
 	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://evil.example.com/", nil)
 	r.Host = "evil.example.com"
@@ -45,12 +43,12 @@ func TestRequireHost_ForeignHost_Rejected(t *testing.T) {
 
 func TestRequireHost_DNSRebindingAttempt_Rejected(t *testing.T) {
 	// Eine fremde Domain, die selbst auf 127.0.0.1 auflöst (DNS-Rebinding):
-	// der Host-Header trägt trotzdem den fremden Namen, nicht "127.0.0.1".
-	allowed := func() map[string]bool { return map[string]bool{"127.0.0.1:1234": true} }
-	handler := requireHost(allowed, okHandler())
+	// der Host-Header trägt trotzdem den fremden Namen, nicht den
+	// erlaubten öffentlichen Hostnamen.
+	handler := requireHost("dmarc.example.com", okHandler())
 
 	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://rebind.example.com/", nil)
-	r.Host = "rebind.example.com:1234"
+	r.Host = "rebind.example.com"
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, r)
 
@@ -70,25 +68,26 @@ func TestSecurityHeaders_SetsCSPAndRelatedHeaders(t *testing.T) {
 	require.Equal(t, "DENY", rec.Header().Get("X-Frame-Options"))
 }
 
-func TestRequireSession_NoCookie_Returns401(t *testing.T) {
-	a, err := newAuth()
-	require.NoError(t, err)
+func TestRequireSession_NoCookie_RedirectsToLogin(t *testing.T) {
+	a := newAuth()
 	handler := requireSession(a, okHandler())
 
 	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, r)
 
-	require.Equal(t, http.StatusUnauthorized, rec.Code)
+	require.Equal(t, http.StatusSeeOther, rec.Code)
+	require.Equal(t, "/anmelden", rec.Header().Get("Location"))
 }
 
 func TestRequireSession_ValidCookie_PassesThrough(t *testing.T) {
-	a, err := newAuth()
+	a := newAuth()
+	cookieValue, _, err := a.createSession("admin@example.com")
 	require.NoError(t, err)
 	handler := requireSession(a, okHandler())
 
 	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
-	r.AddCookie(&http.Cookie{Name: sessionCookieName, Value: a.sessionToken})
+	r.AddCookie(&http.Cookie{Name: sessionCookieName, Value: cookieValue})
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, r)
 
@@ -108,13 +107,29 @@ func TestRecoverPanic_HandlerPanics_Returns500WithoutCrashingProcess(t *testing.
 	require.Equal(t, http.StatusInternalServerError, rec.Code)
 }
 
-func TestRequireCSRF_GetRequest_NeverChecked(t *testing.T) {
-	a, err := newAuth()
+// newAuthenticatedRequest baut eine POST-Anfrage gegen
+// "http://127.0.0.1:1234/konten" mit gültigem Sitzungs-Cookie und liefert
+// zusätzlich das zugehörige CSRF-Token — die meisten requireCSRF-Tests
+// brauchen beides: ohne eine gültige Sitzung schlägt validCSRFToken schon
+// an sessionFromRequest, nicht am eigentlich zu testenden Token-Vergleich.
+func newAuthenticatedRequest(t *testing.T, a *auth) (*http.Request, string) {
+	t.Helper()
+	cookieValue, csrfToken, err := a.createSession("admin@example.com")
 	require.NoError(t, err)
+
+	r := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "http://127.0.0.1:1234/konten", nil)
+	r.Host = "127.0.0.1:1234"
+	r.AddCookie(&http.Cookie{Name: sessionCookieName, Value: cookieValue})
+	return r, csrfToken
+}
+
+func TestRequireCSRF_GetRequest_NeverChecked(t *testing.T) {
+	a := newAuth()
 	handler := requireCSRF(a, okHandler())
 
-	// Weder Origin/Sec-Fetch-Site noch Token gesetzt — GET muss trotzdem
-	// durchgehen, CSRF betrifft nur zustandsändernde Methoden.
+	// Weder Origin/Sec-Fetch-Site noch Token noch Sitzungs-Cookie gesetzt
+	// — GET muss trotzdem durchgehen, CSRF betrifft nur zustandsändernde
+	// Methoden.
 	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1:1234/", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, r)
@@ -123,14 +138,12 @@ func TestRequireCSRF_GetRequest_NeverChecked(t *testing.T) {
 }
 
 func TestRequireCSRF_PostWithValidTokenAndOrigin_PassesThrough(t *testing.T) {
-	a, err := newAuth()
-	require.NoError(t, err)
+	a := newAuth()
 	handler := requireCSRF(a, okHandler())
 
-	r := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "http://127.0.0.1:1234/konten", nil)
-	r.Host = "127.0.0.1:1234"
+	r, token := newAuthenticatedRequest(t, a)
 	r.Header.Set("Origin", "http://127.0.0.1:1234")
-	r.Header.Set(csrfTokenHeader, a.csrfToken)
+	r.Header.Set(csrfTokenHeader, token)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, r)
 
@@ -138,15 +151,17 @@ func TestRequireCSRF_PostWithValidTokenAndOrigin_PassesThrough(t *testing.T) {
 }
 
 func TestRequireCSRF_PostWithValidTokenAsFormField_PassesThrough(t *testing.T) {
-	a, err := newAuth()
+	a := newAuth()
+	cookieValue, csrfToken, err := a.createSession("admin@example.com")
 	require.NoError(t, err)
 	handler := requireCSRF(a, okHandler())
 
-	form := url.Values{"csrf_token": {a.csrfToken}}
+	form := url.Values{"csrf_token": {csrfToken}}
 	r := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "http://127.0.0.1:1234/konten", strings.NewReader(form.Encode()))
 	r.Host = "127.0.0.1:1234"
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	r.Header.Set("Origin", "http://127.0.0.1:1234")
+	r.AddCookie(&http.Cookie{Name: sessionCookieName, Value: cookieValue})
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, r)
 
@@ -154,12 +169,10 @@ func TestRequireCSRF_PostWithValidTokenAsFormField_PassesThrough(t *testing.T) {
 }
 
 func TestRequireCSRF_PostWithoutToken_Returns403(t *testing.T) {
-	a, err := newAuth()
-	require.NoError(t, err)
+	a := newAuth()
 	handler := requireCSRF(a, okHandler())
 
-	r := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "http://127.0.0.1:1234/konten", nil)
-	r.Host = "127.0.0.1:1234"
+	r, _ := newAuthenticatedRequest(t, a)
 	r.Header.Set("Origin", "http://127.0.0.1:1234")
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, r)
@@ -168,12 +181,10 @@ func TestRequireCSRF_PostWithoutToken_Returns403(t *testing.T) {
 }
 
 func TestRequireCSRF_PostWithWrongToken_Returns403(t *testing.T) {
-	a, err := newAuth()
-	require.NoError(t, err)
+	a := newAuth()
 	handler := requireCSRF(a, okHandler())
 
-	r := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "http://127.0.0.1:1234/konten", nil)
-	r.Host = "127.0.0.1:1234"
+	r, _ := newAuthenticatedRequest(t, a)
 	r.Header.Set("Origin", "http://127.0.0.1:1234")
 	r.Header.Set(csrfTokenHeader, "definitiv-falsches-token")
 	rec := httptest.NewRecorder()
@@ -183,14 +194,12 @@ func TestRequireCSRF_PostWithWrongToken_Returns403(t *testing.T) {
 }
 
 func TestRequireCSRF_PostWithValidTokenButForeignOrigin_Returns403(t *testing.T) {
-	a, err := newAuth()
-	require.NoError(t, err)
+	a := newAuth()
 	handler := requireCSRF(a, okHandler())
 
-	r := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "http://127.0.0.1:1234/konten", nil)
-	r.Host = "127.0.0.1:1234"
+	r, token := newAuthenticatedRequest(t, a)
 	r.Header.Set("Origin", "http://evil.example.com")
-	r.Header.Set(csrfTokenHeader, a.csrfToken)
+	r.Header.Set(csrfTokenHeader, token)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, r)
 
@@ -198,15 +207,13 @@ func TestRequireCSRF_PostWithValidTokenButForeignOrigin_Returns403(t *testing.T)
 }
 
 func TestRequireCSRF_PostWithoutOriginOrSecFetchSite_Returns403(t *testing.T) {
-	a, err := newAuth()
-	require.NoError(t, err)
+	a := newAuth()
 	handler := requireCSRF(a, okHandler())
 
 	// Weder Origin noch Sec-Fetch-Site gesetzt — sicherheitshalber
 	// ablehnen statt anzunehmen, es sei schon in Ordnung.
-	r := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "http://127.0.0.1:1234/konten", nil)
-	r.Host = "127.0.0.1:1234"
-	r.Header.Set(csrfTokenHeader, a.csrfToken)
+	r, token := newAuthenticatedRequest(t, a)
+	r.Header.Set(csrfTokenHeader, token)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, r)
 
@@ -214,17 +221,15 @@ func TestRequireCSRF_PostWithoutOriginOrSecFetchSite_Returns403(t *testing.T) {
 }
 
 func TestRequireCSRF_PostWithValidTokenAndSecFetchSiteSameOrigin_PassesThrough(t *testing.T) {
-	a, err := newAuth()
-	require.NoError(t, err)
+	a := newAuth()
 	handler := requireCSRF(a, okHandler())
 
 	// Kein Origin-Header, aber Sec-Fetch-Site: same-origin — manche
 	// Browser lassen Origin bei einfachen same-origin-POSTs weg, senden
 	// aber Sec-Fetch-Site (Fetch Metadata Request Headers).
-	r := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "http://127.0.0.1:1234/konten", nil)
-	r.Host = "127.0.0.1:1234"
+	r, token := newAuthenticatedRequest(t, a)
 	r.Header.Set("Sec-Fetch-Site", "same-origin")
-	r.Header.Set(csrfTokenHeader, a.csrfToken)
+	r.Header.Set(csrfTokenHeader, token)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, r)
 

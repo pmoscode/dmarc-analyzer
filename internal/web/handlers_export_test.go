@@ -119,7 +119,9 @@ func TestHandleExportSourcesCSV_StreamsRows(t *testing.T) {
 func TestHandleExportReportsCSV_RequireSession(t *testing.T) {
 	srv := newTestServerWithReports(t, &fakeReportRepository{})
 
-	resp := httpGet(t, http.DefaultClient, "http://"+srv.Addr()+"/export/berichte.csv")
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	resp := httpGet(t, client, "http://"+srv.Addr()+"/export/berichte.csv")
 	defer func() { _ = resp.Body.Close() }()
-	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	require.Equal(t, http.StatusSeeOther, resp.StatusCode)
+	require.Equal(t, "/anmelden", resp.Header.Get("Location"))
 }

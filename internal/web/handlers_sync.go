@@ -46,11 +46,6 @@ func redirectBack(w http.ResponseWriter, r *http.Request) {
 // einer, ist das kein Fehler — der Nutzer sieht ohnehin den laufenden
 // Fortschritt (siehe /ereignisse).
 func (s *Server) handleSyncStart(w http.ResponseWriter, r *http.Request) {
-	if s.credentialsLocked() {
-		s.redirectToUnlock(w, r, "/")
-		return
-	}
-
 	if err := s.deps.SyncJob.Start(); err != nil && !errors.Is(err, syncjob.ErrAlreadyRunning) {
 		s.serverError(w, r, err)
 		return

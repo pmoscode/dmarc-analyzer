@@ -8,29 +8,24 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/app/sourcestats"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/statistics"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/syncjob"
-	"github.com/pmoscode/dmarc-analyzer/internal/domain/account"
 )
 
-// Dependencies bündelt die Use Cases, die die Web-Oberfläche braucht —
-// analog zu internal/ui.Dependencies, das dieses Paket in M5 ersetzt.
+// Dependencies bündelt die Use Cases, die die Web-Oberfläche braucht.
 type Dependencies struct {
 	Statistics *statistics.UseCase
 	Reports    *queryreports.UseCase
 	Sources    *sourcestats.UseCase
 	Accounts   *manageaccount.UseCase
-	// Credentials ist derselbe Store, den Accounts/SyncJob intern schon
-	// benutzen — die Web-Oberfläche braucht ihn zusätzlich direkt für
-	// /entsperren (Locked()/Unlock(), siehe handlers_unlock.go und
-	// MIGRATIONSPLAN.md Erweiterung 9.4). nil (OS-Schlüsselbund oder
-	// Nicht-web-Aufrufer) bedeutet: nie gesperrt.
-	Credentials account.CredentialStore
-	SyncJob     *syncjob.Runner
-	// Importer braucht (anders als Accounts) keine Zugangsdaten — Import
-	// aus hochgeladenen Dateien funktioniert auch bei gesperrtem
-	// Schlüsselspeicher (MIGRATIONSPLAN.md Meilenstein M4).
+	SyncJob    *syncjob.Runner
+	// Importer braucht keine Zugangsdaten — Import aus hochgeladenen
+	// Dateien funktioniert unabhängig vom konfigurierten IMAP-Konto.
 	Importer *importfiles.UseCase
-	// Retention verwaltet Aufbewahrungsdauer und Sync-Intervall
-	// (AP 7, siehe handlers_settings.go) — braucht ebenfalls keine
-	// Zugangsdaten.
+	// Retention verwaltet die Aufbewahrungsrichtlinie (AP 7, siehe
+	// handlers_settings.go) — RetentionMonths wird dort nur angezeigt,
+	// geändert wird es per ENV und Container-Neustart.
 	Retention *retention.UseCase
+	// SyncIntervalMinutes ist rein informativ für die Status-Seite (siehe
+	// handlers_settings.go) — der tatsächliche geplante Abgleich läuft in
+	// internal/app/syncscheduler, das dieselbe ENV-Einstellung bekommt.
+	SyncIntervalMinutes int
 }

@@ -12,7 +12,7 @@ import (
 )
 
 func TestHandleGlossary_RendersAllTermsWithAnchors(t *testing.T) {
-	srv := newTestServer(t)
+	srv, _ := newTestServer(t)
 	client := authenticatedClient(t, srv)
 
 	resp := httpGet(t, client, "http://"+srv.Addr()+"/glossar")
@@ -31,7 +31,7 @@ func TestHandleGlossary_RendersAllTermsWithAnchors(t *testing.T) {
 }
 
 func TestHandleDashboard_TilesLinkToGlossary(t *testing.T) {
-	srv := newTestServer(t)
+	srv, _ := newTestServer(t)
 	client := authenticatedClient(t, srv)
 
 	resp := httpGet(t, client, "http://"+srv.Addr()+"/")

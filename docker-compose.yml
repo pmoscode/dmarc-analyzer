@@ -1,0 +1,37 @@
+# Beispiel für den lokalen Betrieb bzw. als Vorlage für die Produktion —
+# vollständige ENV-Referenz in docs/features/deployment.md.
+#
+# Voraussetzung: eine Authentik-Anwendung (OAuth2/OIDC-Provider) mit
+# Redirect-URI "<öffentliche-URL>/anmelden/callback" und einer Gruppe, die
+# als DMARC_OIDC_ADMIN_GROUP eingetragen wird (siehe docs/features/auth.md).
+services:
+  dmarc-analyzer:
+    build: .
+    # image: ghcr.io/pmoscode/dmarc-analyzer:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - dmarc-data:/data
+    environment:
+      # --- IMAP-Konto (Pflicht) ---
+      DMARC_IMAP_HOST: imap.example.com
+      DMARC_IMAP_PORT: "993"
+      DMARC_IMAP_USER: dmarc@example.com
+      DMARC_IMAP_PASSWORD: "changeme"
+      DMARC_IMAP_MAILBOX: INBOX
+      DMARC_IMAP_TLS: "true"
+
+      # --- Aufbewahrung/Hintergrund-Sync (optional, Vorgaben siehe Header) ---
+      DMARC_RETENTION_MONTHS: "24"
+      DMARC_SYNC_INTERVAL_MINUTES: "60"
+
+      # --- OIDC/Authentik-Anmeldung (Pflicht) ---
+      DMARC_OIDC_ISSUER_URL: https://authentik.example.com/application/o/dmarc/
+      DMARC_OIDC_CLIENT_ID: dmarc-analyzer
+      DMARC_OIDC_CLIENT_SECRET: "changeme"
+      DMARC_OIDC_REDIRECT_URL: https://dmarc.example.com/anmelden/callback
+      DMARC_OIDC_ADMIN_GROUP: dmarc-admins
+    restart: unless-stopped
+
+volumes:
+  dmarc-data:

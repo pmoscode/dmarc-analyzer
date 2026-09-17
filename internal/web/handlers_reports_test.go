@@ -16,22 +16,17 @@ import (
 
 func newTestServerWithReports(t *testing.T, repo report.Repository) *Server {
 	t.Helper()
-	isolateConfigDir(t)
 
-	// Statistics wird gebraucht, weil die Anmeldung auf "/" (Übersicht)
-	// weiterleitet und authenticatedClient dem Redirect folgt — ohne
-	// Dependencies.Statistics würde bereits der Login-Schritt an einem
-	// nil-Pointer scheitern, nicht erst die hier zu testende Anfrage.
 	deps := Dependencies{
 		Statistics: &statistics.UseCase{Repository: &fakeRepository{}},
 		Reports:    &queryreports.UseCase{Reports: repo},
 	}
-	srv, err := New(deps, Options{})
+	provider := newFakeOIDCProvider(t)
+	srv, err := New(context.Background(), deps, testOIDCOptions(provider.issuer()))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
 
-	_, err = srv.Start(context.Background())
-	require.NoError(t, err)
+	require.NoError(t, srv.Start(context.Background()))
 	return srv
 }
 

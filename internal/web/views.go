@@ -12,25 +12,23 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/web/glossary"
 )
 
-// devTemplatesDir ist der Pfad, unter dem --entwicklung Vorlagen von der
-// Festplatte liest — relativ zum Arbeitsverzeichnis, das beim Starten des
-// Programms das Repository-Wurzelverzeichnis sein muss (z. B. `task run`).
+// devTemplatesDir ist der Pfad, unter dem Dev-Modus (DMARC_DEV_MODE=true)
+// Vorlagen von der Festplatte liest — relativ zum Arbeitsverzeichnis, das
+// beim Starten des Programms das Repository-Wurzelverzeichnis sein muss
+// (z. B. `task run`).
 const devTemplatesDir = "internal/web/templates"
 
 // templateFuncs stellt Vorlagen-Hilfsfunktionen bereit: "glossarLink"
 // wandelt einen Glossar-Begriffsnamen in einen Link auf die passende
-// Erklärung auf /glossar um (MIGRATIONSPLAN.md Meilenstein M2:
-// "Begriffs-Tooltips"), "csrfToken" liefert das CSRF-Token dieser
-// Sitzung für versteckte Formularfelder (Meilenstein M3, siehe
-// middleware.go requireCSRF) — als Funktion statt als Feld auf jeder
-// einzelnen Seiten-Datenstruktur, weil sonst jede der inzwischen
-// zahlreichen page-data-Structs (dashboardPageData, reportsPageData, …)
-// dieses eine Feld einzeln bräuchte, nur weil layout.html jetzt überall
-// ein Sync-Formular zeigt.
-func newTemplateFuncs(csrfToken func() string) template.FuncMap {
+// Erklärung auf /glossar um, "csrfToken" liefert das CSRF-Token DIESER
+// Anfrage (jede Sitzung hat seit dem Umstieg auf OIDC-Mehrbenutzer-Logins
+// ihr eigenes Token, siehe auth.go) — als Platzhalter-Funktion registriert,
+// die render()/renderNamed() vor jeder Ausführung per Template.Funcs() auf
+// den tatsächlichen Wert dieser Anfrage umbiegen (siehe render unten).
+func newTemplateFuncs() template.FuncMap {
 	return template.FuncMap{
 		"glossarLink": func(term string) string { return "/glossar#" + glossary.Slug(term) },
-		"csrfToken":   csrfToken,
+		"csrfToken":   func() string { return "" },
 	}
 }
 
@@ -44,13 +42,17 @@ func newTemplateFuncs(csrfToken func() string) template.FuncMap {
 type views struct {
 	dev   bool
 	funcs template.FuncMap
+	// csrfToken liefert das CSRF-Token für die Sitzung von r — vom Server
+	// übergeben (siehe newViews-Aufruf in server.go), damit views nicht
+	// selbst von auth.go abhängen muss.
+	csrfToken func(*http.Request) string
 
 	mu    sync.RWMutex
 	pages map[string]*template.Template
 }
 
-func newViews(dev bool, csrfToken func() string) (*views, error) {
-	v := &views{dev: dev, funcs: newTemplateFuncs(csrfToken)}
+func newViews(dev bool, csrfToken func(*http.Request) string) (*views, error) {
+	v := &views{dev: dev, funcs: newTemplateFuncs(), csrfToken: csrfToken}
 	if err := v.load(); err != nil {
 		return nil, err
 	}
@@ -94,9 +96,9 @@ func templatesFS(dev bool) (fs.FS, error) {
 // render führt die Vorlage page (z. B. "dashboard.html") gegen data aus
 // und schreibt das Ergebnis nach w. Im Entwicklungsmodus wird vor jedem
 // Aufruf neu von der Festplatte geladen, damit Änderungen ohne Neubau
-// sichtbar werden (MIGRATIONSPLAN.md Abschnitt 6).
-func (v *views) render(w http.ResponseWriter, page string, data any) error {
-	return v.renderNamed(w, page, "layout.html", data)
+// sichtbar werden.
+func (v *views) render(w http.ResponseWriter, r *http.Request, page string, data any) error {
+	return v.renderNamed(w, r, page, "layout.html", data)
 }
 
 // renderNamed führt einen benannten Block innerhalb der Vorlage page aus
@@ -106,7 +108,7 @@ func (v *views) render(w http.ResponseWriter, page string, data any) error {
 // Block, den sowohl der volle Seitenaufruf (über "content" eingebunden)
 // als auch der htmx-Ladeknopf (direkt als "rows") ausführen können, ohne
 // die Zeilen-Vorlage doppelt zu pflegen.
-func (v *views) renderNamed(w http.ResponseWriter, page, tmplName string, data any) error {
+func (v *views) renderNamed(w http.ResponseWriter, r *http.Request, page, tmplName string, data any) error {
 	if v.dev {
 		if err := v.load(); err != nil {
 			return err
@@ -120,8 +122,21 @@ func (v *views) renderNamed(w http.ResponseWriter, page, tmplName string, data a
 		return fmt.Errorf("unbekannte vorlage %q", page)
 	}
 
+	// Clone + Funcs() statt den zur Parse-Zeit registrierten Platzhalter
+	// zu behalten: das CSRF-Token hängt von der jeweiligen Sitzung ab
+	// (mehrere gleichzeitig angemeldete Admins, siehe auth.go), t selbst
+	// wird aber nur einmal geparst und zwischen Anfragen geteilt
+	// (v.pages). Clone() dupliziert die gesamte Vorlagensammlung (layout +
+	// Seite) günstig genug für eine Admin-Oberfläche ohne hohen Durchsatz.
+	token := v.csrfToken(r)
+	cloned, err := t.Clone()
+	if err != nil {
+		return fmt.Errorf("vorlage %q konnte nicht für diese anfrage vorbereitet werden: %w", page, err)
+	}
+	cloned = cloned.Funcs(template.FuncMap{"csrfToken": func() string { return token }})
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := t.ExecuteTemplate(w, tmplName, data); err != nil {
+	if err := cloned.ExecuteTemplate(w, tmplName, data); err != nil {
 		return fmt.Errorf("vorlage %q (%q) konnte nicht gerendert werden: %w", page, tmplName, err)
 	}
 	return nil

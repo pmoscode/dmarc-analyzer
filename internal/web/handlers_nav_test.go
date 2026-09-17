@@ -48,9 +48,15 @@ func TestNav_MarksCurrentPageActive(t *testing.T) {
 func TestRealPages_RequireSession(t *testing.T) {
 	srv, _ := newTestServerWithAccounts(t, mustAccount(t, "Konto 1"))
 
-	for _, path := range []string{"/berichte", "/quellen", "/glossar", "/einstellungen", "/einrichtung", "/entsperren"} {
-		resp := httpGet(t, http.DefaultClient, "http://"+srv.Addr()+path)
-		require.Equal(t, http.StatusUnauthorized, resp.StatusCode, path)
+	// CheckRedirect stoppt vor dem Redirect-Ziel: /anmelden würde sonst
+	// bis zum (nicht auflösbaren) Fake-Provider weiterverfolgt, siehe
+	// testRedirectURL-Dokumentation in server_test.go.
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+
+	for _, path := range []string{"/berichte", "/quellen", "/glossar", "/einstellungen"} {
+		resp := httpGet(t, client, "http://"+srv.Addr()+path)
+		require.Equal(t, http.StatusSeeOther, resp.StatusCode, path)
+		require.Equal(t, "/anmelden", resp.Header.Get("Location"), path)
 		_ = resp.Body.Close()
 	}
 }

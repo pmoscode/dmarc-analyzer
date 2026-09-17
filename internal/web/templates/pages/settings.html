@@ -4,11 +4,13 @@
 {{end}}
 
 <section class="detail-card">
-  <h2>Konten ({{len .Accounts}})</h2>
+  <h2>Konfiguriertes Konto</h2>
+  <p class="field-hint">Zugangsdaten kommen aus Umgebungsvariablen (siehe docs/features/deployment.md) und lassen
+    sich nur über einen Container-Neustart ändern.</p>
   {{if .Accounts}}
-  <table class="data-table" aria-label="Konfigurierte Konten">
+  <table class="data-table" aria-label="Konfiguriertes Konto">
     <thead>
-      <tr><th>Anzeigename</th><th>Host</th><th>Benutzername</th><th>Postfach</th><th></th></tr>
+      <tr><th>Anzeigename</th><th>Host</th><th>Benutzername</th><th>Postfach</th><th>TLS</th><th></th></tr>
     </thead>
     <tbody>
       {{range .Accounts}}
@@ -17,14 +19,11 @@
         <td>{{.Host}}:{{.Port}}</td>
         <td>{{.Username}}</td>
         <td>{{.Mailbox}}</td>
+        <td>{{if .UseTLS}}Ja{{else}}Nein{{end}}</td>
         <td class="row-actions">
           <form method="post" action="/konten/{{.ID}}/test">
             <input type="hidden" name="csrf_token" value="{{csrfToken}}">
             <button type="submit">Verbindung testen</button>
-          </form>
-          <form method="post" action="/konten/{{.ID}}/loeschen" data-confirm="Konto wirklich löschen?">
-            <input type="hidden" name="csrf_token" value="{{csrfToken}}">
-            <button type="submit" class="danger">Löschen</button>
           </form>
         </td>
       </tr>
@@ -32,64 +31,19 @@
     </tbody>
   </table>
   {{else}}
-  <p class="empty-state">Noch keine Konten konfiguriert.</p>
+  <p class="empty-state">Kein Konto konfiguriert — DMARC_IMAP_*-Umgebungsvariablen prüfen.</p>
   {{end}}
 </section>
 
 <section class="detail-card narrow-card">
-  <h2>Konto hinzufügen</h2>
-  <form method="post" action="/konten" class="stacked-form">
-    <input type="hidden" name="csrf_token" value="{{csrfToken}}">
-    <label>Anzeigename
-      <input type="text" name="anzeigename" value="{{.Form.DisplayName}}" placeholder="z. B. Firmenpostfach">
-    </label>
-    <label>Host
-      <input type="text" name="host" value="{{.Form.Host}}" placeholder="imap.example.com" required>
-    </label>
-    <label>Port
-      <input type="number" name="port" value="{{.Form.Port}}" min="1" max="65535" required>
-    </label>
-    <label>Benutzername
-      <input type="text" name="benutzername" value="{{.Form.Username}}" placeholder="name@example.com" required>
-    </label>
-    <label>Postfach
-      <input type="text" name="postfach" value="{{.Form.Mailbox}}" list="postfach-optionen" placeholder="INBOX">
-      <datalist id="postfach-optionen">
-        {{range .Form.MailboxOptions}}<option value="{{.}}">{{end}}
-      </datalist>
-    </label>
-    <label class="checkbox-row">
-      <input type="checkbox" name="tls" value="on"{{if .Form.UseTLS}} checked{{end}}> Verschlüsselte Verbindung (TLS)
-    </label>
-    <label>Passwort
-      <input type="password" name="passwort" autocomplete="new-password" required>
-    </label>
-    <div class="button-row">
-      <button type="submit" formaction="/konten/ordner" class="secondary">Ordner auflisten</button>
-      <button type="submit" formaction="/konten">Speichern</button>
-    </div>
-  </form>
-</section>
-
-<section class="detail-card narrow-card">
-  <h2>Allgemein</h2>
-  <form method="post" action="/einstellungen/allgemein" class="stacked-form">
-    <input type="hidden" name="csrf_token" value="{{csrfToken}}">
-    <label>Aufbewahrungsdauer für Berichte (Monate)
-      <input type="number" name="aufbewahrung_monate" value="{{.General.RetentionMonths}}" min="0" required>
-    </label>
-    <p class="field-hint">0 = unbegrenzt aufbewahren. Ältere Berichte werden automatisch im Hintergrund gelöscht.</p>
-    <label>Automatischer Hintergrund-Abgleich (Minuten)
-      <input type="number" name="sync_intervall_minuten" value="{{.General.SyncIntervalMinutes}}" min="0" required>
-    </label>
-    <p class="field-hint">0 = kein automatischer Abgleich, nur der manuell über den Abgleich-Knopf gestartete.</p>
-    <div class="button-row">
-      <button type="submit">Speichern</button>
-    </div>
-  </form>
-  <div class="stacked-form">
-    <button type="button" id="notifications-enable-btn" class="secondary" hidden>Browser-Benachrichtigungen für Abgleich-Ergebnisse aktivieren</button>
-    <p class="field-hint" id="notifications-status" aria-live="polite"></p>
-  </div>
+  <h2>Laufzeit-Einstellungen</h2>
+  <dl class="status-list">
+    <dt>Aufbewahrungsdauer</dt>
+    <dd>{{if .RetentionMonths}}{{.RetentionMonths}} Monate{{else}}unbegrenzt{{end}}</dd>
+    <dt>Automatischer Hintergrund-Abgleich</dt>
+    <dd>{{if .SyncIntervalMinutes}}alle {{.SyncIntervalMinutes}} Minuten{{else}}deaktiviert{{end}}</dd>
+  </dl>
+  <p class="field-hint">Änderbar über DMARC_RETENTION_MONTHS/DMARC_SYNC_INTERVAL_MINUTES, wirkt nach einem
+    Container-Neustart.</p>
 </section>
 {{end}}

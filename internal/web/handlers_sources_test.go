@@ -15,24 +15,21 @@ import (
 
 func newTestServerWithSources(t *testing.T, repo *fakeSourcesRepository, enricher *fakeEnricher) *Server {
 	t.Helper()
-	isolateConfigDir(t)
 
 	if enricher == nil {
 		enricher = &fakeEnricher{}
 	}
 
-	// Statistics wird gebraucht, weil die Anmeldung auf "/" weiterleitet
-	// (siehe newTestServerWithReports für dieselbe Begründung).
 	deps := Dependencies{
 		Statistics: &statistics.UseCase{Repository: &fakeRepository{}},
 		Sources:    &sourcestats.UseCase{Sources: repo, Enricher: enricher},
 	}
-	srv, err := New(deps, Options{})
+	provider := newFakeOIDCProvider(t)
+	srv, err := New(context.Background(), deps, testOIDCOptions(provider.issuer()))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
 
-	_, err = srv.Start(context.Background())
-	require.NoError(t, err)
+	require.NoError(t, srv.Start(context.Background()))
 	return srv
 }
 

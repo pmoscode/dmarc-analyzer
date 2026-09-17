@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -14,8 +12,6 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/app/retentionjob"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/syncjob"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/syncscheduler"
-	"github.com/pmoscode/dmarc-analyzer/internal/platform/logging"
-	"github.com/pmoscode/dmarc-analyzer/internal/platform/paths"
 	"github.com/pmoscode/dmarc-analyzer/internal/web"
 )
 
@@ -25,149 +21,64 @@ import (
 // unproblematisch.
 const retentionCheckInterval = 24 * time.Hour
 
-// syncSchedulerCheckInterval ist der Abstand, in dem geprüft wird, ob laut
-// den aktuell gespeicherten Einstellungen ein automatischer Abgleich
-// fällig ist (AP 7) — bewusst kurz, damit eine gerade geänderte
-// Sync-Intervall-Einstellung zeitnah wirkt, siehe syncscheduler.Scheduler.
-const syncSchedulerCheckInterval = time.Minute
-
-// syncJobAdapter bildet syncjob.Runner auf syncscheduler.Starter ab —
-// eigener, kleiner Adapter statt syncscheduler von syncjob.State abhängig
-// zu machen (AGENTS.md: nur cmd/dmarc-analyzer verdrahtet konkrete Typen
-// miteinander).
-type syncJobAdapter struct{ runner *syncjob.Runner }
-
-func (a syncJobAdapter) Start() error { return a.runner.Start() }
-
-func (a syncJobAdapter) Snapshot() syncscheduler.Snapshot {
-	s := a.runner.Snapshot()
-	last := s.EndedAt
-	if last.IsZero() {
-		last = s.StartedAt
-	}
-	return syncscheduler.Snapshot{Running: s.Status == syncjob.StatusRunning, LastActivity: last}
-}
-
-// runWeb startet die eingebettete Web-Oberfläche (siehe MIGRATIONSPLAN.md).
-// Lebenszyklus bewusst nur über Strg+C/SIGTERM (Entscheidung E-3, siehe
-// dort): kein Auto-Ende, kein Beenden-Knopf — der Prozess soll sich wie
-// ein gewöhnlicher Server-Dienst verhalten (auch mit Blick auf einen
-// späteren Docker-Betrieb).
-func runWeb(ctx context.Context, a *app, args []string) error {
-	fs := flag.NewFlagSet("web", flag.ContinueOnError)
-	addr := fs.String("adresse", "", "feste Adresse (z. B. 127.0.0.1:8080) — leer: zufälliger freier Port")
-	noBrowser := fs.Bool("kein-browser", false, "Browser nicht automatisch öffnen")
-	dev := fs.Bool("entwicklung", false, "Vorlagen/Statik von der Festplatte laden statt eingebettet (Arbeitsverzeichnis muss die Repository-Wurzel sein)")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-
-	// Zusätzlich in eine Datei loggen (siehe openLogFile): auf macOS/Linux
-	// bleibt os.Stderr unverändert nutzbar, auf Windows verschwindet es im
-	// Release-Build ohne Konsolenfenster spurlos (MIGRATIONSPLAN.md M5:
-	// "-H windowsgui") — die Datei ist dann der einzige Weg, im Fehlerfall
-	// nachzusehen, wo der Anmeldelink war.
-	closeLog := attachLogFile()
-	defer closeLog()
-
-	// Einzelinstanz-Erkennung (MIGRATIONSPLAN.md Abschnitt 3/Meilenstein
-	// M1): läuft bereits ein Server, holt sich dieser zweite Aufruf nur
-	// einen frischen Anmeldelink und beendet sich sofort, statt einen
-	// weiteren Server zu starten. Ein Fehler hier bedeutet meist einen
-	// verwaisten instance.json-Eintrag (Prozess tot) — dann normal
-	// weiterstarten, s. web.New()/writeInstanceFile() überschreibt ihn.
-	if inst, ok := web.FindRunningInstance(); ok {
-		if loginURL, err := web.RequestLoginURL(ctx, inst); err == nil {
-			fmt.Printf("dmarc-analyzer läuft bereits: %s\n", loginURL)
-			slog.Info("laufende instanz gefunden, neuer anmeldelink angefordert", "login_url", loginURL)
-			if !*noBrowser {
-				if err := web.OpenBrowser(loginURL); err != nil {
-					fmt.Fprintf(os.Stderr, "Browser konnte nicht automatisch geöffnet werden — bitte den Anmeldelink von Hand öffnen: %v\n", err)
-					slog.Warn("browser konnte nicht automatisch geöffnet werden", "error", err, "login_url", loginURL)
-				}
-			}
-			return nil
-		}
-	}
-
+// runWeb startet die eingebettete Web-Oberfläche. Lebenszyklus über
+// SIGINT/SIGTERM — "docker stop" sendet SIGTERM, kein Auto-Ende, kein
+// Beenden-Knopf: der Prozess verhält sich wie ein gewöhnlicher
+// Container-Hauptprozess.
+func runWeb(ctx context.Context, a *app, _ []string) error {
 	// Eigener, auf diesen Aufruf begrenzter signal-Kontext statt den
-	// übergebenen ctx global umzustellen — sync/import/stats/account
-	// sollen von dieser Änderung im Lebenszyklus unberührt bleiben (siehe
-	// AGENTS.md: Composition Root verdrahtet nur, was der jeweilige
-	// Unterbefehl tatsächlich braucht). Derselbe Kontext ist gleich unten
-	// die Basis für syncjob.Runner — ein laufender Sync wird spätestens
-	// beim Herunterfahren des Servers abgebrochen, nicht schon mit der
-	// HTTP-Anfrage, die ihn angestoßen hat.
+	// übergebenen ctx global umzustellen — sync/import/stats sollen von
+	// dieser Änderung im Lebenszyklus unberührt bleiben (AGENTS.md:
+	// Composition Root verdrahtet nur, was der jeweilige Unterbefehl
+	// tatsächlich braucht). Derselbe Kontext ist gleich unten die Basis
+	// für syncjob.Runner und die Hintergrund-Aufträge.
 	signalCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	syncJob := syncjob.NewRunner(signalCtx, a.accounts.Accounts, a.sync)
 
-	srv, err := web.New(web.Dependencies{
-		Statistics:  a.stats,
-		Reports:     a.queries,
-		Sources:     a.sourceStats,
-		Accounts:    a.accounts,
-		Credentials: a.credentials,
-		SyncJob:     syncJob,
-		Importer:    a.importer,
-		Retention:   a.retention,
-	}, web.Options{Addr: *addr, Dev: *dev})
+	srv, err := web.New(signalCtx, web.Dependencies{
+		Statistics:          a.stats,
+		Reports:             a.queries,
+		Sources:             a.sourceStats,
+		Accounts:            a.accounts,
+		SyncJob:             syncJob,
+		Importer:            a.importer,
+		Retention:           a.retention,
+		SyncIntervalMinutes: a.config.SyncIntervalMinutes,
+	}, web.Options{
+		Addr: a.config.ListenAddr,
+		Dev:  a.config.DevMode,
+		OIDC: web.OIDCConfig{
+			IssuerURL:    a.config.OIDC.IssuerURL,
+			ClientID:     a.config.OIDC.ClientID,
+			ClientSecret: a.config.OIDC.ClientSecret,
+			RedirectURL:  a.config.OIDC.RedirectURL,
+			AdminGroup:   a.config.OIDC.AdminGroup,
+		},
+	})
 	if err != nil {
 		return fmt.Errorf("web-oberfläche konnte nicht aufgebaut werden: %w", err)
 	}
 
 	// Hintergrund-Aufträge (AP 7) — laufen über die Lebensdauer des
 	// Servers (signalCtx), unabhängig von einzelnen HTTP-Anfragen: die
-	// Aufbewahrungsrichtlinie greift auch, wenn nie jemand die
-	// Einstellungen-Seite besucht, und der geplante Abgleich läuft auch
-	// bei geschlossenem Browser weiter.
+	// Aufbewahrungsrichtlinie und der geplante Abgleich laufen auch, wenn
+	// gerade niemand angemeldet ist.
 	go retentionjob.NewRunner(a.retention, retentionCheckInterval, slog.Default()).Run(signalCtx)
-	go syncscheduler.NewScheduler(a.retention.Settings, syncJobAdapter{syncJob}, syncSchedulerCheckInterval, slog.Default()).Run(signalCtx)
+	go syncscheduler.NewScheduler(syncJob, time.Duration(a.config.SyncIntervalMinutes)*time.Minute, slog.Default()).Run(signalCtx)
 
-	loginURL, err := srv.Start(signalCtx)
-	if err != nil {
+	if err := srv.Start(signalCtx); err != nil {
 		return fmt.Errorf("web-oberfläche konnte nicht gestartet werden: %w", err)
 	}
 
 	fmt.Printf("dmarc-analyzer läuft: http://%s\n", srv.Addr())
-	fmt.Printf("Anmeldelink (60 s gültig): %s\n", loginURL)
 	fmt.Println("Strg+C zum Beenden.")
-	slog.Info("web-oberfläche gestartet", "addr", srv.Addr(), "login_url", loginURL)
-
-	if !*noBrowser {
-		if err := web.OpenBrowser(loginURL); err != nil {
-			fmt.Fprintf(os.Stderr, "Browser konnte nicht automatisch geöffnet werden — bitte den Anmeldelink von Hand öffnen: %v\n", err)
-			slog.Warn("browser konnte nicht automatisch geöffnet werden", "error", err, "login_url", loginURL)
-		}
-	}
+	slog.Info("web-oberfläche gestartet", "addr", srv.Addr())
 
 	<-signalCtx.Done()
 	fmt.Println("\nWird beendet …")
 	slog.Info("web-oberfläche wird beendet")
 
 	return srv.Shutdown(context.Background())
-}
-
-// attachLogFile öffnet die persistente Log-Datei (paths.LogFilePath()) zum
-// Anhängen und baut den globalen Logger so um, dass er zusätzlich zu
-// os.Stderr auch dorthin schreibt — im normalen Terminal-Betrieb bleibt
-// die bisherige Ausgabe also unverändert sichtbar. Schlägt das Öffnen
-// fehl (z. B. weil kein Home-Verzeichnis ermittelbar ist), wird
-// stillschweigend nur bei os.Stderr geblieben; das ist kein Grund, den
-// Start abzubrechen. Die zurückgegebene Funktion schließt die Datei
-// wieder (per defer im Aufrufer).
-func attachLogFile() func() {
-	path, err := paths.LogFilePath()
-	if err != nil {
-		return func() {}
-	}
-
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
-	if err != nil {
-		return func() {}
-	}
-
-	logging.New(logging.WithWriter(io.MultiWriter(os.Stderr, file)))
-	return func() { _ = file.Close() }
 }

@@ -48,47 +48,7 @@ func (f *fakeAccountRepository) FindAll(context.Context) ([]account.MailAccount,
 	return all, nil
 }
 
-func (f *fakeAccountRepository) Delete(_ context.Context, id account.AccountID) error {
-	delete(f.accounts, id)
-	return nil
-}
-
 var errNotFound = errors.New("nicht gefunden")
-
-// --- account.CredentialStore -------------------------------------------
-
-type fakeCredentialStore struct {
-	secrets map[account.AccountID]account.Secret
-}
-
-func newFakeCredentialStore() *fakeCredentialStore {
-	return &fakeCredentialStore{secrets: make(map[account.AccountID]account.Secret)}
-}
-
-// Store kopiert secret defensiv (account.NewSecret kopiert) — reale
-// Adapter (OSStore, FileStore) verwandeln die Bytes synchron in eine
-// eigene Kopie (String-Konversion bzw. Verschlüsselung); ein Aufrufer darf
-// das übergebene Secret direkt danach mit Zero() überschreiben (siehe
-// Vertrag an account.CredentialStore). Ohne diese Kopie würde ein
-// späteres Zero() beim Aufrufer auch den hier "gespeicherten" Wert
-// leeren, weil beide dasselbe Backing-Array teilen.
-func (f *fakeCredentialStore) Store(id account.AccountID, s account.Secret) error {
-	f.secrets[id] = account.NewSecret(s.Expose())
-	return nil
-}
-
-func (f *fakeCredentialStore) Retrieve(id account.AccountID) (account.Secret, error) {
-	s, ok := f.secrets[id]
-	if !ok {
-		return account.Secret{}, account.ErrCredentialNotFound
-	}
-	return s, nil
-}
-
-func (f *fakeCredentialStore) Delete(id account.AccountID) error {
-	delete(f.secrets, id)
-	return nil
-}
 
 // --- domainsync.StateRepository -----------------------------------------
 

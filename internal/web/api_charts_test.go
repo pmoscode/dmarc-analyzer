@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/http/cookiejar"
 	"testing"
 	"time"
 
@@ -15,37 +14,62 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/report"
 )
 
-// authenticatedClient meldet sich einmalig über einen frischen Einmal-Code
-// an und liefert einen Client, dessen Cookie-Jar die Sitzung für alle
-// folgenden Anfragen an srv mitträgt.
+// sessionTransport injiziert das Sitzungs-Cookie einer über
+// authenticatedClient erzeugten Sitzung in jede Anfrage — ein eigener,
+// von Secure/SameSite unabhängiger Mechanismus statt eines
+// net/http/cookiejar: cookiejar würde ein Secure-Cookie (siehe auth.go
+// setSessionCookie) für die "http://"-Testserver-URLs dieses Pakets beim
+// Zurücklesen stillschweigend verwerfen.
+type sessionTransport struct {
+	cookieValue string
+}
+
+func (t *sessionTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req = req.Clone(req.Context())
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: t.cookieValue})
+	return http.DefaultTransport.RoundTrip(req)
+}
+
+// authenticatedClient legt direkt eine Sitzung an (ohne für jeden
+// Handler-Test den echten OIDC-Umweg über den Fake-Provider zu
+// durchlaufen — das prüfen die Login-spezifischen Tests in
+// server_test.go/handlers_login_test.go separat) und liefert einen
+// Client, der das Sitzungs-Cookie bei jeder Anfrage mitschickt.
 func authenticatedClient(t *testing.T, srv *Server) *http.Client {
 	t.Helper()
 
-	code, err := srv.auth.issueCode()
+	cookieValue, _, err := srv.auth.createSession("test-admin@example.com")
 	require.NoError(t, err)
 
-	jar, err := cookiejar.New(nil)
-	require.NoError(t, err)
-	client := &http.Client{Jar: jar}
+	return &http.Client{Transport: &sessionTransport{cookieValue: cookieValue}}
+}
 
-	resp := httpGet(t, client, "http://"+srv.Addr()+"/anmelden?code="+code)
-	require.NoError(t, resp.Body.Close())
-	require.Equal(t, http.StatusOK, resp.StatusCode)
+// csrfTokenFor liefert das CSRF-Token der Sitzung von client (siehe
+// authenticatedClient) — für Formulartests, die requireCSRF durchlaufen
+// müssen.
+func csrfTokenFor(t *testing.T, srv *Server, client *http.Client) string {
+	t.Helper()
 
-	return client
+	tr, ok := client.Transport.(*sessionTransport)
+	require.True(t, ok, "client wurde nicht über authenticatedClient erzeugt")
+
+	srv.auth.mu.Lock()
+	defer srv.auth.mu.Unlock()
+	s, ok := srv.auth.sessions[tr.cookieValue]
+	require.True(t, ok, "sitzung nicht gefunden")
+	return s.csrfToken
 }
 
 func newTestServerWithRepo(t *testing.T, repo *fakeRepository) *Server {
 	t.Helper()
-	isolateConfigDir(t)
 
+	provider := newFakeOIDCProvider(t)
 	deps := Dependencies{Statistics: &statistics.UseCase{Repository: repo}}
-	srv, err := New(deps, Options{})
+	srv, err := New(context.Background(), deps, testOIDCOptions(provider.issuer()))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
 
-	_, err = srv.Start(context.Background())
-	require.NoError(t, err)
+	require.NoError(t, srv.Start(context.Background()))
 	return srv
 }
 

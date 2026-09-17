@@ -107,10 +107,13 @@ func TestSyncStateRepository_DeletingAccount_CascadesState(t *testing.T) {
 	ctx := context.Background()
 	db := newTestDBWithAccount(t)
 	stateRepo := sqlite.NewSyncStateRepository(db)
-	accountRepo := sqlite.NewAccountRepository(db)
 
 	require.NoError(t, stateRepo.Save(ctx, domainsync.State{AccountID: "acc-1", Mailbox: "INBOX", LastUID: 5}))
-	require.NoError(t, accountRepo.Delete(ctx, "acc-1"))
+	// Kein AccountRepository.Delete mehr (Konten kommen aus ENV, kein
+	// CRUD) — das Löschen hier prüft ausschließlich die
+	// ON-DELETE-CASCADE-Eigenschaft des Schemas, deshalb direkt per SQL.
+	_, err := db.ExecContext(ctx, "DELETE FROM accounts WHERE id = ?", "acc-1")
+	require.NoError(t, err)
 
 	// ON DELETE CASCADE im Schema: mit dem Account verschwindet auch sein
 	// Sync-Fortschritt, kein verwaister Datensatz.

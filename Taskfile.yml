@@ -6,7 +6,6 @@ vars:
   BIN_DIR: bin
   BIN_NAME: dmarc-analyzer
   COVER_FILE: coverage.out
-  RELEASE_DIR: "{{.BIN_DIR}}/release"
   VERSION:
     sh: git describe --tags --always --dirty 2>/dev/null || echo dev
 
@@ -78,70 +77,18 @@ tasks:
       - go mod tidy
       - go run golang.org/x/tools/cmd/deadcode@latest ./cmd/dmarc-analyzer || true
 
-  # release:* baut seit M5 (MIGRATIONSPLAN.md: Fyne/go-chart vollständig
-  # entfernt) reine Cross-Compiles mit CGO_ENABLED=0 statt "fyne package" —
-  # das Programm ist nur noch ein Server-Prozess ohne native GUI-Toolkit,
-  # ein Fenster-Toolkit-Paketierer wird also nicht mehr gebraucht.
-  release:darwin:
-    desc: >-
-      macOS-Binärdateien (arm64, amd64) bauen und als minimales .app-Bündel
-      zippen (kein "fyne package" mehr, siehe packaging/darwin/Info.plist.tmpl
-      zur Begründung von LSUIElement).
+  docker:build:
+    desc: Docker-Image lokal bauen (getaggt mit VERSION, siehe vars).
     cmds:
-      - mkdir -p {{.RELEASE_DIR}}
-      - for: ["arm64", "amd64"]
-        cmd: |
-          set -e
-          arch="{{.ITEM}}"
-          app="{{.RELEASE_DIR}}/{{.BIN_NAME}}-darwin-$arch.app"
-          rm -rf "$app"
-          mkdir -p "$app/Contents/MacOS"
-          CGO_ENABLED=0 GOOS=darwin GOARCH="$arch" go build \
-            -ldflags "-X main.version={{.VERSION}}" \
-            -o "$app/Contents/MacOS/{{.BIN_NAME}}" ./cmd/dmarc-analyzer
-          sed 's/__VERSION__/{{.VERSION}}/g' packaging/darwin/Info.plist.tmpl > "$app/Contents/Info.plist"
-          (cd {{.RELEASE_DIR}} && zip -r -q -X "{{.BIN_NAME}}-{{.VERSION}}-darwin-$arch.app.zip" "{{.BIN_NAME}}-darwin-$arch.app")
-          rm -rf "$app"
+      - docker build --build-arg VERSION={{.VERSION}} -t {{.BIN_NAME}}:{{.VERSION}} -t {{.BIN_NAME}}:latest .
 
-  release:windows:
+  docker:run:
     desc: >-
-      Windows-Binärdatei (amd64) ohne Konsolenfenster bauen ("-H
-      windowsgui", MIGRATIONSPLAN.md M5 — Ausgaben landen dafür zusätzlich
-      in einer Log-Datei, siehe cmd/dmarc-analyzer/cmd_web.go) und zippen.
+      Lokal gebautes Image starten — erwartet eine .env-Datei mit den in
+      docker-compose.yml/docs/features/deployment.md dokumentierten
+      Variablen.
     cmds:
-      - mkdir -p {{.RELEASE_DIR}}
-      - |
-        set -e
-        exe="{{.RELEASE_DIR}}/{{.BIN_NAME}}.exe"
-        CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build \
-          -ldflags "-H windowsgui -X main.version={{.VERSION}}" \
-          -o "$exe" ./cmd/dmarc-analyzer
-        (cd {{.RELEASE_DIR}} && zip -q -X "{{.BIN_NAME}}-{{.VERSION}}-windows-amd64.zip" "{{.BIN_NAME}}.exe")
-        rm -f "$exe"
-
-  release:linux:
-    desc: Linux-Binärdateien (amd64, arm64) bauen und als .tar.gz packen.
-    cmds:
-      - mkdir -p {{.RELEASE_DIR}}
-      - for: ["amd64", "arm64"]
-        cmd: |
-          set -e
-          arch="{{.ITEM}}"
-          dir="{{.RELEASE_DIR}}/{{.BIN_NAME}}-linux-$arch"
-          mkdir -p "$dir"
-          CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build \
-            -ldflags "-X main.version={{.VERSION}}" \
-            -o "$dir/{{.BIN_NAME}}" ./cmd/dmarc-analyzer
-          tar -C "{{.RELEASE_DIR}}" -czf "{{.RELEASE_DIR}}/{{.BIN_NAME}}-{{.VERSION}}-linux-$arch.tar.gz" "{{.BIN_NAME}}-linux-$arch"
-          rm -rf "$dir"
-
-  release:
-    desc: >-
-      Alle Plattformen cross-kompilieren (macOS arm64/amd64, Windows amd64,
-      Linux amd64/arm64) und Checksummen erzeugen.
-    deps: [release:darwin, release:windows, release:linux]
-    cmds:
-      - shasum -a 256 {{.RELEASE_DIR}}/*.{zip,tar.gz} > {{.RELEASE_DIR}}/checksums.txt
+      - docker run --rm -p 8080:8080 --env-file .env -v dmarc-data:/data {{.BIN_NAME}}:{{.VERSION}}
 
   clean:
     desc: Build-Artefakte entfernen.

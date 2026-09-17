@@ -25,6 +25,10 @@
       </form>
       <span id="sync-status" class="sync-status" aria-live="polite"></span>
     </div>
+    <form method="post" action="/abmelden" class="logout-form">
+      <input type="hidden" name="csrf_token" value="{{csrfToken}}">
+      <button type="submit" class="secondary">Abmelden</button>
+    </form>
   </header>
   <main class="app-main">
     {{template "content" .}}

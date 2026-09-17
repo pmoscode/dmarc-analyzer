@@ -24,7 +24,8 @@ func NewAccountRepository(db *sql.DB) *AccountRepository {
 }
 
 // Save legt einen Account neu an oder aktualisiert ihn (UPSERT über die
-// ID) — ohne Zugangsdaten, die liegen hinter account.CredentialStore.
+// ID) — ohne Zugangsdaten, die kommen aus ENV (siehe
+// internal/infra/envconfig) und werden nie persistiert.
 func (r *AccountRepository) Save(ctx context.Context, a *account.MailAccount) error {
 	const stmt = `
 		INSERT INTO accounts (id, display_name, host, port, username, mailbox, use_tls, created_at)
@@ -90,17 +91,6 @@ func (r *AccountRepository) FindAll(ctx context.Context) ([]account.MailAccount,
 		return nil, fmt.Errorf("accounts konnten nicht vollständig gelesen werden: %w", err)
 	}
 	return accounts, nil
-}
-
-// Delete entfernt nur die Metadaten. sync_state-Einträge für dieses Konto
-// werden per ON DELETE CASCADE mitentfernt; der Schlüsselbund-Eintrag ist
-// separat über CredentialStore.Delete zu entfernen (siehe
-// IMPLEMENTIERUNG.md Abschnitt 9, umgesetzt im manageaccount-Use-Case).
-func (r *AccountRepository) Delete(ctx context.Context, id account.AccountID) error {
-	if _, err := r.db.ExecContext(ctx, "DELETE FROM accounts WHERE id = ?", string(id)); err != nil {
-		return fmt.Errorf("account %q konnte nicht gelöscht werden: %w", id, err)
-	}
-	return nil
 }
 
 // rowScanner fasst *sql.Row und *sql.Rows unter einer gemeinsamen

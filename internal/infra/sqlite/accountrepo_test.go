@@ -3,7 +3,6 @@ package sqlite_test
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"testing"
 	"time"
 
@@ -86,19 +85,4 @@ func TestAccountRepository_FindAll_OrderedByDisplayName(t *testing.T) {
 	require.Len(t, all, 2)
 	require.Equal(t, "A-Konto", all[0].DisplayName)
 	require.Equal(t, "Z-Konto", all[1].DisplayName)
-}
-
-func TestAccountRepository_Delete_IsIdempotent(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	repo := sqlite.NewAccountRepository(newTestDB(t))
-
-	acc := newTestAccount(t, "acc-1")
-	require.NoError(t, repo.Save(ctx, acc))
-
-	require.NoError(t, repo.Delete(ctx, "acc-1"))
-	require.NoError(t, repo.Delete(ctx, "acc-1"), "erneutes Löschen darf nicht scheitern")
-
-	_, err := repo.FindByID(ctx, "acc-1")
-	require.True(t, errors.Is(err, sql.ErrNoRows))
 }

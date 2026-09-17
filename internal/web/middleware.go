@@ -6,20 +6,15 @@ import (
 	"net/url"
 )
 
-// requireHost lehnt Anfragen ab, deren Host-Header nicht exakt einer der
-// erlaubten Adressen entspricht — Schutz vor DNS-Rebinding: eine fremde
-// Webseite kann per JavaScript zwar eine Anfrage an 127.0.0.1 auslösen,
-// aber (ohne DNS-Rebinding) keinen Host-Header setzen, der von der
-// Browser-URL abweicht (MIGRATIONSPLAN.md Abschnitt 5).
-//
-// allowedHosts ist eine Funktion statt einer festen map: routes() baut
-// den Handler-Baum bereits in New(), bevor bind() den tatsächlichen Port
-// kennt — die erlaubten Hosts werden deshalb bei jeder Anfrage neu aus
-// der inzwischen gebundenen Adresse berechnet (s.allowedHosts in
-// server.go), nicht einmalig bei der Konstruktion eingefroren.
-func requireHost(allowedHosts func() map[string]bool, next http.Handler) http.Handler {
+// requireHost lehnt Anfragen ab, deren Host-Header nicht exakt dem
+// öffentlichen Hostnamen entspricht (aus DMARC_OIDC_REDIRECT_URL, siehe
+// server.go Server.allowedHost) — Schutz gegen Host-Header-Fälschung
+// (z. B. wenn der Container versehentlich auf mehreren Netzwerken lauscht).
+// Der Reverse-Proxy vor dem Container reicht den externen Host-Header
+// üblicherweise unverändert durch.
+func requireHost(allowedHost string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !allowedHosts()[r.Host] {
+		if r.Host != allowedHost {
 			http.Error(w, "ungültiger Host", http.StatusMisdirectedRequest)
 			return
 		}
@@ -44,13 +39,14 @@ func securityHeaders(next http.Handler) http.Handler {
 	})
 }
 
-// requireSession lehnt Anfragen ohne gültiges Sitzungs-Cookie mit 401 ab —
-// die einzige Ausnahme (/anmelden) wird in routes.go bewusst außerhalb
-// dieser Middleware verdrahtet, nicht durch eine Sonderregel hier drin.
+// requireSession leitet Anfragen ohne gültiges Sitzungs-Cookie auf
+// /anmelden um — die Ausnahmen (/anmelden, /anmelden/callback, /gesund)
+// werden in routes.go bewusst außerhalb dieser Middleware verdrahtet,
+// nicht durch eine Sonderregel hier drin.
 func requireSession(a *auth, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !a.validSession(r) {
-			http.Error(w, "Bitte über das Programm öffnen (dmarc-analyzer web).", http.StatusUnauthorized)
+			http.Redirect(w, r, "/anmelden", http.StatusSeeOther)
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -121,7 +117,7 @@ func requireCSRF(a *auth, next http.Handler) http.Handler {
 		if token == "" {
 			token = r.PostFormValue(csrfTokenField)
 		}
-		if !a.validCSRFToken(token) {
+		if !a.validCSRFToken(r, token) {
 			http.Error(w, "ungültiges oder fehlendes CSRF-Token", http.StatusForbidden)
 			return
 		}

@@ -17,21 +17,18 @@ var version = "dev"
 
 const usage = `dmarc-analyzer ` + `%s` + `
 
-Ohne Argumente startet die Web-Oberfläche im Standardbrowser (siehe
-MIGRATIONSPLAN.md). Für den Kommandozeilen-Betrieb (z. B. Cron/launchd)
-stehen folgende Unterbefehle bereit:
+Läuft als Docker-Container, komplett über Umgebungsvariablen konfiguriert
+(siehe docs/features/deployment.md). Ohne Argumente startet die
+Web-Oberfläche. Für Diagnose/Wartung per "docker exec" stehen folgende
+Unterbefehle bereit:
 
 Verwendung:
-  dmarc-analyzer web [--adresse H:P] [--kein-browser] [--entwicklung]
-                                             Web-Oberfläche starten (auch ohne Argumente der Standard)
-  dmarc-analyzer sync [--headless]          Alle konfigurierten Konten synchronisieren
+  dmarc-analyzer web                        Web-Oberfläche starten (auch ohne Argumente der Standard)
+  dmarc-analyzer sync                       Konfiguriertes Konto synchronisieren
   dmarc-analyzer import <pfad>...           DMARC-Reports aus Dateien importieren (.eml, .xml, .xml.gz, .zip)
   dmarc-analyzer stats [--days N] [--domain D]
                                              Kennzahlen für die letzten N Tage ausgeben (Standard: 30)
-  dmarc-analyzer account add                Konto anlegen (fragt Zugangsdaten interaktiv ab)
-  dmarc-analyzer account list               Konfigurierte Konten auflisten
-  dmarc-analyzer account test <id>          Verbindung zu einem Konto testen
-  dmarc-analyzer account delete <id>        Konto entfernen (Metadaten und Zugangsdaten)
+  dmarc-analyzer healthcheck                 Docker-HEALTHCHECK: prüft, ob der HTTP-Server antwortet
 `
 
 // main entscheidet, ob main.go selbst ein Argument ergänzen muss (kein
@@ -57,9 +54,6 @@ func main() {
 }
 
 func run(ctx context.Context, args []string) error {
-	logger := logging.New()
-	logger.Info("dmarc-analyzer gestartet", "version", version)
-
 	if len(args) == 0 {
 		fmt.Printf(usage, version)
 		return nil
@@ -67,18 +61,30 @@ func run(ctx context.Context, args []string) error {
 
 	cmd, rest := args[0], args[1:]
 
+	// healthcheck läuft bewusst ohne Logger-Setup und ohne newApp()/
+	// envconfig.Load() weiter unten — Docker ruft es alle paar Sekunden
+	// auf, ein Log-Eintrag pro Aufruf wäre reines Rauschen, und eine
+	// Liveness-Prüfung soll nicht an einer kurzzeitig ungültigen
+	// IMAP-/OIDC-Konfiguration scheitern (siehe cmd_healthcheck.go).
+	if cmd == "healthcheck" {
+		return runHealthcheck(ctx, rest)
+	}
+
+	logger := logging.New()
+	logger.Info("dmarc-analyzer gestartet", "version", version)
+
 	handler, ok := subcommands[cmd]
 	if !ok {
 		return fmt.Errorf("unbekannter Unterbefehl %q — siehe 'dmarc-analyzer' ohne Argumente für die Hilfe", cmd)
 	}
 
 	// Composition Root: erst hier, nachdem der Unterbefehl als bekannt
-	// erkannt wurde, werden konkrete Adapter verdrahtet (echte Datenbank,
-	// echter OS-Schlüsselbund). Ein unbekannter Unterbefehl oder die reine
-	// Hilfeausgabe lösen keinerlei I/O aus — wichtig sowohl für Tests als
-	// auch dafür, dass ein Tippfehler nicht versehentlich die Datenbank
-	// anlegt oder den Schlüsselbund anspricht.
-	application, err := newApp(ctx, cmd)
+	// erkannt wurde, werden konkrete Adapter verdrahtet (ENV-Konfiguration
+	// gelesen, echte Datenbank geöffnet). Ein unbekannter Unterbefehl oder
+	// die reine Hilfeausgabe lösen keinerlei I/O aus — wichtig sowohl für
+	// Tests als auch dafür, dass ein Tippfehler nicht versehentlich die
+	// Datenbank anlegt.
+	application, err := newApp(ctx)
 	if err != nil {
 		return fmt.Errorf("anwendung konnte nicht initialisiert werden: %w", err)
 	}
@@ -89,9 +95,8 @@ func run(ctx context.Context, args []string) error {
 
 // subcommands bildet Unterbefehlsnamen auf ihre Handler ab.
 var subcommands = map[string]func(context.Context, *app, []string) error{
-	"web":     runWeb,
-	"sync":    runSync,
-	"import":  runImport,
-	"stats":   runStats,
-	"account": runAccount,
+	"web":    runWeb,
+	"sync":   runSync,
+	"import": runImport,
+	"stats":  runStats,
 }

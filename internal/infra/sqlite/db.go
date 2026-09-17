@@ -19,9 +19,9 @@ import (
 //
 // path wird unverändert in die DSN übernommen (kein URL-Escaping) — so
 // erwartet es modernc.org/sqlite (siehe dessen dsn_test.go). Ein Pfad mit
-// "?" oder "#" würde die Query-Parameter-Grenze verwirren; für die von
-// internal/platform/paths gelieferten Pfade (unterhalb von
-// os.UserConfigDir()) kommt das praktisch nicht vor.
+// "?" oder "#" würde die Query-Parameter-Grenze verwirren; für den aus
+// DMARC_DATA_DIR abgeleiteten Pfad (siehe internal/infra/envconfig)
+// kommt das praktisch nicht vor.
 func Open(ctx context.Context, path string) (*sql.DB, error) {
 	dsn := path +
 		"?_journal_mode=WAL" +

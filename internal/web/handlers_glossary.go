@@ -33,7 +33,7 @@ func (s *Server) handleGlossary(w http.ResponseWriter, r *http.Request) {
 		Nav:   navItems(r.URL.Path),
 		Terms: terms,
 	}
-	if err := s.views.render(w, "glossary.html", data); err != nil {
+	if err := s.views.render(w, r, "glossary.html", data); err != nil {
 		s.serverError(w, r, err)
 	}
 }

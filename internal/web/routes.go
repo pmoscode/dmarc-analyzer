@@ -3,20 +3,25 @@ package web
 import "net/http"
 
 // routes baut den vollständigen Handler-Baum. Middleware-Reihenfolge
-// (außen nach innen): Panic-Sicherung, Sicherheits-Header, Host-Prüfung,
-// dann erst das eigentliche Routing — /anmelden und /intern/code
-// ausgenommen von Sitzungsprüfung und CSRF (siehe dort, eigenes
-// Geheimnis-basiertes Verfahren statt Cookie-Sitzung), alles andere
-// unter "/" durchläuft zusätzlich requireSession und requireCSRF
-// (MIGRATIONSPLAN.md Abschnitt 5 und 7).
+// (außen nach innen): Panic-Sicherung, Sicherheits-Header, dann erst
+// /gesund (siehe unten) bzw. Host-Prüfung + Routing für alles andere.
+//
+// /gesund liegt bewusst VOR requireHost, nicht nur vor requireSession:
+// Dockers HEALTHCHECK (siehe cmd_healthcheck.go) verbindet sich
+// containerintern über "127.0.0.1:<port>", der Host-Header trägt also nie
+// den öffentlichen Hostnamen aus DMARC_OIDC_REDIRECT_URL — mit
+// requireHost davor wäre der Container dauerhaft "unhealthy" (per
+// "docker run" tatsächlich reproduziert). Ein Healthcheck ist außerdem
+// nicht sicherheitskritisch (liefert nur "läuft der Prozess", keine
+// Daten), die DNS-Rebinding-Schutzwirkung von requireHost wird hier nicht
+// gebraucht.
 func (s *Server) routes() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /gesund", s.handleHealthz)
 
-	mux.HandleFunc("GET /anmelden", s.handleLogin)
-	// POST /intern/code ist bewusst außerhalb von requireSession/protected
-	// verdrahtet (wie /anmelden) — es authentifiziert sich über das
-	// Instanz-Geheimnis, nicht über eine Sitzung (siehe instance.go).
-	mux.HandleFunc("POST /intern/code", s.handleInternalCode)
+	hostChecked := http.NewServeMux()
+	hostChecked.HandleFunc("GET /anmelden", s.handleLoginStart)
+	hostChecked.HandleFunc("GET /anmelden/callback", s.handleLoginCallback)
 
 	protected := http.NewServeMux()
 	protected.HandleFunc("GET /{$}", s.handleDashboard)
@@ -24,9 +29,6 @@ func (s *Server) routes() http.Handler {
 	protected.HandleFunc("GET /api/diagramme/heatmap", s.handleChartHeatmap)
 	protected.HandleFunc("GET /api/diagramme/quellen", s.handleChartTopSources)
 	protected.HandleFunc("GET /api/diagramme/disposition", s.handleChartDisposition)
-	// Platzhalter-Seiten (Meilenstein M1: "Navigation zwischen leeren
-	// Seiten") — Inhalt folgt in M2 (Berichte, Sendequellen, Glossar)
-	// bzw. M3 (Einstellungen).
 	protected.HandleFunc("GET /berichte", s.handleReports)
 	protected.HandleFunc("GET /berichte/seite", s.handleReportsPage)
 	protected.HandleFunc("GET /berichte/{id}", s.handleReportDetail)
@@ -34,15 +36,7 @@ func (s *Server) routes() http.Handler {
 	protected.HandleFunc("GET /quellen/seite", s.handleSourcesPage)
 	protected.HandleFunc("GET /glossar", s.handleGlossary)
 	protected.HandleFunc("GET /einstellungen", s.handleSettings)
-	protected.HandleFunc("POST /einstellungen/allgemein", s.handleGeneralSettingsUpdate)
-	protected.HandleFunc("POST /konten", s.handleAccountCreate)
-	protected.HandleFunc("POST /konten/ordner", s.handleAccountListMailboxes)
 	protected.HandleFunc("POST /konten/{id}/test", s.handleAccountTest)
-	protected.HandleFunc("POST /konten/{id}/loeschen", s.handleAccountDelete)
-	protected.HandleFunc("GET /einrichtung", s.handleOnboarding)
-	protected.HandleFunc("POST /einrichtung", s.handleOnboardingSubmit)
-	protected.HandleFunc("GET /entsperren", s.handleUnlockForm)
-	protected.HandleFunc("POST /entsperren", s.handleUnlockSubmit)
 	protected.HandleFunc("POST /abgleich", s.handleSyncStart)
 	protected.HandleFunc("POST /abgleich/abbrechen", s.handleSyncCancel)
 	protected.HandleFunc("GET /ereignisse", s.handleEvents)
@@ -50,13 +44,18 @@ func (s *Server) routes() http.Handler {
 	protected.HandleFunc("POST /import", s.handleImportSubmit)
 	protected.HandleFunc("GET /export/berichte.csv", s.handleExportReportsCSV)
 	protected.HandleFunc("GET /export/quellen.csv", s.handleExportSourcesCSV)
+	protected.HandleFunc("POST /abmelden", s.handleLogout)
 
-	mux.Handle("/", requireSession(s.auth, requireCSRF(s.auth, protected)))
+	hostChecked.Handle("/", requireSession(s.auth, requireCSRF(s.auth, protected)))
 
 	// /static/ bewusst außerhalb von requireSession: CSS/JS sind nicht
 	// schützenswert, und die Anmeldeseite selbst braucht sie, bevor eine
-	// Sitzung existiert.
-	mux.Handle("/static/", http.StripPrefix("/static/", s.staticHandler()))
+	// Sitzung existiert. Trotzdem hinter requireHost, anders als /gesund
+	// oben — anders als der Healthcheck kommt eine Anfrage hierfür immer
+	// über den Browser mit echtem Host-Header.
+	hostChecked.Handle("/static/", http.StripPrefix("/static/", s.staticHandler()))
 
-	return recoverPanic(s.logger, securityHeaders(requireHost(s.allowedHosts, mux)))
+	mux.Handle("/", requireHost(s.allowedHost, hostChecked))
+
+	return recoverPanic(s.logger, securityHeaders(mux))
 }

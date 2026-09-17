@@ -1,0 +1,11 @@
+.git
+.github
+.idea
+bin
+coverage.out
+coverage.html
+docs
+*.md
+Dockerfile
+docker-compose.yml
+.dockerignore

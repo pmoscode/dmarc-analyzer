@@ -166,7 +166,7 @@ func (s *Server) handleSources(w http.ResponseWriter, r *http.Request) {
 
 	data := buildSourcesPageData(filter, page)
 	data.Nav = navItems(r.URL.Path)
-	if err := s.views.render(w, "sources.html", data); err != nil {
+	if err := s.views.render(w, r, "sources.html", data); err != nil {
 		s.serverError(w, r, err)
 	}
 }
@@ -190,7 +190,7 @@ func (s *Server) handleSourcesPage(w http.ResponseWriter, r *http.Request) {
 		HasMore:     page.NextCursor != "",
 		NextPageURL: sourcesPageURL(filter, page.NextCursor),
 	}
-	if err := s.views.renderNamed(w, "sources.html", "rows", data); err != nil {
+	if err := s.views.renderNamed(w, r, "sources.html", "rows", data); err != nil {
 		s.serverError(w, r, err)
 	}
 }

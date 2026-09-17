@@ -26,7 +26,6 @@ import (
 // gespeichert wird).
 func newTestServerWithImporter(t *testing.T) (*Server, *fakeReportRepository, *fakeFailedImportRepository) {
 	t.Helper()
-	isolateConfigDir(t)
 
 	reports := &fakeReportRepository{}
 	failed := &fakeFailedImportRepository{}
@@ -40,12 +39,12 @@ func newTestServerWithImporter(t *testing.T) (*Server, *fakeReportRepository, *f
 			Parsers:       []domainsync.ReportParser{dmarcxml.NewParser()},
 		},
 	}
-	srv, err := New(deps, Options{})
+	provider := newFakeOIDCProvider(t)
+	srv, err := New(context.Background(), deps, testOIDCOptions(provider.issuer()))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
 
-	_, err = srv.Start(context.Background())
-	require.NoError(t, err)
+	require.NoError(t, srv.Start(context.Background()))
 	return srv, reports, failed
 }
 
@@ -70,10 +69,9 @@ func multipartUpload(t *testing.T, csrfToken string, files map[string][]byte) (*
 
 func postMultipart(t *testing.T, client *http.Client, addr string, body *bytes.Buffer, contentType string) *http.Response {
 	t.Helper()
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://"+addr+"/import", body)
-	require.NoError(t, err)
+	req := newRequest(t, http.MethodPost, "http://"+addr+"/import", body)
 	req.Header.Set("Content-Type", contentType)
-	req.Header.Set("Origin", "http://"+addr)
+	req.Header.Set("Origin", "http://"+testPublicHost)
 
 	resp, err := client.Do(req)
 	require.NoError(t, err)
@@ -104,7 +102,7 @@ func TestHandleImportSubmit_ValidXML_ImportsAndShowsResult(t *testing.T) {
 	srv, reports, _ := newTestServerWithImporter(t)
 	client := authenticatedClient(t, srv)
 
-	csrf := srv.auth.csrfToken
+	csrf := csrfTokenFor(t, srv, client)
 	body, contentType := multipartUpload(t, csrf, map[string][]byte{"report.xml": sampleReportXML(t)})
 
 	resp := postMultipart(t, client, srv.Addr(), body, contentType)
@@ -122,7 +120,7 @@ func TestHandleImportSubmit_MultipleFiles_AggregatesResult(t *testing.T) {
 	client := authenticatedClient(t, srv)
 
 	sample := sampleReportXML(t)
-	body, contentType := multipartUpload(t, srv.auth.csrfToken, map[string][]byte{
+	body, contentType := multipartUpload(t, csrfTokenFor(t, srv, client), map[string][]byte{
 		"a.xml": sample,
 		"b.xml": append(append([]byte{}, sample...), []byte(" ")...), // minimal unterschiedlicher Inhalt
 	})
@@ -141,7 +139,7 @@ func TestHandleImportSubmit_CorruptFile_CountsAsFailed(t *testing.T) {
 	srv, _, failed := newTestServerWithImporter(t)
 	client := authenticatedClient(t, srv)
 
-	body, contentType := multipartUpload(t, srv.auth.csrfToken, map[string][]byte{
+	body, contentType := multipartUpload(t, csrfTokenFor(t, srv, client), map[string][]byte{
 		"kaputt.xml": []byte("das ist kein gueltiges dmarc-xml"),
 	})
 
@@ -159,7 +157,7 @@ func TestHandleImportSubmit_NoFiles_ShowsError(t *testing.T) {
 	srv, _, _ := newTestServerWithImporter(t)
 	client := authenticatedClient(t, srv)
 
-	body, contentType := multipartUpload(t, srv.auth.csrfToken, nil)
+	body, contentType := multipartUpload(t, csrfTokenFor(t, srv, client), nil)
 	resp := postMultipart(t, client, srv.Addr(), body, contentType)
 	defer func() { _ = resp.Body.Close() }()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -174,7 +172,7 @@ func TestHandleImportSubmit_FileTooLarge_CountsAsFailed(t *testing.T) {
 	client := authenticatedClient(t, srv)
 
 	huge := bytes.Repeat([]byte("x"), maxImportFileSize+1)
-	body, contentType := multipartUpload(t, srv.auth.csrfToken, map[string][]byte{"riesig.xml": huge})
+	body, contentType := multipartUpload(t, csrfTokenFor(t, srv, client), map[string][]byte{"riesig.xml": huge})
 
 	resp := postMultipart(t, client, srv.Addr(), body, contentType)
 	defer func() { _ = resp.Body.Close() }()
@@ -208,7 +206,7 @@ func TestHandleImportSubmit_ZipWithMultipleReports_ImportsBoth(t *testing.T) {
 	zipData, err := os.ReadFile("../../testdata/reports/multi/two_reports.zip")
 	require.NoError(t, err)
 
-	body, contentType := multipartUpload(t, srv.auth.csrfToken, map[string][]byte{"two_reports.zip": zipData})
+	body, contentType := multipartUpload(t, csrfTokenFor(t, srv, client), map[string][]byte{"two_reports.zip": zipData})
 	resp := postMultipart(t, client, srv.Addr(), body, contentType)
 	defer func() { _ = resp.Body.Close() }()
 	require.Equal(t, http.StatusOK, resp.StatusCode)

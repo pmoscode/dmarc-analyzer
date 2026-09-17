@@ -1,36 +1,38 @@
-// Package web implementiert die eingebettete Web-Oberfläche, die die
-// Fyne-Oberfläche ablöst (siehe MIGRATIONSPLAN.md). Ruft wie zuvor
-// internal/ui ausschließlich Use Cases aus internal/app auf, nie direkt
-// einen Infra-Adapter (AGENTS.md).
+// Package web implementiert die eingebettete Web-Oberfläche. Ruft
+// ausschließlich Use Cases aus internal/app auf, nie direkt einen
+// Infra-Adapter (AGENTS.md).
 package web
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
-	"os"
-	"path/filepath"
+	"net/url"
 	"time"
-
-	"github.com/pmoscode/dmarc-analyzer/internal/platform/paths"
 )
 
-// Options steuert Adresse, Browserverhalten und Vorlagen-Quelle.
+// Options steuert Adresse, Vorlagen-Quelle und die Authentik-Anbindung.
 type Options struct {
-	// Addr ist eine feste Adresse ("127.0.0.1:8080"). Leer bedeutet:
-	// zufälliger freier Port auf 127.0.0.1 (Migrationsplan E-4).
+	// Addr ist die Adresse, auf die der HTTP-Server bindet (z. B.
+	// ":8080") — kommt aus DMARC_LISTEN_ADDR, siehe
+	// internal/infra/envconfig. Anders als vor dem Umstieg auf Docker ist
+	// hier bewusst KEINE Beschränkung auf Loopback-Adressen mehr
+	// eingebaut: der Container muss von außerhalb erreichbar sein, der
+	// Zugriffsschutz läuft über OIDC (siehe auth.go/oidc.go) statt über
+	// "nur vom selben Rechner erreichbar".
 	Addr string
 	// Dev liest Vorlagen/Statik von der Festplatte statt eingebettet —
 	// für Entwicklung ohne Neubau bei jeder Änderung (Arbeitsverzeichnis
-	// muss die Repository-Wurzel sein).
+	// muss die Repository-Wurzel sein), aus DMARC_DEV_MODE.
 	Dev bool
 	// Logger — nil verwendet slog.Default().
 	Logger *slog.Logger
+	// OIDC sind die Parameter für die Authentik-Anmeldung.
+	OIDC OIDCConfig
 }
 
 // Server ist die eingebettete Web-Oberfläche.
@@ -38,37 +40,45 @@ type Server struct {
 	deps    Dependencies
 	logger  *slog.Logger
 	auth    *auth
+	oidc    *oidcAuthenticator
 	views   *views
 	devMode bool
 
+	// allowedHost ist der öffentliche Hostname (aus OIDC.RedirectURL), den
+	// requireHost gegen den Host-Header eingehender Anfragen prüft (siehe
+	// middleware.go) — ersetzt die frühere, aus der gebundenen
+	// Loopback-Adresse berechnete Zulassungsliste.
+	allowedHost string
+
 	staticFS fs.FS
 
-	httpServer   *http.Server
-	listener     net.Listener
-	instancePath string
-
-	// onboarding hält das noch nicht gespeicherte Konto zwischen den
-	// Schritten der Ersteinrichtung fest (MIGRATIONSPLAN.md Meilenstein
-	// M3) — siehe handlers_onboarding.go.
-	onboarding *onboardingState
+	httpServer *http.Server
+	listener   net.Listener
 }
 
-// New baut den Server auf (Vorlagen laden, Instanz-Geheimnis erzeugen),
-// bindet aber noch keinen Port — das übernimmt Start(). Getrennt, damit
-// Konstruktionsfehler (z. B. kaputte Vorlage) sich ohne Netzwerk-Seiteneffekt
-// melden.
-func New(deps Dependencies, opts Options) (*Server, error) {
+// New baut den Server auf (Vorlagen laden, OIDC-Discovery gegen
+// Authentik), bindet aber noch keinen Port — das übernimmt Start().
+// Getrennt, damit Konstruktionsfehler (z. B. Authentik nicht erreichbar,
+// kaputte Vorlage) sich ohne Netzwerk-Seiteneffekt melden.
+func New(ctx context.Context, deps Dependencies, opts Options) (*Server, error) {
 	logger := opts.Logger
 	if logger == nil {
 		logger = slog.Default()
 	}
 
-	a, err := newAuth()
+	redirectURL, err := url.Parse(opts.OIDC.RedirectURL)
+	if err != nil || redirectURL.Host == "" {
+		return nil, fmt.Errorf("DMARC_OIDC_REDIRECT_URL ist keine vollständige URL: %q", opts.OIDC.RedirectURL)
+	}
+
+	authenticator, err := newOIDCAuthenticator(ctx, opts.OIDC)
 	if err != nil {
 		return nil, err
 	}
 
-	v, err := newViews(opts.Dev, func() string { return a.csrfToken })
+	a := newAuth()
+
+	v, err := newViews(opts.Dev, a.csrfTokenForRequest)
 	if err != nil {
 		return nil, fmt.Errorf("vorlagen konnten nicht geladen werden: %w", err)
 	}
@@ -79,13 +89,14 @@ func New(deps Dependencies, opts Options) (*Server, error) {
 	}
 
 	s := &Server{
-		deps:       deps,
-		logger:     logger,
-		auth:       a,
-		views:      v,
-		devMode:    opts.Dev,
-		staticFS:   sfs,
-		onboarding: &onboardingState{},
+		deps:        deps,
+		logger:      logger,
+		auth:        a,
+		oidc:        authenticator,
+		views:       v,
+		devMode:     opts.Dev,
+		allowedHost: redirectURL.Host,
+		staticFS:    sfs,
 	}
 	s.httpServer = &http.Server{
 		Handler:           s.routes(),
@@ -99,117 +110,34 @@ func New(deps Dependencies, opts Options) (*Server, error) {
 	return s, nil
 }
 
-// bind bindet den Server an addr (leer: zufälliger Port auf 127.0.0.1).
-// Lehnt jede nicht-loopback Adresse ab (MIGRATIONSPLAN.md Abschnitt 5:
-// "Nur Loopback") — auch wenn addr per --adresse explizit gesetzt wurde.
+// bind bindet den Server an addr.
 func (s *Server) bind(addr string) error {
-	if addr == "" {
-		addr = "127.0.0.1:0"
-	}
-
 	ln, err := new(net.ListenConfig).Listen(context.Background(), "tcp", addr)
 	if err != nil {
 		return fmt.Errorf("adresse %q konnte nicht gebunden werden: %w", addr, err)
 	}
-
-	tcpAddr, ok := ln.Addr().(*net.TCPAddr)
-	if !ok || !tcpAddr.IP.IsLoopback() {
-		_ = ln.Close()
-		return fmt.Errorf("nur Loopback-Adressen (127.0.0.1) sind erlaubt, nicht %q", addr)
-	}
-
 	s.listener = ln
 	return nil
 }
 
-// Start startet den Server im Hintergrund, schreibt instance.json und
-// liefert die Einmal-Anmelde-URL, mit der der Browser eine Sitzung
-// erhält.
-func (s *Server) Start(context.Context) (string, error) {
+// Start startet den Server im Hintergrund. Lebenszyklus über
+// SIGINT/SIGTERM (siehe cmd/dmarc-analyzer/cmd_web.go) — "docker stop"
+// sendet SIGTERM.
+func (s *Server) Start(context.Context) error {
 	go func() {
 		if err := s.httpServer.Serve(s.listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			s.logger.Error("server beendet", "error", err)
 		}
 	}()
-
-	if err := s.writeInstanceFile(); err != nil {
-		return "", err
-	}
-
-	code, err := s.auth.issueCode()
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("http://%s/anmelden?code=%s", s.listener.Addr().String(), code), nil
+	return nil
 }
 
-// Shutdown fährt den Server sauber herunter (offene Anfragen fertig) und
-// entfernt instance.json (MIGRATIONSPLAN.md E-3, Abschnitt 5
-// "Aufräumen").
+// Shutdown fährt den Server sauber herunter (offene Anfragen fertig).
 func (s *Server) Shutdown(ctx context.Context) error {
-	err := s.httpServer.Shutdown(ctx)
-	if s.instancePath != "" {
-		_ = os.Remove(s.instancePath)
-	}
-	return err
+	return s.httpServer.Shutdown(ctx)
 }
 
-// Addr liefert die tatsächlich gebundene Adresse ("127.0.0.1:PORT").
+// Addr liefert die tatsächlich gebundene Adresse.
 func (s *Server) Addr() string {
 	return s.listener.Addr().String()
-}
-
-// allowedHosts wird bei jeder Anfrage neu aus der gebundenen Adresse
-// berechnet (siehe middleware.go requireHost) statt einmalig bei der
-// Konstruktion — dadurch kann s.routes() bereits in New() gebaut werden,
-// bevor bind() den Port kennt.
-func (s *Server) allowedHosts() map[string]bool {
-	tcpAddr, ok := s.listener.Addr().(*net.TCPAddr)
-	if !ok {
-		return nil
-	}
-	port := tcpAddr.Port
-	return map[string]bool{
-		fmt.Sprintf("127.0.0.1:%d", port): true,
-		fmt.Sprintf("localhost:%d", port): true,
-	}
-}
-
-// instanceFile ist der Inhalt von instance.json — Grundlage für die
-// Einzelinstanz-Erkennung (Meilenstein M1) und POST /intern/code.
-type instanceFile struct {
-	Port   int    `json:"port"`
-	PID    int    `json:"pid"`
-	Secret string `json:"secret"`
-}
-
-func (s *Server) writeInstanceFile() error {
-	dir, err := paths.ConfigDir()
-	if err != nil {
-		return err
-	}
-	s.instancePath = filepath.Join(dir, "instance.json")
-
-	tcpAddr, ok := s.listener.Addr().(*net.TCPAddr)
-	if !ok {
-		return fmt.Errorf("adresse des servers ist unerwartet keine TCP-Adresse")
-	}
-
-	//nolint:gosec // G117: Secret gehört hier absichtlich hinein —
-	// instance.json ist die dokumentierte Ablage des Instanz-Geheimnisses
-	// (MIGRATIONSPLAN.md Abschnitt 5), mit Rechten 0600 geschrieben
-	// (siehe unten).
-	data, err := json.Marshal(instanceFile{
-		Port:   tcpAddr.Port,
-		PID:    os.Getpid(),
-		Secret: s.auth.instanceSecret,
-	})
-	if err != nil {
-		return fmt.Errorf("instanzdatei konnte nicht kodiert werden: %w", err)
-	}
-
-	if err := os.WriteFile(s.instancePath, data, 0o600); err != nil {
-		return fmt.Errorf("instanzdatei konnte nicht geschrieben werden: %w", err)
-	}
-	return nil
 }

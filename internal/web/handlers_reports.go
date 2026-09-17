@@ -339,7 +339,7 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 
 	data := buildReportsPageData(filter, page)
 	data.Nav = navItems(r.URL.Path)
-	if err := s.views.render(w, "reports.html", data); err != nil {
+	if err := s.views.render(w, r, "reports.html", data); err != nil {
 		s.serverError(w, r, err)
 	}
 }
@@ -367,7 +367,7 @@ func (s *Server) handleReportsPage(w http.ResponseWriter, r *http.Request) {
 		HasMore:     page.NextCursor != "",
 		NextPageURL: reportsPageURL(filter, page.NextCursor),
 	}
-	if err := s.views.renderNamed(w, "reports.html", "rows", data); err != nil {
+	if err := s.views.renderNamed(w, r, "reports.html", "rows", data); err != nil {
 		s.serverError(w, r, err)
 	}
 }
@@ -454,7 +454,7 @@ func (s *Server) handleReportDetail(w http.ResponseWriter, r *http.Request) {
 
 	data := buildReportDetailData(full)
 	data.Nav = navItems("/berichte")
-	if err := s.views.render(w, "report_detail.html", data); err != nil {
+	if err := s.views.render(w, r, "report_detail.html", data); err != nil {
 		s.serverError(w, r, err)
 	}
 }

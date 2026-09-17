@@ -117,6 +117,21 @@ a {
   filter: brightness(1.08);
 }
 
+.logout-form {
+  margin: 0;
+}
+
+.logout-form button {
+  padding: 6px 12px;
+  border: 1px solid var(--gridline);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
 #sync-cancel-form button {
   background: var(--surface);
   color: var(--status-critical);
@@ -319,6 +334,23 @@ a {
   margin: -6px 0 0;
   font-size: 12px;
   color: var(--ink-secondary);
+}
+
+.status-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 0 0 12px;
+}
+
+.status-list dt {
+  color: var(--ink-secondary);
+  font-size: 13px;
+}
+
+.status-list dd {
+  margin: 0;
+  font-weight: 600;
 }
 
 .button-link {

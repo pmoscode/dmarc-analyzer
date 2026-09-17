@@ -2,17 +2,21 @@
 
 Leitfaden für KI-Coding-Agenten in diesem Repository. Menschliche
 Mitwirkende finden dieselben Informationen ausführlicher in
-[`IMPLEMENTIERUNG.md`](IMPLEMENTIERUNG.md) (Architektur) und
-[`UMSETZUNGSPLAN.md`](UMSETZUNGSPLAN.md) (Arbeitsplan, Fortschritt).
+[`docs/architecture.md`](docs/architecture.md) (Architektur) und
+[`docs/features/`](docs/features/) (Feature-Dokumentation pro Domäne).
+`docs/archive/` enthält die Planungsdokumente der früheren
+Desktop-Ära — historischer Kontext, kein aktueller Stand mehr (siehe
+`docs/adr/0003-docker-nativ-oidc-statt-desktop-keychain.md`).
 
 ## Worum es geht
 
-DMARC Analyzer: ein Go-Programm mit eingebetteter Web-Oberfläche (im
-Standardbrowser, siehe `MIGRATIONSPLAN.md`), das DMARC-Aggregate-Reports
-aus einem IMAP-Postfach holt, lokal in SQLite speichert und auswertet.
-Aktueller Stand und nächste Schritte immer zuerst in `UMSETZUNGSPLAN.md`
-prüfen, bevor mit einer Änderung begonnen wird — dort steht, welches
-Arbeitspaket (AP) gerade dran ist und was bereits abgehakt ist.
+DMARC Analyzer: ein Go-Programm, das als Docker-Container läuft, DMARC-
+Aggregate-Reports aus einem IMAP-Postfach holt, in SQLite speichert und
+über eine eingebettete Web-Oberfläche auswertet. Komplett über
+Umgebungsvariablen konfiguriert (`internal/infra/envconfig`, siehe
+`docs/features/deployment.md`), Zugriffsschutz per OIDC gegen einen
+Authentik-IdP (`docs/features/auth.md`). Genau ein IMAP-Konto pro
+Container, kein Konto-CRUD in der Oberfläche.
 
 ## Sprachregel — wichtig, bricht sonst CI
 
@@ -50,16 +54,19 @@ cmd/dmarc-analyzer  →  internal/web  →  internal/app  →  internal/domain
   Standardbibliothek. Kein `encoding/xml`-Import hier, kein SQL.
 - `internal/app/*`: Use Cases, hängen nur an domain-Ports (Interfaces).
 - `internal/infra/*`: Adapter, implementieren die domain-Ports gegen
-  konkrete Technik (SQLite, IMAP, Keyring, dmarcxml).
+  konkrete Technik (SQLite, IMAP, dmarcxml, `envconfig` für ENV-Werte).
 - `internal/web/*`: Go-`html/template` + Chart.js (`static/charts.js`),
   ruft ausschließlich Use Cases aus `internal/app` auf. Diagrammlogik
   (Aggregation, Filter, Drill-down-Ziele) gehört nach Go — `charts.js`
-  bekommt fertig aufbereitete JSON-Daten und bleibt bewusst dünn.
+  bekommt fertig aufbereitete JSON-Daten und bleibt bewusst dünn. Enthält
+  außerdem den OIDC-Login-Flow (`auth.go`/`oidc.go`) — bewusst hier und
+  nicht in `internal/app`, weil Sitzungen/Cookies reine
+  Web-Ausliefer-Belange sind, keine Fachlogik.
 - `cmd/dmarc-analyzer`: einziger Ort, an dem Adapter mit Use Cases verdrahtet
-  werden (Composition Root).
+  werden (Composition Root) — liest hier auch die ENV-Konfiguration
+  (`envconfig.Load()`).
 
-Details und Begründung (SOLID/DDD/Clean Code) in `IMPLEMENTIERUNG.md`
-Abschnitt 4.
+Details und Begründung (SOLID/DDD/Clean Code) in `docs/architecture.md`.
 
 ## Web-Oberfläche: keine Inline-Skripte, jede Zustandsänderung per POST mit CSRF
 
@@ -101,11 +108,9 @@ nur mit einer Handvoll Testzeilen — dort fällt das Problem nicht auf.
 ## Abhängigkeiten
 
 **Nichts in `go.mod` aufnehmen, das nicht tatsächlich importiert wird.**
-`go.mod` wächst organisch pro Arbeitspaket, wenn Code die jeweilige
-Bibliothek wirklich importiert — nicht vorab. Recherchierte Zielversionen
-für später gebrauchte Bibliotheken (go-imap, go-message, sqlite,
-go-keyring) stehen in `docs/DEPENDENCIES.md`, nicht in `go.mod`.
-`task tidy` entfernt ungenutzte Requires ohnehin wieder.
+`go.mod` wächst organisch, wenn Code eine Bibliothek wirklich importiert —
+nicht vorab. Konkret gepinnte Versionen stehen in `docs/DEPENDENCIES.md`,
+nicht in `go.mod`. `task tidy` entfernt ungenutzte Requires ohnehin wieder.
 
 ## Tests
 
@@ -119,8 +124,14 @@ go-keyring) stehen in `docs/DEPENDENCIES.md`, nicht in `go.mod`.
 - Fixtures für den DMARC-Parser: `testdata/reports/<stil>/...`, IPs aus dem
   RFC-5737-Bereich (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`),
   Domains als `example.com`/`example.org` — nie echte Adressen oder Domains.
-- Coverage-Zielwerte je Schicht stehen in `IMPLEMENTIERUNG.md` Abschnitt 12.2
-  (domain ≥ 90 %, app ≥ 85 %, dmarcxml/sqlite/imap gestaffelt).
+- `internal/web`-Tests gegen OIDC-geschützte Routen brauchen einen echten
+  Server: `New(ctx, deps, opts)` macht beim Start eine echte
+  OIDC-Discovery-Anfrage gegen `opts.OIDC.IssuerURL`. Dafür gibt es
+  `internal/web/fakeoidc_test.go` (`newFakeOIDCProvider`) — ein
+  minimaler, lokaler Identity-Provider (Discovery/JWKS/Authorize/Token,
+  echt signierte ID-Tokens), kein Mock der Client-Logik. Siehe
+  `server_test.go` (`newTestServer`, `loginViaFakeOIDC`,
+  `beginFakeOIDCLogin`) für das Muster.
 
 ## Sonst noch wichtig
 
@@ -163,19 +174,24 @@ Lücke im Test nicht auf.
   `// indirect` markiert (passiert, wenn `go get` mehrere transitive
   Abhängigkeiten in einem Rutsch auflöst).
 
-## Fakes für `account.CredentialStore`: defensiv kopieren
+## Sitzungs-Cookies in Tests: `net/http/cookiejar` verwirft Secure-Cookies auf `http://`-Testservern
 
-`CredentialStore.Store` hat einen impliziten, jetzt am Port dokumentierten
-Vertrag: Implementierungen dürfen sich nach Rückkehr nicht mehr auf
-`secret.Expose()` beziehen, weil Aufrufer das übergebene `Secret` direkt
-danach mit `Zero()` überschreiben dürfen. Die echten Adapter (`OSStore`,
-`FileStore`) erfüllen das automatisch (String-Konversion bzw.
-Verschlüsselung verbrauchen die Bytes synchron). Ein Test-Fake, der das
-`Secret` nur flach speichert (`f.secrets[id] = s`), teilt das
-Backing-Array mit dem Original — ein späteres `Zero()` beim Aufrufer leert
-dann auch den "gespeicherten" Wert. Immer `account.NewSecret(s.Expose())`
-statt `s` speichern. Gefunden über einen echten Testausfall in
-`cmd/dmarc-analyzer/cmd_account_test.go` (AP 4).
+`auth.go` setzt das Sitzungs-Cookie mit `Secure: true` (Produktionsbetrieb
+läuft hinter einem TLS-terminierenden Reverse-Proxy). `net/http/cookiejar`
+setzt RFC 6265 korrekt um: ein per `SetCookies` gespeichertes
+Secure-Cookie wird bei einem späteren `Cookies(u)`-Aufruf für eine
+`http://`-URL **stillschweigend nicht zurückgegeben** — ein mit
+`http.Client{Jar: cookiejar.New(nil)}` gebauter Testclient verliert die
+Sitzung dadurch nach dem ersten Redirect, ohne dass ein Fehler auftritt
+(einfach ein 303 zu `/anmelden` statt der erwarteten Seite). Zwei
+Lösungen, je nach Testart: `internal/web/api_charts_test.go`
+(`sessionTransport`) umgeht das Cookie-Handling komplett und injiziert das
+Cookie über einen eigenen `http.RoundTripper` — für Handler-Tests, die
+keine echte Anmeldung durchlaufen (`authenticatedClient`). Für Tests, die
+den echten OIDC-Redirect-Tanz durchlaufen müssen (`server_test.go`,
+`testCookieJar`), ein bewusst vereinfachter `http.CookieJar`, der
+Secure/Domain/Path ignoriert. Beide Muster nicht durch einen
+gewöhnlichen `cookiejar.New(nil)` ersetzen.
 
 ## Diagrammfarben (`internal/web/static/app.css`) folgen der `dataviz`-Skill-Referenzpalette
 

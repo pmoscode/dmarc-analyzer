@@ -1,6 +1,8 @@
 // Package account enthält das Aggregate MailAccount, den Typ Secret für
-// den sicheren Umgang mit Zugangsdaten im Speicher, sowie die Ports
-// Repository und CredentialStore (IMPLEMENTIERUNG.md Abschnitt 6.4 und 9).
+// den sicheren Umgang mit Zugangsdaten im Speicher, sowie den Port
+// Repository. Das Secret kommt seit dem Umstieg auf reine
+// ENV-Konfiguration aus internal/infra/envconfig statt aus einem
+// persistierten Schlüsselbund.
 package account
 
 import (
@@ -24,8 +26,8 @@ const defaultMailbox = "INBOX"
 
 // MailAccount ist das Aggregate für ein konfiguriertes IMAP-Postfach, aus
 // dem DMARC-Aggregate-Reports abgeholt werden. Enthält bewusst kein
-// Passwort — das liegt ausschließlich im Schlüsselbund
-// (IMPLEMENTIERUNG.md Abschnitt 9, Regel "Passwort nie in der DB").
+// Passwort — das kommt ausschließlich aus einer Umgebungsvariable
+// (internal/infra/envconfig) und wird nie in der DB gespeichert.
 type MailAccount struct {
 	ID          AccountID
 	DisplayName string
