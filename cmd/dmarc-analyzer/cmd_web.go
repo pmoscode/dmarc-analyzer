@@ -43,7 +43,11 @@ func runWeb(ctx context.Context, a *app, args []string) error {
 		}
 	}
 
-	srv, err := web.New(web.Dependencies{Statistics: a.stats}, web.Options{Addr: *addr, Dev: *dev})
+	srv, err := web.New(web.Dependencies{
+		Statistics: a.stats,
+		Reports:    a.queries,
+		Sources:    a.sourceStats,
+	}, web.Options{Addr: *addr, Dev: *dev})
 	if err != nil {
 		return fmt.Errorf("web-oberfläche konnte nicht aufgebaut werden: %w", err)
 	}

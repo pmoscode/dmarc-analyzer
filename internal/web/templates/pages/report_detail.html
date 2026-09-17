@@ -1,0 +1,50 @@
+{{define "content"}}
+<p><a href="/berichte">&larr; Zurück zur Berichtstabelle</a></p>
+
+<section class="detail-card">
+  <h2>Metadaten</h2>
+  <dl class="detail-list">
+    <dt>Absender-Organisation</dt><dd>{{.OrgName}}</dd>
+    <dt>E-Mail</dt><dd>{{.Email}}</dd>
+    {{if .ExtraContactInfo}}<dt>Weitere Kontaktinfo</dt><dd>{{.ExtraContactInfo}}</dd>{{end}}
+    <dt>Report-ID</dt><dd>{{.ReportID}}</dd>
+    <dt>Zeitraum</dt><dd>{{.RangeLabel}}</dd>
+  </dl>
+</section>
+
+<section class="detail-card">
+  <h2>Veröffentlichte Richtlinie</h2>
+  <dl class="detail-list">
+    <dt>Domain</dt><dd>{{.Domain}}</dd>
+    <dt>Richtlinie (p)</dt><dd>{{.Policy}}</dd>
+    <dt>Subdomain-Richtlinie (sp)</dt><dd>{{.SubdomainPolicy}}</dd>
+    <dt>DKIM-Alignment</dt><dd>{{.DKIMAlignment}}</dd>
+    <dt>SPF-Alignment</dt><dd>{{.SPFAlignment}}</dd>
+    <dt>Prozentsatz (pct)</dt><dd>{{.Percentage}} %</dd>
+  </dl>
+</section>
+
+<section class="detail-card">
+  <h2>Sendequellen ({{len .Records}})</h2>
+  {{if .Records}}
+  <table class="data-table" aria-label="Sendequellen in diesem Bericht">
+    <thead>
+      <tr><th>Quell-IP</th><th>Nachrichten</th><th>Disposition</th><th>DKIM</th><th>SPF</th></tr>
+    </thead>
+    <tbody>
+      {{range .Records}}
+      <tr>
+        <td>{{.SourceIP}}</td>
+        <td>{{.Count}}</td>
+        <td>{{.Disposition}}</td>
+        <td>{{.DKIM}}</td>
+        <td>{{.SPF}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p class="empty-state">Keine Sendequellen in diesem Bericht.</p>
+  {{end}}
+</section>
+{{end}}

@@ -12,40 +12,11 @@ func TestPlaceholderPages_RenderWithNavigationAndCorrectTitle(t *testing.T) {
 	srv := newTestServer(t)
 	client := authenticatedClient(t, srv)
 
-	cases := []struct {
-		path  string
-		title string
-	}{
-		{"/berichte", "Berichte"},
-		{"/quellen", "Sendequellen"},
-		{"/glossar", "Glossar"},
-		{"/einstellungen", "Einstellungen"},
-	}
-
-	for _, c := range cases {
-		resp := httpGet(t, client, "http://"+srv.Addr()+c.path)
-		require.Equal(t, http.StatusOK, resp.StatusCode, c.path)
-
-		body, err := io.ReadAll(resp.Body)
-		require.NoError(t, err)
-		_ = resp.Body.Close()
-
-		html := string(body)
-		require.Contains(t, html, "<title>"+c.title, c.path)
-		// Die Navigation muss auf allen fünf Seiten erscheinen (dasselbe
-		// layout.html), auch auf den noch inhaltslosen Platzhaltern.
-		require.Contains(t, html, `href="/berichte"`, c.path)
-		require.Contains(t, html, `href="/quellen"`, c.path)
-		require.Contains(t, html, `href="/glossar"`, c.path)
-		require.Contains(t, html, `href="/einstellungen"`, c.path)
-	}
-}
-
-func TestPlaceholderPages_MarkCurrentNavItemActive(t *testing.T) {
-	srv := newTestServer(t)
-	client := authenticatedClient(t, srv)
-
-	resp := httpGet(t, client, "http://"+srv.Addr()+"/berichte")
+	// /berichte, /quellen und /glossar haben inzwischen echten Inhalt
+	// (eigene Tests in handlers_reports_test.go/handlers_sources_test.go/
+	// handlers_glossary_test.go) — hier nur der verbleibende echte
+	// Platzhalter.
+	resp := httpGet(t, client, "http://"+srv.Addr()+"/einstellungen")
 	defer func() { _ = resp.Body.Close() }()
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -53,8 +24,29 @@ func TestPlaceholderPages_MarkCurrentNavItemActive(t *testing.T) {
 	require.NoError(t, err)
 	html := string(body)
 
-	require.Contains(t, html, `href="/berichte" class="active"`)
-	require.NotContains(t, html, `href="/quellen" class="active"`)
+	require.Contains(t, html, "<title>Einstellungen")
+	// Die Navigation muss auf allen fünf Seiten erscheinen (dasselbe
+	// layout.html), auch auf dem noch inhaltslosen Platzhalter.
+	require.Contains(t, html, `href="/berichte"`)
+	require.Contains(t, html, `href="/quellen"`)
+	require.Contains(t, html, `href="/glossar"`)
+	require.Contains(t, html, `href="/einstellungen"`)
+}
+
+func TestPlaceholderPages_MarkCurrentNavItemActive(t *testing.T) {
+	srv := newTestServer(t)
+	client := authenticatedClient(t, srv)
+
+	resp := httpGet(t, client, "http://"+srv.Addr()+"/einstellungen")
+	defer func() { _ = resp.Body.Close() }()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	html := string(body)
+
+	require.Contains(t, html, `href="/einstellungen" class="active"`)
+	require.NotContains(t, html, `href="/berichte" class="active"`)
 }
 
 func TestPlaceholderPages_RequireSession(t *testing.T) {

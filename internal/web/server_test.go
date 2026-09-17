@@ -163,7 +163,7 @@ func TestServer_StaticAssets_ServedWithoutSession(t *testing.T) {
 func TestServer_ChartEndpoints_RequireSession(t *testing.T) {
 	srv := newTestServer(t)
 
-	for _, path := range []string{"/api/diagramme/verlauf", "/api/diagramme/heatmap"} {
+	for _, path := range []string{"/api/diagramme/verlauf", "/api/diagramme/heatmap", "/api/diagramme/quellen", "/api/diagramme/disposition"} {
 		resp := httpGet(t, http.DefaultClient, "http://"+srv.Addr()+path)
 		require.Equal(t, http.StatusUnauthorized, resp.StatusCode, path)
 		_ = resp.Body.Close()

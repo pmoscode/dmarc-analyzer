@@ -17,19 +17,19 @@
     <span class="tile-value">{{.TotalMessages}}</span>
   </div>
   <div class="tile">
-    <span class="tile-label">DMARC-Pass-Rate</span>
+    <span class="tile-label">DMARC-Pass-Rate <a href="{{glossarLink "DMARC-Pass-Rate"}}" class="glossary-hint" title="Begriff erklären">?</a></span>
     <span class="tile-value">{{.PassRatePercent}}</span>
   </div>
   <div class="tile">
-    <span class="tile-label">DKIM-Alignment-Rate</span>
+    <span class="tile-label">DKIM-Alignment-Rate <a href="{{glossarLink "Alignment"}}" class="glossary-hint" title="Begriff erklären">?</a></span>
     <span class="tile-value">{{.DKIMAlignmentPercent}}</span>
   </div>
   <div class="tile">
-    <span class="tile-label">SPF-Alignment-Rate</span>
+    <span class="tile-label">SPF-Alignment-Rate <a href="{{glossarLink "Alignment"}}" class="glossary-hint" title="Begriff erklären">?</a></span>
     <span class="tile-value">{{.SPFAlignmentPercent}}</span>
   </div>
   <div class="tile">
-    <span class="tile-label">Unterschiedliche Quellen</span>
+    <span class="tile-label">Unterschiedliche Quellen <a href="{{glossarLink "Quell-IP"}}" class="glossary-hint" title="Begriff erklären">?</a></span>
     <span class="tile-value">{{.DistinctSources}}</span>
   </div>
 </section>
@@ -40,19 +40,49 @@
 <p class="trend trend-none">kein Vergleich zur Vorperiode möglich</p>
 {{end}}
 
+{{/* Gruppierung bewusst nicht als eine lange, eintönige Spalte: Zeitreihe
+     und Disposition-Donut sind beide ungefähr quadratisch und stehen
+     nebeneinander; Top-Sendequellen (viele schmale Balken) und die
+     Heatmap (Breite wächst mit der Anzahl Tage) bekommen je eine eigene
+     volle Zeile mit horizontalem Scrollbereich — dieselbe Gruppierung
+     wie zuvor internal/ui/dashboard, siehe AGENTS.md. */}}
 <section class="charts">
+  <div class="charts-row charts-row-2">
+    <div class="chart-card">
+      <h2>Nachrichtenvolumen pro Tag <a href="{{glossarLink "Nachrichtenvolumen pro Tag"}}" class="glossary-hint" title="Begriff erklären">?</a></h2>
+      <p class="chart-hint">Mausrad zum Zoomen, Ziehen zum Verschieben. Klick auf einen Tag zeigt die Berichte dieses Tages.</p>
+      <canvas id="chart-verlauf" aria-label="Gestapeltes Balkendiagramm: Nachrichtenvolumen pro Tag, aufgeteilt nach bestanden und fehlgeschlagen" role="img"></canvas>
+      <details class="chart-table-toggle">
+        <summary>Als Tabelle anzeigen</summary>
+        <table id="chart-verlauf-table" class="chart-table"></table>
+      </details>
+    </div>
+
+    <div class="chart-card">
+      <h2>Verteilung nach Disposition <a href="{{glossarLink "Verteilung nach Disposition"}}" class="glossary-hint" title="Begriff erklären">?</a></h2>
+      <p class="chart-hint">Klick auf ein Segment zeigt die Berichte mit dieser Disposition.</p>
+      <canvas id="chart-disposition" aria-label="Donut-Diagramm: Verteilung der Nachrichten nach Disposition" role="img"></canvas>
+      <details class="chart-table-toggle">
+        <summary>Als Tabelle anzeigen</summary>
+        <table id="chart-disposition-table" class="chart-table"></table>
+      </details>
+    </div>
+  </div>
+
   <div class="chart-card">
-    <h2>Nachrichtenvolumen pro Tag</h2>
-    <p class="chart-hint">Mausrad zum Zoomen, Ziehen zum Verschieben. Klick auf einen Tag zeigt die Berichte dieses Tages.</p>
-    <canvas id="chart-verlauf" aria-label="Gestapeltes Balkendiagramm: Nachrichtenvolumen pro Tag, aufgeteilt nach bestanden und fehlgeschlagen" role="img"></canvas>
+    <h2>Top-Sendequellen <a href="{{glossarLink "Top-Sendequellen"}}" class="glossary-hint" title="Begriff erklären">?</a></h2>
+    <p class="chart-hint">Klick auf einen Balken zeigt die Berichte dieser Quelle.</p>
+    <div class="chart-scroll">
+      <canvas id="chart-quellen" aria-label="Horizontales Balkendiagramm: Nachrichtenvolumen je Sendequelle, eingefärbt nach Pass-Rate" role="img"></canvas>
+    </div>
     <details class="chart-table-toggle">
       <summary>Als Tabelle anzeigen</summary>
-      <table id="chart-verlauf-table" class="chart-table"></table>
+      <table id="chart-quellen-table" class="chart-table"></table>
     </details>
   </div>
 
   <div class="chart-card">
-    <h2>Sendequelle × Tag (Pass-Rate)</h2>
+    <h2>Sendequelle × Tag (Pass-Rate) <a href="{{glossarLink "Sendequelle × Tag (Pass-Rate)"}}" class="glossary-hint" title="Begriff erklären">?</a></h2>
     <p class="chart-hint">Klick auf eine Zelle zeigt die Berichte dieser Quelle an diesem Tag.</p>
     <div class="chart-scroll">
       <canvas id="chart-heatmap" aria-label="Heatmap: Pass-Rate je Sendequelle und Tag" role="img"></canvas>

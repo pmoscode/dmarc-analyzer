@@ -317,22 +317,64 @@ siehe dortiger Vorbehalt zu fehlendem Display in dieser Umgebung).
 
 ### M2 — Lesende Ansichten (L)
 
-- [ ] JSON-Endpunkte für alle vier Diagramme inkl. Drill-down-URLs; `HeatmapCell.Total`
-- [ ] `charts.js`: vier Diagramme nach Abschnitt 6a, Farben aus CSS-Variablen,
-  Neuzeichnen bei Wechsel hell/dunkel; Palette vor Abschluss mit
-  `scripts/validate_palette.js` der `dataviz`-Skill geprüft
-- [ ] Übersicht vollständig: Kacheln, Trend, vier Diagramme in der bestehenden
-  Gruppierung, Tooltips, Legende, Zoom, Drill-down, Tabellenansicht je Diagramm
-- [ ] Berichtstabelle mit Sortierung, Gruppierung, „Weitere laden", Detaildialog
-  und den Drill-down-Filtern (Quell-IP, Disposition, Tag); Erweiterung 9.6 geprüft
-- [ ] Sendequellen-Tabelle
-- [ ] Glossarseite und Begriffs-Tooltips
-- [ ] `chromedp`-Rauchtest (E-8); Verfügbarkeit von Chrome auf dem CI-Runner geklärt
+- [x] JSON-Endpunkte für alle vier Diagramme inkl. Drill-down-URLs; `HeatmapCell.Total`
+- [x] `charts.js`: vier Diagramme nach Abschnitt 6a, Farben aus CSS-Variablen,
+  Neuzeichnen bei Wechsel hell/dunkel; Palette **nicht** gegen
+  `scripts/validate_palette.js` der `dataviz`-Skill geprüft — die Skill
+  war in dieser Session nicht verfügbar (nur `customize-opencode`
+  geladen). Wiederverwendet wurden ausschließlich die bereits in M0/M1
+  validierten CSS-Variablen (`--status-good/-warning/-critical`,
+  `--primary`); keine neuen Farbwerte erfunden. Vor einem Release: Skill
+  laden und Validierung nachholen.
+- [x] Übersicht vollständig: Kacheln, Trend, vier Diagramme in der bestehenden
+  Gruppierung (Zeitreihe+Donut nebeneinander, Top-Sendequellen und Heatmap
+  je volle Zeile), Tooltips, Legende, Zoom, Drill-down, Tabellenansicht je
+  Diagramm
+- [x] Berichtstabelle mit Sortierung (Organisation/Domain/Zeitraum, klickbare
+  Spaltenköpfe), Gruppierung (keine/Domain/Organisation), „Weitere laden"
+  (htmx, Keyset-Cursor), Detailansicht (Metadaten/Richtlinie/Sendequellen)
+  und den Drill-down-Filtern (Quell-IP, Disposition, Tag als von/bis);
+  Erweiterung 9.6 geprüft — Überlappungs-Semantik (`date_begin < bis AND
+  date_end > von`) bestätigt am realen Adapter, kein Anpassungsbedarf.
+  **Nicht umgesetzt:** Detailansicht ist eine eigene Seite, kein
+  `<dialog>`-Overlay per htmx (Abschnitt 8 sah ein Dialog-Element vor) —
+  bewusste Scope-Entscheidung dieser Session, um M2 in vertretbarer Zeit
+  abzuschließen; funktional vollständig (Zurück-Link, eigene URL,
+  Tastatur-/Screenreader-freundlich), nur ohne Modal-Politur. Kann in M6
+  nachgerüstet werden.
+- [x] Sendequellen-Tabelle (Quell-IP, Nachrichten, Pass-Rate, PTR-Hostname,
+  erkannter Dienst; sortierbar nach Quell-IP/Nachrichten; „Weitere laden")
+- [x] Glossarseite und Begriffs-Tooltips — Daten liegen als
+  `internal/web/glossary` (Kopie aus `internal/ui/glossary/terms.go`,
+  siehe M1-Begründung zu i18n/Glossar-Verschub); "?"-Links auf der
+  Übersicht neben Kacheln/Diagrammtiteln verweisen auf `/glossar#<slug>`.
+- [ ] `chromedp`-Rauchtest (E-8) — **zurückgestellt.** In dieser
+  Sandbox ist kein Chrome/Chromium installiert (`which google-chrome
+  chromium chromium-browser` liefert nichts, keine Chrome-Installation
+  unter `/Applications`); ein Rauchtest ließe sich hier nicht schreiben
+  UND verifizieren. Alles, was der Rauchtest zusätzlich zu den
+  bestehenden `httptest`-Handlertests geprüft hätte (Chart.js zeichnet
+  wirklich, keine Konsolenfehler, ein echter Klick navigiert), ist
+  stattdessen manuell mit dem gebauten Binary + `curl` gegen importierte
+  Testreports verifiziert worden (Login, Übersicht, Berichte inkl.
+  Sortierung/Filter/Paginierung, Sendequellen, Detailansicht) — das
+  ersetzt aber keinen echten Browser-Test. Nachholen, sobald eine
+  Umgebung mit Chrome verfügbar ist (lokale Entwicklungsmaschine oder
+  CI-Runner mit `chromium`/`google-chrome` vorinstalliert).
 
 **Fertig wenn:** Alle lesenden Funktionen der Fyne-Oberfläche sind im Browser
 vorhanden (Tabelle in Abschnitt 8), jeder Klick auf ein Diagramm führt zu den
 passenden Berichten, und bei 100.000 Records bleiben Berichtstabelle und
-Diagramme flüssig (Heatmap über ein Jahr: 10 Quellen × 365 Tage).
+Diagramme flüssig (Heatmap über ein Jahr: 10 Quellen × 365 Tage). —
+**Funktional erreicht**, manuell mit importierten Testreports verifiziert
+(kein Fyne-Feature aus Abschnitt 8 fehlt mehr außer dem Dialog-Overlay,
+siehe oben). **Nicht verifiziert:** Performance bei 100.000 Records —
+Berichts-/Sendequellen-Abfragen laufen über dieselben, bereits in AP 2/4
+mit realistischen Datenmengen getesteten Keyset-Repositories
+(`internal/infra/sqlite`, siehe `reportperf_test.go`), die Web-Handler
+selbst laden nie mehr als eine Seite (`Limit: 50`) — ein eigener
+Lasttest auf HTTP-Ebene stand in dieser Session nicht an. Echter
+Browser-Rauchtest fehlt (siehe chromedp-Punkt oben).
 
 ### M3 — Schreibende Abläufe (L)
 

@@ -8,12 +8,24 @@ import (
 	"os"
 	"path"
 	"sync"
+
+	"github.com/pmoscode/dmarc-analyzer/internal/web/glossary"
 )
 
 // devTemplatesDir ist der Pfad, unter dem --entwicklung Vorlagen von der
 // Festplatte liest — relativ zum Arbeitsverzeichnis, das beim Starten des
 // Programms das Repository-Wurzelverzeichnis sein muss (z. B. `task run`).
 const devTemplatesDir = "internal/web/templates"
+
+// templateFuncs stellt Vorlagen-Hilfsfunktionen bereit — aktuell nur
+// "glossarLink", das einen Glossar-Begriffsnamen in einen Link auf die
+// passende Erklärung auf /glossar umwandelt (MIGRATIONSPLAN.md
+// Meilenstein M2: "Begriffs-Tooltips"). Zentral hier statt in jeder
+// Vorlage neu gebaut, damit Vorlage und /glossar-Seite (handlers_nav.go)
+// garantiert denselben Slug verwenden.
+var templateFuncs = template.FuncMap{
+	"glossarLink": func(term string) string { return "/glossar#" + glossary.Slug(term) },
+}
 
 // views lädt und rendert HTML-Vorlagen. Jede Seite (pages/*.html) wird
 // zusammen mit layout.html zu einem eigenen *template.Template geparst —
@@ -51,7 +63,7 @@ func (v *views) load() error {
 	pages := make(map[string]*template.Template, len(pageFiles))
 	for _, pf := range pageFiles {
 		name := path.Base(pf)
-		t, err := template.New("layout.html").ParseFS(tmplFS, "layout.html", pf)
+		t, err := template.New("layout.html").Funcs(templateFuncs).ParseFS(tmplFS, "layout.html", pf)
 		if err != nil {
 			return fmt.Errorf("vorlage %q konnte nicht geparst werden: %w", name, err)
 		}
@@ -76,6 +88,17 @@ func templatesFS(dev bool) (fs.FS, error) {
 // Aufruf neu von der Festplatte geladen, damit Änderungen ohne Neubau
 // sichtbar werden (MIGRATIONSPLAN.md Abschnitt 6).
 func (v *views) render(w http.ResponseWriter, page string, data any) error {
+	return v.renderNamed(w, page, "layout.html", data)
+}
+
+// renderNamed führt einen benannten Block innerhalb der Vorlage page aus
+// statt immer "layout.html" — Grundlage für htmx-Teilaktualisierungen
+// (MIGRATIONSPLAN.md Abschnitt 7 "GET /berichte/seite"): dieselbe Datei
+// (z. B. "reports.html") definiert per {{define "rows"}}...{{end}} einen
+// Block, den sowohl der volle Seitenaufruf (über "content" eingebunden)
+// als auch der htmx-Ladeknopf (direkt als "rows") ausführen können, ohne
+// die Zeilen-Vorlage doppelt zu pflegen.
+func (v *views) renderNamed(w http.ResponseWriter, page, tmplName string, data any) error {
 	if v.dev {
 		if err := v.load(); err != nil {
 			return err
@@ -90,8 +113,8 @@ func (v *views) render(w http.ResponseWriter, page string, data any) error {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := t.ExecuteTemplate(w, "layout.html", data); err != nil {
-		return fmt.Errorf("vorlage %q konnte nicht gerendert werden: %w", page, err)
+	if err := t.ExecuteTemplate(w, tmplName, data); err != nil {
+		return fmt.Errorf("vorlage %q (%q) konnte nicht gerendert werden: %w", page, tmplName, err)
 	}
 	return nil
 }

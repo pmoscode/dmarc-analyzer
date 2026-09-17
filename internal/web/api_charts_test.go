@@ -219,3 +219,99 @@ func TestHandleChartDailyVolume_UnknownZeitraum_FallsBackToDefault(t *testing.T)
 		repo.lastDailyVolumesQuery.Period.End,
 		time.Second)
 }
+
+func TestHandleChartTopSources_ReturnsPointsWithLabelsAndDrilldownURLs(t *testing.T) {
+	repo := &fakeRepository{topSources: []analysis.SourceVolume{
+		{SourceIP: mustSourceIP("203.0.113.1"), Total: 100, PassRate: 0.9, Label: "Google Workspace"},
+		{SourceIP: mustSourceIP("203.0.113.2"), Total: 10, PassRate: 0.1},
+	}}
+	srv := newTestServerWithRepo(t, repo)
+	client := authenticatedClient(t, srv)
+
+	resp := httpGet(t, client, "http://"+srv.Addr()+"/api/diagramme/quellen")
+	defer func() { _ = resp.Body.Close() }()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+
+	var got sourceVolumeResponse
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	require.Len(t, got.Sources, 2)
+
+	require.Equal(t, "Google Workspace (203.0.113.1)", got.Sources[0].Label)
+	require.Equal(t, 100, got.Sources[0].Total)
+	require.InDelta(t, 0.9, got.Sources[0].PassRate, 0.0001)
+	require.Contains(t, got.Sources[0].URL, "quelle=203.0.113.1")
+
+	require.Equal(t, "203.0.113.2", got.Sources[1].Label)
+}
+
+func TestHandleChartTopSources_EmptyData_ReturnsEmptyArrayNotNull(t *testing.T) {
+	srv := newTestServerWithRepo(t, &fakeRepository{})
+	client := authenticatedClient(t, srv)
+
+	resp := httpGet(t, client, "http://"+srv.Addr()+"/api/diagramme/quellen")
+	defer func() { _ = resp.Body.Close() }()
+
+	var got sourceVolumeResponse
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	require.NotNil(t, got.Sources)
+	require.Empty(t, got.Sources)
+}
+
+func TestHandleChartTopSources_ComputeError_Returns500NotPanic(t *testing.T) {
+	repo := &fakeRepository{}
+	srv := newTestServerWithRepo(t, repo)
+	client := authenticatedClient(t, srv)
+	repo.computeErr = errTest
+
+	resp := httpGet(t, client, "http://"+srv.Addr()+"/api/diagramme/quellen")
+	defer func() { _ = resp.Body.Close() }()
+
+	require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+}
+
+func TestHandleChartDisposition_ReturnsAllFourInFixedOrderWithDrilldownURLs(t *testing.T) {
+	repo := &fakeRepository{stats: analysis.Statistics{
+		VolumeByDisposition: map[report.Disposition]int{
+			report.DispositionNone:       80,
+			report.DispositionQuarantine: 15,
+			report.DispositionReject:     5,
+		},
+	}}
+	srv := newTestServerWithRepo(t, repo)
+	client := authenticatedClient(t, srv)
+
+	resp := httpGet(t, client, "http://"+srv.Addr()+"/api/diagramme/disposition")
+	defer func() { _ = resp.Body.Close() }()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	var got dispositionResponse
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+	require.Len(t, got.Slices, 4)
+
+	require.Equal(t, "none", got.Slices[0].Disposition)
+	require.Equal(t, "Keine Maßnahme", got.Slices[0].Label)
+	require.Equal(t, 80, got.Slices[0].Total)
+	require.Contains(t, got.Slices[0].URL, "disposition=none")
+
+	require.Equal(t, "quarantine", got.Slices[1].Disposition)
+	require.Equal(t, 15, got.Slices[1].Total)
+
+	require.Equal(t, "reject", got.Slices[2].Disposition)
+	require.Equal(t, 5, got.Slices[2].Total)
+
+	require.Equal(t, "unknown", got.Slices[3].Disposition)
+	require.Equal(t, 0, got.Slices[3].Total)
+}
+
+func TestHandleChartDisposition_ComputeError_Returns500NotPanic(t *testing.T) {
+	repo := &fakeRepository{}
+	srv := newTestServerWithRepo(t, repo)
+	client := authenticatedClient(t, srv)
+	repo.computeErr = errTest
+
+	resp := httpGet(t, client, "http://"+srv.Addr()+"/api/diagramme/disposition")
+	defer func() { _ = resp.Body.Close() }()
+
+	require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+}

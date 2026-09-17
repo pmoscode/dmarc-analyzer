@@ -1,0 +1,67 @@
+{{define "content"}}
+<form class="filter-bar" method="get" action="/berichte" aria-label="Filter">
+  {{if .UsesAbsolutePeriod}}
+  <p class="chart-hint">Zeitraum aus einem Diagramm-Klick: {{.PeriodFromLabel}} – {{.PeriodToLabel}}.
+    <a href="/berichte">Filter zurücksetzen</a></p>
+  {{else}}
+  <label>Zeitraum
+    <select name="zeitraum">
+      {{range .PeriodOptions}}<option value="{{.Days}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
+    </select>
+  </label>
+  {{end}}
+  <label>Domain
+    <input type="text" name="domain" value="{{.Domain}}" placeholder="Alle" autocomplete="off">
+  </label>
+  <label>Quell-IP
+    <input type="text" name="quelle" value="{{.SourceIP}}" placeholder="Alle" autocomplete="off">
+  </label>
+  <label>Disposition
+    <select name="disposition">
+      {{range .DispositionOptions}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
+    </select>
+  </label>
+  <label>Gruppierung
+    <select name="gruppierung">
+      {{range .GroupOptions}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
+    </select>
+  </label>
+  <button type="submit">Filter anwenden</button>
+</form>
+
+<table class="data-table" aria-label="Berichte">
+  <thead>
+    <tr>
+      <th><a href="{{.SortOrgURL}}">Organisation{{.SortOrgIndicator}}</a></th>
+      <th><a href="{{.SortDomainURL}}">Domain{{.SortDomainIndicator}}</a></th>
+      <th><a href="{{.SortPeriodURL}}">Zeitraum{{.SortPeriodIndicator}}</a></th>
+    </tr>
+  </thead>
+  <tbody id="reports-rows">
+    {{template "rows" .Rows}}
+  </tbody>
+</table>
+{{if not .Rows.Rows}}
+<p class="empty-state">Keine Berichte für diesen Filter gefunden.</p>
+{{end}}
+{{end}}
+
+{{define "rows"}}
+{{range .Rows}}
+<tr>
+  <td><a href="/berichte/{{.ID}}">{{.OrgName}}</a></td>
+  <td>{{.Domain}}</td>
+  <td>{{.PeriodLabel}}</td>
+</tr>
+{{end}}
+{{if .HasMore}}
+<tr id="reports-load-more-row">
+  <td colspan="3">
+    <button type="button" class="load-more"
+      hx-get="{{.NextPageURL}}"
+      hx-target="#reports-load-more-row"
+      hx-swap="outerHTML">Weitere laden</button>
+  </td>
+</tr>
+{{end}}
+{{end}}

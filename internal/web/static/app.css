@@ -99,6 +99,109 @@ a {
   color: var(--ink-secondary);
 }
 
+.glossary-entry {
+  background: var(--surface);
+  border: 1px solid var(--gridline);
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-bottom: 12px;
+}
+
+.glossary-entry dt {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.glossary-entry dd {
+  margin: 0;
+  color: var(--ink-secondary);
+}
+
+.glossary-entry:target {
+  border-color: var(--primary);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+  border: 1px solid var(--gridline);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.data-table th,
+.data-table td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--gridline);
+}
+
+.data-table th a {
+  color: var(--ink);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.data-table th a:hover {
+  color: var(--primary);
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.load-more {
+  padding: 6px 12px;
+  border: 1px solid var(--gridline);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.load-more:hover {
+  background: var(--gridline);
+}
+
+.empty-state {
+  padding: 24px;
+  text-align: center;
+  color: var(--ink-muted);
+  background: var(--surface);
+  border: 1px solid var(--gridline);
+  border-radius: 12px;
+}
+
+.detail-card {
+  background: var(--surface);
+  border: 1px solid var(--gridline);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.detail-card h2 {
+  margin-top: 0;
+  font-size: 16px;
+}
+
+.detail-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 0;
+}
+
+.detail-list dt {
+  color: var(--ink-secondary);
+}
+
+.detail-list dd {
+  margin: 0;
+}
+
 .app-main {
   max-width: 1100px;
   margin: 0 auto;
@@ -189,6 +292,40 @@ a {
   display: grid;
   grid-template-columns: 1fr;
   gap: 16px;
+}
+
+.charts-row {
+  display: grid;
+  gap: 16px;
+}
+
+.charts-row-2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+@media (max-width: 720px) {
+  .charts-row-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.glossary-hint {
+  display: inline-block;
+  min-width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  border-radius: 50%;
+  border: 1px solid var(--ink-muted);
+  color: var(--ink-muted);
+  font-size: 11px;
+  text-decoration: none;
+  vertical-align: middle;
+}
+
+.glossary-hint:hover {
+  color: var(--primary);
+  border-color: var(--primary);
 }
 
 .chart-card {

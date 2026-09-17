@@ -22,12 +22,17 @@ func (s *Server) routes() http.Handler {
 	protected.HandleFunc("GET /{$}", s.handleDashboard)
 	protected.HandleFunc("GET /api/diagramme/verlauf", s.handleChartDailyVolume)
 	protected.HandleFunc("GET /api/diagramme/heatmap", s.handleChartHeatmap)
+	protected.HandleFunc("GET /api/diagramme/quellen", s.handleChartTopSources)
+	protected.HandleFunc("GET /api/diagramme/disposition", s.handleChartDisposition)
 	// Platzhalter-Seiten (Meilenstein M1: "Navigation zwischen leeren
 	// Seiten") — Inhalt folgt in M2 (Berichte, Sendequellen, Glossar)
 	// bzw. M3 (Einstellungen).
-	protected.HandleFunc("GET /berichte", s.handlePlaceholder("Berichte", "Die Berichtstabelle kommt in Kürze."))
-	protected.HandleFunc("GET /quellen", s.handlePlaceholder("Sendequellen", "Die Sendequellen-Übersicht kommt in Kürze."))
-	protected.HandleFunc("GET /glossar", s.handlePlaceholder("Glossar", "Das Glossar kommt in Kürze."))
+	protected.HandleFunc("GET /berichte", s.handleReports)
+	protected.HandleFunc("GET /berichte/seite", s.handleReportsPage)
+	protected.HandleFunc("GET /berichte/{id}", s.handleReportDetail)
+	protected.HandleFunc("GET /quellen", s.handleSources)
+	protected.HandleFunc("GET /quellen/seite", s.handleSourcesPage)
+	protected.HandleFunc("GET /glossar", s.handleGlossary)
 	protected.HandleFunc("GET /einstellungen", s.handlePlaceholder("Einstellungen", "Die Kontenverwaltung kommt in Kürze."))
 
 	mux.Handle("/", requireSession(s.auth, requireCSRF(s.auth, protected)))

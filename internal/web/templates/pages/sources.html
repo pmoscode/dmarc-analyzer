@@ -1,0 +1,53 @@
+{{define "content"}}
+<form class="filter-bar" method="get" action="/quellen" aria-label="Filter">
+  <label>Zeitraum
+    <select name="zeitraum">
+      {{range .PeriodOptions}}<option value="{{.Days}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
+    </select>
+  </label>
+  <label>Domain
+    <input type="text" name="domain" value="{{.Domain}}" placeholder="Alle" autocomplete="off">
+  </label>
+  <button type="submit">Filter anwenden</button>
+</form>
+
+<table class="data-table" aria-label="Sendequellen">
+  <thead>
+    <tr>
+      <th><a href="{{.SortIPURL}}">Quell-IP</a></th>
+      <th><a href="{{.SortVolumeURL}}">Nachrichten</a></th>
+      <th>Pass-Rate</th>
+      <th>Hostname (rDNS/PTR)</th>
+      <th>Erkannter Dienst</th>
+    </tr>
+  </thead>
+  <tbody id="sources-rows">
+    {{template "rows" .Rows}}
+  </tbody>
+</table>
+{{if not .Rows.Rows}}
+<p class="empty-state">Keine Sendequellen für diesen Filter gefunden.</p>
+{{end}}
+{{end}}
+
+{{define "rows"}}
+{{range .Rows}}
+<tr>
+  <td>{{.IP}}</td>
+  <td>{{.Total}}</td>
+  <td>{{.PassRate}}</td>
+  <td>{{.Hostname}}</td>
+  <td>{{.Service}}</td>
+</tr>
+{{end}}
+{{if .HasMore}}
+<tr id="sources-load-more-row">
+  <td colspan="5">
+    <button type="button" class="load-more"
+      hx-get="{{.NextPageURL}}"
+      hx-target="#sources-load-more-row"
+      hx-swap="outerHTML">Weitere laden</button>
+  </td>
+</tr>
+{{end}}
+{{end}}

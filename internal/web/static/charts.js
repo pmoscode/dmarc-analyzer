@@ -285,8 +285,183 @@
     return div.innerHTML;
   }
 
+  // --- Top-Sendequellen (horizontales Balkendiagramm) ---------------------
+
+  function renderTopSources() {
+    var canvas = document.getElementById("chart-quellen");
+    if (!canvas) {
+      return;
+    }
+
+    fetchJSON(apiURL("/api/diagramme/quellen"))
+      .then(function (data) {
+        var sources = data.sources || [];
+        var labels = sources.map(function (s) { return s.label; });
+        var totals = sources.map(function (s) { return s.total; });
+        var colors = sources.map(function (s) { return passRateColor(s.passRate); });
+        var urls = sources.map(function (s) { return s.url; });
+
+        canvas.style.height = Math.max(120, sources.length * 28 + 60) + "px";
+
+        var chart = new Chart(canvas, {
+          type: "bar",
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: "Nachrichten",
+                data: totals,
+                backgroundColor: colors,
+                pointURLs: urls,
+              },
+            ],
+          },
+          options: {
+            indexAxis: "y",
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: { beginAtZero: true, grid: { color: cssVar("--gridline") }, ticks: { color: cssVar("--ink-secondary") } },
+              y: { grid: { display: false }, ticks: { color: cssVar("--ink-secondary") } },
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: function (context) {
+                    var s = sources[context.dataIndex];
+                    return ["Nachrichten: " + s.total, "Pass-Rate: " + (s.passRate * 100).toFixed(1) + " %"];
+                  },
+                },
+              },
+            },
+            onClick: function (evt, elements, chart) {
+              if (!elements.length) {
+                return;
+              }
+              var el = elements[0];
+              var ds = chart.data.datasets[el.datasetIndex];
+              navigateTo(ds.pointURLs && ds.pointURLs[el.index]);
+            },
+          },
+        });
+
+        renderTopSourcesTable(sources);
+        return chart;
+      })
+      .catch(function (err) {
+        console.error("Diagramm 'Top-Sendequellen' konnte nicht geladen werden", err);
+      });
+  }
+
+  function renderTopSourcesTable(sources) {
+    var table = document.getElementById("chart-quellen-table");
+    if (!table) {
+      return;
+    }
+    var rows = ["<caption>Top-Sendequellen</caption>",
+      "<tr><th>Quelle</th><th>Nachrichten</th><th>Pass-Rate</th></tr>"];
+    sources.forEach(function (s) {
+      rows.push(
+        "<tr><td><a href=\"" + s.url + "\">" + escapeHTML(s.label) + "</a></td>" +
+          "<td>" + s.total + "</td><td>" + (s.passRate * 100).toFixed(1) + " %</td></tr>"
+      );
+    });
+    table.innerHTML = rows.join("");
+  }
+
+  // --- Verteilung nach Disposition (Donut) --------------------------------
+
+  function dispositionColor(disposition) {
+    switch (disposition) {
+      case "none":
+        return cssVar("--status-good");
+      case "quarantine":
+        return cssVar("--status-warning");
+      case "reject":
+        return cssVar("--status-critical");
+      default:
+        return cssVar("--gridline");
+    }
+  }
+
+  function renderDisposition() {
+    var canvas = document.getElementById("chart-disposition");
+    if (!canvas) {
+      return;
+    }
+
+    fetchJSON(apiURL("/api/diagramme/disposition"))
+      .then(function (data) {
+        var slices = (data.slices || []).filter(function (s) { return s.total > 0; });
+        var labels = slices.map(function (s) { return s.label; });
+        var totals = slices.map(function (s) { return s.total; });
+        var colors = slices.map(function (s) { return dispositionColor(s.disposition); });
+        var urls = slices.map(function (s) { return s.url; });
+
+        canvas.style.height = "260px";
+
+        var chart = new Chart(canvas, {
+          type: "doughnut",
+          data: {
+            labels: labels,
+            datasets: [{ data: totals, backgroundColor: colors, pointURLs: urls }],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { position: "bottom", labels: { color: cssVar("--ink") } },
+              tooltip: {
+                callbacks: {
+                  label: function (context) {
+                    var total = totals.reduce(function (a, b) { return a + b; }, 0);
+                    var value = context.parsed;
+                    var pct = total > 0 ? ((value / total) * 100).toFixed(1) : "0.0";
+                    return context.label + ": " + value + " (" + pct + " %)";
+                  },
+                },
+              },
+            },
+            onClick: function (evt, elements, chart) {
+              if (!elements.length) {
+                return;
+              }
+              var el = elements[0];
+              var ds = chart.data.datasets[el.datasetIndex];
+              navigateTo(ds.pointURLs && ds.pointURLs[el.index]);
+            },
+          },
+        });
+
+        renderDispositionTable(slices);
+        return chart;
+      })
+      .catch(function (err) {
+        console.error("Diagramm 'Verteilung nach Disposition' konnte nicht geladen werden", err);
+      });
+  }
+
+  function renderDispositionTable(slices) {
+    var table = document.getElementById("chart-disposition-table");
+    if (!table) {
+      return;
+    }
+    var rows = ["<caption>Verteilung nach Disposition</caption>",
+      "<tr><th>Disposition</th><th>Nachrichten</th></tr>"];
+    slices.forEach(function (s) {
+      rows.push(
+        "<tr><td><a href=\"" + s.url + "\">" + escapeHTML(s.label) + "</a></td>" +
+          "<td>" + s.total + "</td></tr>"
+      );
+    });
+    table.innerHTML = rows.join("");
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     renderDailyVolume();
+    renderTopSources();
+    renderDisposition();
     renderHeatmap();
   });
 })();
