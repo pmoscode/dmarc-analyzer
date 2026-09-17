@@ -215,3 +215,36 @@ func TestView_ShowDetail_LoadsFullReport(t *testing.T) {
 
 	require.NotPanics(t, func() { v.showDetail(summary) })
 }
+
+// TestView_ShowDetail_DialogCanBeClosed ist ein Regressionstest: der
+// Bericht-Detaildialog lief auf dialog.NewCustomWithoutButtons — ohne
+// jeden Knopf und ohne dass irgendein Code-Pfad Hide() aufrief. Anders
+// als ein gewöhnliches Popup schließt ein widget.NewModalPopUp (das
+// dialog.NewCustom* intern verwendet) NICHT durch Antippen außerhalb —
+// der Dialog blieb für den Nutzer dauerhaft offen, ohne jede Möglichkeit
+// ihn zu schließen.
+func TestView_ShowDetail_DialogCanBeClosed(t *testing.T) {
+	summary := testReport(t, 1, "r1")
+	full := summary
+	full.Records = []report.Record{}
+
+	repo := &fakeReportRepository{
+		pages: []report.Page{{Reports: []report.AggregateReport{summary}}},
+		byID:  map[report.ReportID]*report.AggregateReport{1: &full},
+	}
+	w := test.NewWindow(nil)
+	defer w.Close()
+
+	v := newSyncTestView(repo, w)
+	w.SetContent(v)
+	v.Reload()
+	v.showDetail(summary)
+
+	overlay := w.Canvas().Overlays().Top()
+	require.NotNil(t, overlay, "Detaildialog muss als Overlay sichtbar sein")
+
+	closeButton := uitest.FindButton(t, overlay, i18n.ButtonClose)
+	test.Tap(closeButton)
+
+	require.Nil(t, w.Canvas().Overlays().Top(), "Dialog muss nach Tippen auf %q schließen", i18n.ButtonClose)
+}

@@ -153,3 +153,28 @@ die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
   auflisten. Das Postfach-Feld ist jetzt ein `widget.SelectEntry`
   (weiterhin frei eintippbar, zusätzlich mit den gefundenen Ordnern als
   Dropdown).
+- Moderneres, vollständig eigenes Farbschema (`internal/ui.appTheme`) für
+  hellen und dunklen Modus, nach der validierten Referenzpalette der
+  `dataviz`-Skill (Primärblau, feste Statusfarben Grün/Gelb/Rot) — löst
+  das gemeldete "altbacken, alles schwarz" im dunklen Systemmodus, das
+  vorher fast vollständig an Fynes generisches Standard-Theme delegiert
+  wurde. Dieselben Statusfarben jetzt auch in
+  `internal/infra/charts` (vorher ad-hoc gewählte Grün-/Rot-Töne) —
+  Oberfläche und Diagramme sprechen dieselbe Farbsprache. Größere
+  Eckenradien/Abstände (Karten, Knöpfe, Eingabefelder) für einen
+  luftigeren, weniger kantigen Eindruck.
+- Dashboard-Kacheln und -Diagramme stecken jetzt in `widget.Card` statt
+  frei auf dem Fensterhintergrund zu stehen, mit Symbolen je Kennzahl.
+  Die vier Diagramme sind neu gruppiert statt einer langen Spalte:
+  Zeitreihe und Disposition-Donut nebeneinander, Top-Sendequellen und
+  Heatmap je mit eigener voller Zeile und horizontalem Scrollbereich
+  (ihre Breite wächst mit der Anzahl Sendequellen/Tagen). Seitliche
+  Navigation jetzt mit Symbolen je Eintrag, Trennlinien zwischen
+  Kopfzeile/Navigation und dem Inhalt.
+- Echter Bug behoben: Der Bericht-Detaildialog (Berichte-Tabelle, Zeile
+  antippen) ließ sich nicht mehr schließen. Er lief auf
+  `dialog.NewCustomWithoutButtons` — ganz ohne Knopf, und kein Code-Pfad
+  rief `Hide()` auf. Anders als ein gewöhnliches Popup schließt das
+  zugrunde liegende `widget.ModalPopUp` nicht durch Antippen außerhalb,
+  der Dialog blieb also dauerhaft offen. Jetzt `dialog.NewCustom(...)`
+  mit einem "Schließen"-Knopf.

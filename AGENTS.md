@@ -242,3 +242,71 @@ Umstellung eines Feldes von `*widget.Entry` auf `*widget.SelectEntry` neu
 durchgezählt werden — das Feld verschwindet aus der Liste, alle
 nachfolgenden Indizes rutschen um eins nach vorn. Kein Bug im Widget
 selbst, nur eine Falle für index-basierte Testhelfer.
+
+## Eigenes Theme + Diagrammfarben folgen der `dataviz`-Skill-Referenzpalette
+
+`internal/ui/theme.go` (`appTheme`) definiert Hintergrund/Oberflächen/
+Text/Trenner/Primär-/Status-Farben für hell **und** dunkel vollständig
+selbst, statt (wie vor der Überarbeitung) fast alles an
+`theme.DefaultTheme()` zu delegieren — Grund war ein Nutzerfeedback, dass
+die Oberfläche im dunklen Systemmodus "altbacken" und "alles schwarz"
+wirkte: ohne eigene Farbrollen für Oberflächen/Karten/Trenner blieb nur
+Fynes generisches Grau/Schwarz ohne erkennbare Struktur.
+
+Die konkreten Hex-Werte (Primärblau `#2a78d6`/`#3987e5`,
+Status-Grün/-Gelb/-Rot `#0ca30c`/`#fab219`/`#d03b3b`) stammen unverändert
+aus der Referenzpalette der `dataviz`-Skill (`references/palette.md`) —
+**nicht** frei erfunden. Dieselben Statusfarben verwendet
+`internal/infra/charts` (Pass/Fail/Disposition-Diagramme) — Oberfläche und
+Diagramme sprechen dadurch dieselbe Farbsprache. Vor einer Änderung dieser
+Werte: `dataviz`-Skill laden und `scripts/validate_palette.js` gegen die
+neuen Werte laufen lassen (nicht nach Auge entscheiden) — siehe dortige
+Anleitung. Statusfarben sind laut Skill bewusst **modusunabhängig fest**
+(nicht pro hell/dunkel verschieden), Primärfarbe/Oberflächen dagegen schon.
+
+Kacheln und Diagramm-Panels im Dashboard (`internal/ui/dashboard`) stecken
+seither in `widget.Card` statt frei auf dem Fensterhintergrund zu stehen —
+das war der zweite Hebel gegen "alles schwarz": eine sichtbare
+Kartenfläche macht auch im dunklen Modus erkennbar, wo eine Kennzahl/ein
+Diagramm anfängt und aufhört. Die vier Dashboard-Diagramme sind bewusst
+nicht mehr eine lange, eintönige Spalte, sondern gruppiert: Zeitreihe und
+Disposition-Donut nebeneinander (beide etwa quadratisch), Top-Sendequellen
+und Heatmap je eine eigene volle Zeile mit horizontalem Scrollbereich um
+das Bild (ihre Breite wächst mit Anzahl Sendequellen/Tagen und würde im
+Raster sonst die Spaltenbreite aller anderen Karten erzwingen).
+
+**Nicht in diesem Kontainer visuell verifiziert:** Diese Session hat keinen
+Zugriff auf ein echtes Display — die Änderungen sind ausschließlich über
+`fyne.io/fyne/v2/test` (Headless-Treiber) und Farbwert-Prüfungen
+abgesichert, nicht durch einen echten Bildschirmvergleich. Vor einem
+Release lohnt sich ein tatsächlicher Blick auf das laufende Fenster
+(`task build && ./bin/dmarc-analyzer`), auch im hellen UND dunklen
+Systemmodus.
+
+## `dialog.NewCustomWithoutButtons` schließt nicht durch Antippen außerhalb
+
+`dialog.NewCustom*` baut intern immer ein `widget.NewModalPopUp` (siehe
+`fyne.io/fyne/v2/dialog/base.go:create`). "Modal" ist hier wörtlich
+gemeint: anders als ein gewöhnliches Popup/Dropdown schließt ein
+`ModalPopUp` **nicht**, wenn man daneben tippt. `NewCustomWithoutButtons`
+liefert dazu noch nicht einmal einen Knopf — ohne einen Code-Pfad, der
+explizit `.Hide()` auf den zurückgegebenen `*dialog.CustomDialog` aufruft,
+bleibt ein so erzeugter Dialog für den Nutzer **dauerhaft offen und
+unschließbar**. Genau das war ein echter Bug im
+Bericht-Detaildialog (`reports.View.showDetail`): der zweite (eigentliche
+Inhalts-)Dialog benutzte `NewCustomWithoutButtons`, aber nichts rief
+danach `Hide()` auf.
+
+`NewCustomWithoutButtons` ist nur für Dialoge richtig, die der
+aufrufende Code selbst wieder schließt (z. B. ein Fortschritts-Spinner,
+der nach Abschluss einer Hintergrundoperation per `progress.Hide()`
+verschwindet — siehe `settings.View.testAccount` und die
+Lade-Zwischenanzeige in `reports.View.showDetail`). Für jeden Dialog, den
+der **Nutzer** selbst schließen soll, gehört ein echter Dismiss-Knopf
+dazu: `dialog.NewCustom(title, dismissText, content, window)`.
+
+Regressionstest-Muster für "kann der Nutzer diesen Dialog wieder
+schließen": `w.Canvas().Overlays().Top()` liefert den obersten Dialog als
+`fyne.CanvasObject`, darin per `uitest.FindButton` den Dismiss-Knopf
+suchen, `test.Tap(...)`, danach `w.Canvas().Overlays().Top()` muss `nil`
+sein — siehe `reports/list_test.go:TestView_ShowDetail_DialogCanBeClosed`.

@@ -10,6 +10,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/pmoscode/dmarc-analyzer/internal/app/manageaccount"
@@ -72,6 +73,10 @@ const (
 
 var navLabels = []string{i18n.NavDashboard, i18n.NavReports, i18n.NavSources, i18n.NavSettings}
 
+// navIcons stehen an derselben Stelle wie navLabels — eine Sidebar mit
+// Icons liest sich schneller als eine reine Textliste.
+var navIcons = []fyne.Resource{theme.HomeIcon(), theme.DocumentIcon(), theme.ComputerIcon(), theme.SettingsIcon()}
+
 // shell ist das Hauptfenster nach der Ersteinrichtung: Navigation links,
 // Inhalt rechts, Sync-Knopf oben.
 type shell struct {
@@ -116,9 +121,13 @@ func newShell(deps Dependencies, window fyne.Window) *shell {
 
 	s.nav = widget.NewList(
 		func() int { return len(navLabels) },
-		func() fyne.CanvasObject { return widget.NewLabel("") },
+		func() fyne.CanvasObject {
+			return container.NewHBox(widget.NewIcon(nil), widget.NewLabel(""))
+		},
 		func(id widget.ListItemID, obj fyne.CanvasObject) {
-			obj.(*widget.Label).SetText(navLabels[id])
+			row := obj.(*fyne.Container)
+			row.Objects[0].(*widget.Icon).SetResource(navIcons[id])
+			row.Objects[1].(*widget.Label).SetText(navLabels[id])
 		},
 	)
 	s.nav.OnSelected = func(id widget.ListItemID) { s.selectNav(navItem(id)) }
@@ -126,10 +135,10 @@ func newShell(deps Dependencies, window fyne.Window) *shell {
 	// navScroll: widget.List meldet nur eine minimale Breite nach oben,
 	// unabhängig von der Länge der Einträge (navLabels) — ohne explizite
 	// Mindestbreite wird die Navigation so schmal, dass die Labels
-	// abgeschnitten werden ("Übe" statt "Übersicht"). navWidth ist
-	// großzügig für den längsten Eintrag (i18n.NavSources) bemessen.
+	// abgeschnitten werden ("Übe" statt "Übersicht"). Großzügig für Icon
+	// + den längsten Eintrag (i18n.NavSources) bemessen.
 	s.navScroll = container.NewVScroll(s.nav)
-	s.navScroll.SetMinSize(fyne.NewSize(160, 0))
+	s.navScroll.SetMinSize(fyne.NewSize(190, 0))
 
 	s.syncButton = widget.NewButton(i18n.SyncButton, s.startSync)
 	s.syncButton.Importance = widget.HighImportance
@@ -138,14 +147,22 @@ func newShell(deps Dependencies, window fyne.Window) *shell {
 
 	s.content = container.NewStack()
 
+	titleLabel := widget.NewLabelWithStyle(i18n.AppTitle, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	titleLabel.SizeName = theme.SizeNameSubHeadingText
+
+	// Trennlinien machen Kopfzeile und Navigation als eigene Flächen
+	// erkennbar, statt dass Titel/Filterleiste/Inhalt ohne sichtbare
+	// Grenze ineinander übergehen.
 	header := container.NewVBox(
-		container.NewHBox(widget.NewLabelWithStyle(i18n.AppTitle, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}), glossaryButton, s.syncButton),
+		container.NewHBox(titleLabel, glossaryButton, s.syncButton),
 		s.filterBar,
+		widget.NewSeparator(),
 	)
+	navWithDivider := container.NewBorder(nil, nil, nil, widget.NewSeparator(), s.navScroll)
 
 	s.container = container.NewBorder(
 		header,
-		nil, s.navScroll, nil,
+		nil, navWithDivider, nil,
 		s.content,
 	)
 

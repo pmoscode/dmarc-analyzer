@@ -230,7 +230,13 @@ func (v *View) showDetail(r report.AggregateReport) {
 				return
 			}
 			detail := NewDetailView(full)
-			d := dialog.NewCustomWithoutButtons(i18n.ReportDetailTitle, detail, v.window)
+			// NewCustomWithoutButtons hier ein echter Bug (nicht nur
+			// Test-Rauschen): der Dialog läuft auf einem
+			// widget.NewModalPopUp, der anders als ein gewöhnliches Popup
+			// NICHT durch Antippen außerhalb schließt — ohne Knopf und
+			// ohne jeden Code-Pfad, der Hide() aufruft, blieb der
+			// Bericht-Detaildialog für den Nutzer dauerhaft offen.
+			d := dialog.NewCustom(i18n.ReportDetailTitle, i18n.ButtonClose, detail, v.window)
 			d.Resize(fyne.NewSize(700, 500))
 			d.Show()
 		})

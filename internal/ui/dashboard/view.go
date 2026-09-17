@@ -74,18 +74,18 @@ func NewView(stats *statistics.UseCase, charts analysis.ChartRenderer, window fy
 	v.tileTrendLabel = widget.NewLabel("")
 	v.tileTrendIcon = widget.NewIcon(nil)
 
-	tiles := container.NewGridWithColumns(3,
-		newTile(i18n.DashboardTileTotalMessages, "", v.tileTotal, window),
-		newTile(i18n.DashboardTilePassRate, "DMARC-Pass-Rate", v.tilePass, window),
-		newTile(i18n.DashboardTileDKIMAlignment, "Alignment", v.tileDKIM, window),
-		newTile(i18n.DashboardTileSPFAlignment, "Alignment", v.tileSPF, window),
-		newTile(i18n.DashboardTileDistinctSources, "Quell-IP", v.tileSources, window),
+	tiles := container.NewGridWithColumns(5,
+		newTile(i18n.DashboardTileTotalMessages, "", theme.MailComposeIcon(), v.tileTotal, window),
+		newTile(i18n.DashboardTilePassRate, "DMARC-Pass-Rate", theme.ConfirmIcon(), v.tilePass, window),
+		newTile(i18n.DashboardTileDKIMAlignment, "Alignment", theme.VisibilityIcon(), v.tileDKIM, window),
+		newTile(i18n.DashboardTileSPFAlignment, "Alignment", theme.AccountIcon(), v.tileSPF, window),
+		newTile(i18n.DashboardTileDistinctSources, "Quell-IP", theme.ComputerIcon(), v.tileSources, window),
 	)
 
-	v.dailyPanel = newChartPanel(i18n.DashboardChartDailyVolume, v.exportChart(func() image.Image { return v.dailyPanel.image() }), window)
-	v.topPanel = newChartPanel(i18n.DashboardChartTopSources, v.exportChart(func() image.Image { return v.topPanel.image() }), window)
-	v.dispPanel = newChartPanel(i18n.DashboardChartDisposition, v.exportChart(func() image.Image { return v.dispPanel.image() }), window)
-	v.heatPanel = newChartPanel(i18n.DashboardChartHeatmap, v.exportChart(func() image.Image { return v.heatPanel.image() }), window)
+	v.dailyPanel = newChartPanel(i18n.DashboardChartDailyVolume, v.exportChart(func() image.Image { return v.dailyPanel.image() }), window, false)
+	v.topPanel = newChartPanel(i18n.DashboardChartTopSources, v.exportChart(func() image.Image { return v.topPanel.image() }), window, true)
+	v.dispPanel = newChartPanel(i18n.DashboardChartDisposition, v.exportChart(func() image.Image { return v.dispPanel.image() }), window, false)
+	v.heatPanel = newChartPanel(i18n.DashboardChartHeatmap, v.exportChart(func() image.Image { return v.heatPanel.image() }), window, true)
 
 	// Panels von Anfang an mit einem leeren, aber KORREKT GROSSEN Platzhalter
 	// füllen (statt img.Image nil zu lassen): so bekommt jedes Panel schon
@@ -115,9 +115,25 @@ func NewView(stats *statistics.UseCase, charts analysis.ChartRenderer, window fy
 
 	trendRow := container.NewHBox(v.tileTrendIcon, v.tileTrendLabel)
 
+	// Gruppierung der vier Diagramme bewusst nicht als eine lange,
+	// eintönige Spalte (frühere Version): Zeitreihe und Donut sind beide
+	// ungefähr quadratisch und stehen nebeneinander in einem 2-Spalten-
+	// Raster; Top-Sendequellen (viele schmale Balken) und die Heatmap
+	// (Breite wächst mit der Anzahl Tage, bei langen Zeiträumen leicht
+	// > 1000px) bekommen je eine eigene volle Zeile — im Raster gezwungen
+	// bestimmten sie sonst die Spaltenbreite aller anderen Karten.
+	chartsSection := container.NewVBox(
+		sectionHeader(i18n.DashboardSectionTrends),
+		container.NewGridWithColumns(2, v.dailyPanel.container, v.dispPanel.container),
+		v.topPanel.container,
+		sectionHeader(i18n.DashboardSectionSources),
+		v.heatPanel.container,
+	)
+
 	v.content = container.NewVBox(
+		sectionHeader(i18n.DashboardSectionMetrics),
 		tiles, trendRow,
-		v.dailyPanel.container, v.topPanel.container, v.dispPanel.container, v.heatPanel.container,
+		chartsSection,
 	)
 
 	v.scroll = container.NewVScroll(v.content)
@@ -253,17 +269,31 @@ func trendText(c statistics.Comparison) string {
 	return fmt.Sprintf(i18n.DashboardTrendFmt, c.PassRateTrend*100)
 }
 
-// newTile baut eine Kennzahlen-Kachel. glossaryTerm verlinkt optional
-// (leer = kein Knopf) auf eine Begriffserklärung — Ersatz für
-// Hover-Tooltips, siehe internal/ui/glossary.
-func newTile(title, glossaryTerm string, value *widget.Label, window fyne.Window) fyne.CanvasObject {
+// newTile baut eine Kennzahlen-Kachel als Card (statt freistehendem Text
+// direkt auf dem Fensterhintergrund) — die Kartenfläche/-kontur macht auch
+// im dunklen Modus sichtbar, wo eine Kennzahl anfängt und aufhört, statt
+// dass alles zu einer ununterscheidbaren Fläche verschwimmt. glossaryTerm
+// verlinkt optional (leer = kein Knopf) auf eine Begriffserklärung —
+// Ersatz für Hover-Tooltips, siehe internal/ui/glossary.
+func newTile(title, glossaryTerm string, icon fyne.Resource, value *widget.Label, window fyne.Window) fyne.CanvasObject {
 	value.TextStyle = fyne.TextStyle{Bold: true}
+	value.SizeName = theme.SizeNameHeadingText
 
-	var titleRow fyne.CanvasObject = widget.NewLabel(title)
+	titleLabel := widget.NewLabel(title)
+	titleLabel.SizeName = theme.SizeNameCaptionText
+	titleRow := container.NewHBox(widget.NewIcon(icon), titleLabel)
 	if glossaryTerm != "" {
-		titleRow = container.NewHBox(widget.NewLabel(title), glossary.NewInfoButton(glossaryTerm, window))
+		titleRow.Add(glossary.NewInfoButton(glossaryTerm, window))
 	}
-	return container.NewVBox(titleRow, value)
+	return widget.NewCard("", "", container.NewVBox(titleRow, value))
+}
+
+// sectionHeader gliedert die Übersicht in benannte Abschnitte (Kennzahlen,
+// Verlauf, Sendequellen) statt einer einzigen undifferenzierten Spalte.
+func sectionHeader(title string) fyne.CanvasObject {
+	label := widget.NewLabelWithStyle(title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	label.SizeName = theme.SizeNameSubHeadingText
+	return label
 }
 
 // exportChart baut den Callback für den PNG-Export-Knopf eines Diagramms
@@ -291,28 +321,42 @@ func (v *View) exportChart(image func() image.Image) func() {
 	}
 }
 
-// chartPanel ist ein Diagramm mit Titel und Export-Knopf.
+// chartPanel ist ein Diagramm mit Titel und Export-Knopf, als Card
+// gerahmt — dieselbe Begründung wie bei newTile: eine sichtbare
+// Kartenfläche statt frei auf dem (im dunklen Modus sonst
+// ununterscheidbaren) Fensterhintergrund stehender Elemente.
 type chartPanel struct {
 	img       *canvas.Image
 	current   image.Image
-	container *fyne.Container
+	container fyne.CanvasObject
 }
 
 // newChartPanel baut ein Diagramm mit Titel, Erklär-Knopf ("?", siehe
 // internal/ui/glossary) und Export-Knopf — title muss ein Begriff aus
-// glossary.Terms sein (siehe glossary.terms.go).
-func newChartPanel(title string, onExport func(), window fyne.Window) *chartPanel {
+// glossary.Terms sein (siehe glossary.terms.go). horizontalScroll
+// aktiviert einen horizontalen Scrollbereich um das Diagrammbild (für die
+// Heatmap, deren Breite mit der Anzahl Tage wächst und bei langen
+// Zeiträumen breiter als das Fenster werden kann — ohne das würde das
+// Bild entweder das ganze Fenster in die Breite zwingen oder unsichtbar
+// abgeschnitten).
+func newChartPanel(title string, onExport func(), window fyne.Window, horizontalScroll bool) *chartPanel {
 	p := &chartPanel{img: &canvas.Image{FillMode: canvas.ImageFillOriginal}}
 	exportButton := widget.NewButton(i18n.DashboardExportChartPNG, onExport)
 	titleRow := container.NewHBox(
 		widget.NewLabelWithStyle(title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		glossary.NewInfoButton(title, window),
 	)
-	p.container = container.NewVBox(
+
+	var imgArea fyne.CanvasObject = p.img
+	if horizontalScroll {
+		imgArea = container.NewHScroll(p.img)
+	}
+
+	p.container = widget.NewCard("", "", container.NewVBox(
 		titleRow,
-		p.img,
+		imgArea,
 		exportButton,
-	)
+	))
 	return p
 }
 

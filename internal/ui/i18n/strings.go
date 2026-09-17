@@ -12,6 +12,7 @@ const (
 	ButtonNext  = "Weiter"
 	ButtonSave  = "Speichern"
 	ButtonRetry = "Erneut versuchen"
+	ButtonClose = "Schließen"
 )
 
 // Navigation (Hauptfenster, linke Leiste).
@@ -154,6 +155,12 @@ const (
 	DashboardChartTopSources  = "Top-Sendequellen"
 	DashboardChartDisposition = "Verteilung nach Disposition"
 	DashboardChartHeatmap     = "Sendequelle × Tag (Pass-Rate)"
+
+	// Abschnittsüberschriften gliedern die Übersicht — statt einer langen,
+	// undifferenzierten Spalte aus Kacheln und Diagrammen.
+	DashboardSectionMetrics = "Kennzahlen"
+	DashboardSectionTrends  = "Verlauf und Verteilung"
+	DashboardSectionSources = "Sendequellen"
 
 	DashboardEmptyTitle  = "Noch keine Daten für diesen Zeitraum"
 	DashboardEmptyDetail = "Nach dem ersten Abgleich erscheinen hier Kennzahlen und Diagramme."

@@ -35,10 +35,16 @@ const (
 	donutWidth = 900
 )
 
+// Statuspalette, identisch zu internal/ui.appTheme (colorStatusGood/
+// -Warning/-Critical) — Oberfläche und Diagramme sprechen dieselbe
+// Farbsprache. Feste Werte, nicht pro Fyne-Modus verschieden (dataviz-
+// Skill: "Status palette (fixed — never themed)"), da go-chart-Bilder
+// unabhängig vom aktuellen Oberflächen-Modus gerendert werden.
 var (
-	colorPass    = drawing.Color{R: 0x2e, G: 0xa0, B: 0x4f, A: 0xff}
-	colorFail    = drawing.Color{R: 0xd6, G: 0x3b, B: 0x3b, A: 0xff}
-	colorUnknown = drawing.Color{R: 0x9a, G: 0x9a, B: 0x9a, A: 0xff}
+	colorPass    = drawing.Color{R: 0x0c, G: 0xa3, B: 0x0c, A: 0xff} // good
+	colorWarn    = drawing.Color{R: 0xfa, G: 0xb2, B: 0x19, A: 0xff} // warning
+	colorFail    = drawing.Color{R: 0xd0, G: 0x3b, B: 0x3b, A: 0xff} // critical
+	colorUnknown = drawing.Color{R: 0x89, G: 0x87, B: 0x81, A: 0xff} // muted
 )
 
 // Renderer implementiert analysis.ChartRenderer.
@@ -139,7 +145,12 @@ func (Renderer) DispositionChart(data map[report.Disposition]int) (image.Image, 
 		})
 	}
 	if len(values) == 0 {
-		return blankImage(donutWidth, defaultHeight), nil
+		// Höhe wie beim tatsächlich gerenderten Donut (Height: defaultWidth,
+		// siehe unten) — nicht defaultHeight wie bei den übrigen
+		// Diagrammen. Eine falsche Platzhaltergröße würde exakt das beim
+		// Konstruktions-Platzhalter (dashboard.NewView) bewusst vermiedene
+		// Nachwachsen-Problem zurückbringen (siehe dortiger Kommentar).
+		return blankImage(donutWidth, defaultWidth), nil
 	}
 	if len(values) == 1 {
 		// go-chart/v2's DonutChart.drawSlices hat für genau einen Wert
@@ -199,7 +210,7 @@ func dispositionColor(d report.Disposition) drawing.Color {
 	case report.DispositionNone:
 		return colorPass
 	case report.DispositionQuarantine:
-		return drawing.Color{R: 0xe0, G: 0x9a, B: 0x1c, A: 0xff}
+		return colorWarn
 	case report.DispositionReject:
 		return colorFail
 	default:
