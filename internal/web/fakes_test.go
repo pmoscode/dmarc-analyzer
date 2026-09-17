@@ -92,19 +92,34 @@ const testAccountID account.AccountID = "acc-1"
 // und /berichte/{id}. Save/Exists werden von queryreports.UseCase nicht
 // benutzt, müssen aber für das Interface vorhanden sein.
 type fakeReportRepository struct {
+	mu        sync.Mutex
 	page      report.Page
 	queryErr  error
 	byID      map[report.ReportID]*report.AggregateReport
 	getErr    error
 	lastQuery report.Query
+	saved     int
 }
 
 func (f *fakeReportRepository) Save(context.Context, *report.AggregateReport) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.saved++
 	return nil
 }
 
 func (f *fakeReportRepository) Exists(context.Context, report.Key) (bool, error) {
 	return false, nil
+}
+
+// count meldet, wie oft Save() erfolgreich aufgerufen wurde — für
+// Import-Tests (handlers_import_test.go), die über
+// report.SaveIfNew()/importfiles.UseCase tatsächlich gespeicherte
+// Reports zählen wollen.
+func (f *fakeReportRepository) count() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.saved
 }
 
 func (f *fakeReportRepository) FindByID(_ context.Context, id report.ReportID) (*report.AggregateReport, error) {
@@ -311,4 +326,24 @@ func (f *fakeJobSyncer) callCount() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return len(f.calls)
+}
+
+// fakeFailedImportRepository implementiert domainsync.FailedImportRepository
+// — für Tests von /import, die eine kaputte Datei einreichen.
+type fakeFailedImportRepository struct {
+	mu      sync.Mutex
+	records []domainsync.FailedImport
+}
+
+func (f *fakeFailedImportRepository) Record(_ context.Context, rec domainsync.FailedImport) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.records = append(f.records, rec)
+	return nil
+}
+
+func (f *fakeFailedImportRepository) count() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.records)
 }

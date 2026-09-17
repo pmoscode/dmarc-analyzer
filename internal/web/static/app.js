@@ -77,3 +77,57 @@ document.addEventListener("submit", function (event) {
   }
 });
 
+// Datei-Import: Drag & Drop (MIGRATIONSPLAN.md Meilenstein M4). Die
+// eigentliche Dateiübernahme funktioniert bereits nativ (Browser lassen
+// Dateien direkt auf ein <input type="file"> fallen) — dieses Skript
+// sorgt nur für optisches Feedback (Rahmen hervorheben, sobald über der
+// gesamten Fläche gezogen wird, nicht nur über dem oft winzigen
+// <input>) und zeigt die ausgewählten Dateinamen an, egal ob per Klick
+// oder per Drop ausgewählt.
+(function () {
+  "use strict";
+
+  var dropzone = document.getElementById("import-dropzone");
+  var fileInput = document.getElementById("import-file-input");
+  var text = document.getElementById("import-dropzone-text");
+  if (!dropzone || !fileInput) {
+    return;
+  }
+
+  function updateLabel() {
+    if (!text) {
+      return;
+    }
+    var files = fileInput.files;
+    if (!files || files.length === 0) {
+      text.textContent = "Dateien hierher ziehen oder klicken zum Auswählen";
+      return;
+    }
+    var names = [];
+    for (var i = 0; i < files.length; i++) {
+      names.push(files[i].name);
+    }
+    text.textContent = names.join(", ");
+  }
+
+  ["dragenter", "dragover"].forEach(function (evt) {
+    dropzone.addEventListener(evt, function (e) {
+      e.preventDefault();
+      dropzone.classList.add("dropzone-active");
+    });
+  });
+  ["dragleave", "drop"].forEach(function (evt) {
+    dropzone.addEventListener(evt, function (e) {
+      e.preventDefault();
+      dropzone.classList.remove("dropzone-active");
+    });
+  });
+  dropzone.addEventListener("drop", function (e) {
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+      fileInput.files = e.dataTransfer.files;
+      updateLabel();
+    }
+  });
+  fileInput.addEventListener("change", updateLabel);
+})();
+

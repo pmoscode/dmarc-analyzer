@@ -52,6 +52,10 @@
       <h2>Nachrichtenvolumen pro Tag <a href="{{glossarLink "Nachrichtenvolumen pro Tag"}}" class="glossary-hint" title="Begriff erklären">?</a></h2>
       <p class="chart-hint">Mausrad zum Zoomen, Ziehen zum Verschieben. Klick auf einen Tag zeigt die Berichte dieses Tages.</p>
       <canvas id="chart-verlauf" aria-label="Gestapeltes Balkendiagramm: Nachrichtenvolumen pro Tag, aufgeteilt nach bestanden und fehlgeschlagen" role="img"></canvas>
+      <div class="chart-actions">
+        <button type="button" class="chart-export" data-chart="verlauf" data-export="png">PNG exportieren</button>
+        <button type="button" class="chart-export" data-chart="verlauf" data-export="csv">CSV exportieren</button>
+      </div>
       <details class="chart-table-toggle">
         <summary>Als Tabelle anzeigen</summary>
         <table id="chart-verlauf-table" class="chart-table"></table>
@@ -62,6 +66,10 @@
       <h2>Verteilung nach Disposition <a href="{{glossarLink "Verteilung nach Disposition"}}" class="glossary-hint" title="Begriff erklären">?</a></h2>
       <p class="chart-hint">Klick auf ein Segment zeigt die Berichte mit dieser Disposition.</p>
       <canvas id="chart-disposition" aria-label="Donut-Diagramm: Verteilung der Nachrichten nach Disposition" role="img"></canvas>
+      <div class="chart-actions">
+        <button type="button" class="chart-export" data-chart="disposition" data-export="png">PNG exportieren</button>
+        <button type="button" class="chart-export" data-chart="disposition" data-export="csv">CSV exportieren</button>
+      </div>
       <details class="chart-table-toggle">
         <summary>Als Tabelle anzeigen</summary>
         <table id="chart-disposition-table" class="chart-table"></table>
@@ -75,6 +83,10 @@
     <div class="chart-scroll">
       <canvas id="chart-quellen" aria-label="Horizontales Balkendiagramm: Nachrichtenvolumen je Sendequelle, eingefärbt nach Pass-Rate" role="img"></canvas>
     </div>
+    <div class="chart-actions">
+      <button type="button" class="chart-export" data-chart="quellen" data-export="png">PNG exportieren</button>
+      <button type="button" class="chart-export" data-chart="quellen" data-export="csv">CSV exportieren</button>
+    </div>
     <details class="chart-table-toggle">
       <summary>Als Tabelle anzeigen</summary>
       <table id="chart-quellen-table" class="chart-table"></table>
@@ -86,6 +98,10 @@
     <p class="chart-hint">Klick auf eine Zelle zeigt die Berichte dieser Quelle an diesem Tag.</p>
     <div class="chart-scroll">
       <canvas id="chart-heatmap" aria-label="Heatmap: Pass-Rate je Sendequelle und Tag" role="img"></canvas>
+    </div>
+    <div class="chart-actions">
+      <button type="button" class="chart-export" data-chart="heatmap" data-export="png">PNG exportieren</button>
+      <button type="button" class="chart-export" data-chart="heatmap" data-export="csv">CSV exportieren</button>
     </div>
     <details class="chart-table-toggle">
       <summary>Als Tabelle anzeigen</summary>

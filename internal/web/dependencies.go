@@ -1,6 +1,7 @@
 package web
 
 import (
+	"github.com/pmoscode/dmarc-analyzer/internal/app/importfiles"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/manageaccount"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/queryreports"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/sourcestats"
@@ -23,4 +24,8 @@ type Dependencies struct {
 	// Nicht-web-Aufrufer) bedeutet: nie gesperrt.
 	Credentials account.CredentialStore
 	SyncJob     *syncjob.Runner
+	// Importer braucht (anders als Accounts) keine Zugangsdaten — Import
+	// aus hochgeladenen Dateien funktioniert auch bei gesperrtem
+	// Schlüsselspeicher (MIGRATIONSPLAN.md Meilenstein M4).
+	Importer *importfiles.UseCase
 }

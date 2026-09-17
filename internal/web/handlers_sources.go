@@ -38,7 +38,7 @@ func parseSourcesSortField(raw string) domainsources.SortField {
 	return domainsources.SortByVolume
 }
 
-func (f sourcesFilter) query(cursor string) (domainsources.Query, error) {
+func (f sourcesFilter) query(cursor string, limit int) (domainsources.Query, error) {
 	q, err := f.Period.query()
 	if err != nil {
 		return domainsources.Query{}, err
@@ -47,7 +47,7 @@ func (f sourcesFilter) query(cursor string) (domainsources.Query, error) {
 		Period:    &q.Period,
 		Domain:    f.Period.Domain,
 		SortField: f.SortField,
-		Limit:     sourcesPageSize,
+		Limit:     limit,
 		Cursor:    cursor,
 	}, nil
 }
@@ -125,6 +125,9 @@ type sourcesPageData struct {
 	SortIPURL     string
 	SortField     string
 
+	// ExportURL: siehe reportsPageData.ExportURL.
+	ExportURL string
+
 	Rows sourcesRowsData
 }
 
@@ -136,6 +139,7 @@ func buildSourcesPageData(filter sourcesFilter, page domainsources.Page) sources
 		SortVolumeURL: filter.sortLink(domainsources.SortByVolume),
 		SortIPURL:     filter.sortLink(domainsources.SortByIP),
 		SortField:     string(filter.SortField),
+		ExportURL:     "/export/quellen.csv?" + filter.values().Encode(),
 		Rows: sourcesRowsData{
 			Rows:        sourceRows(page.Stats),
 			HasMore:     page.NextCursor != "",
@@ -148,7 +152,7 @@ func buildSourcesPageData(filter sourcesFilter, page domainsources.Page) sources
 
 func (s *Server) handleSources(w http.ResponseWriter, r *http.Request) {
 	filter := parseSourcesFilter(r)
-	q, err := filter.query("")
+	q, err := filter.query("", sourcesPageSize)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -169,7 +173,7 @@ func (s *Server) handleSources(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleSourcesPage(w http.ResponseWriter, r *http.Request) {
 	filter := parseSourcesFilter(r)
-	q, err := filter.query(r.URL.Query().Get("cursor"))
+	q, err := filter.query(r.URL.Query().Get("cursor"), sourcesPageSize)
 	if err != nil {
 		s.serverError(w, r, err)
 		return

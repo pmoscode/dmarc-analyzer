@@ -135,6 +135,12 @@
 
         canvas.style.height = "320px";
         renderDailyVolumeTable(days);
+        registerExport("verlauf", chart, function () {
+          return {
+            header: ["Tag", "Bestanden", "Fehlgeschlagen"],
+            rows: days.map(function (d) { return [d.label, d.pass, d.fail]; }),
+          };
+        });
         return chart;
       })
       .catch(function (err) {
@@ -171,9 +177,18 @@
         var dayLabels = data.dayLabels || [];
         var sourceLabels = data.sourceLabels || [];
         var cells = data.cells || [];
+        var toCSV = function () {
+          return {
+            header: ["Quelle", "Tag", "Pass-Rate", "Nachrichten"],
+            rows: cells.map(function (c) {
+              return [c.y, c.x, c.hasData ? (c.passRate * 100).toFixed(1) + " %" : "keine Daten", c.hasData ? c.total : ""];
+            }),
+          };
+        };
 
         if (dayLabels.length === 0 || sourceLabels.length === 0) {
           renderHeatmapTable(cells);
+          registerExport("heatmap", null, toCSV);
           return;
         }
 
@@ -254,6 +269,7 @@
         });
 
         renderHeatmapTable(cells);
+        registerExport("heatmap", chart, toCSV);
         return chart;
       })
       .catch(function (err) {
@@ -284,6 +300,73 @@
     div.textContent = String(s == null ? "" : s);
     return div.innerHTML;
   }
+
+  // --- Diagramm-Export (MIGRATIONSPLAN.md Meilenstein M4: "Diagramm-
+  // Export als PNG (Browser) und CSV (Tabellenansicht)") -----------------
+  //
+  // chartExports bildet einen Diagrammschlüssel (dieselben Namen wie die
+  // "data-chart"-Attribute der Export-Knöpfe in dashboard.html) auf einen
+  // Zugriff auf das zuletzt gezeichnete Chart.js-Objekt sowie eine
+  // csv()-Funktion ab, die genau die Zeilen liefert, die auch die
+  // zugehörige Tabellenansicht zeigt — kein serverseitiger Bild-Export
+  // (siehe MIGRATIONSPLAN.md Abschnitt 6a: "Serverseitiger Bild-Export
+  // entfällt").
+  var chartExports = {};
+
+  function registerExport(key, chart, csvRows) {
+    chartExports[key] = { chart: chart, csv: csvRows };
+  }
+
+  function downloadDataURL(filename, dataURL) {
+    var a = document.createElement("a");
+    a.href = dataURL;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  function csvEscape(v) {
+    v = String(v == null ? "" : v);
+    if (/[",\n]/.test(v)) {
+      v = '"' + v.replace(/"/g, '""') + '"';
+    }
+    return v;
+  }
+
+  function rowsToCSV(header, rows) {
+    var lines = [header.map(csvEscape).join(",")];
+    rows.forEach(function (row) {
+      lines.push(row.map(csvEscape).join(","));
+    });
+    return lines.join("\r\n");
+  }
+
+  function downloadCSV(filename, header, rows) {
+    var blob = new Blob([rowsToCSV(header, rows)], { type: "text/csv;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    downloadDataURL(filename, url);
+    URL.revokeObjectURL(url);
+  }
+
+  document.addEventListener("click", function (event) {
+    var button = event.target.closest(".chart-export");
+    if (!button) {
+      return;
+    }
+    var entry = chartExports[button.dataset.chart];
+    if (!entry) {
+      return;
+    }
+    if (button.dataset.export === "png") {
+      if (entry.chart) {
+        downloadDataURL(button.dataset.chart + ".png", entry.chart.toBase64Image());
+      }
+    } else if (entry.csv) {
+      var csv = entry.csv();
+      downloadCSV(button.dataset.chart + ".csv", csv.header, csv.rows);
+    }
+  });
 
   // --- Top-Sendequellen (horizontales Balkendiagramm) ---------------------
 
@@ -347,6 +430,12 @@
         });
 
         renderTopSourcesTable(sources);
+        registerExport("quellen", chart, function () {
+          return {
+            header: ["Quelle", "Nachrichten", "Pass-Rate"],
+            rows: sources.map(function (s) { return [s.label, s.total, (s.passRate * 100).toFixed(1) + " %"]; }),
+          };
+        });
         return chart;
       })
       .catch(function (err) {
@@ -435,6 +524,12 @@
         });
 
         renderDispositionTable(slices);
+        registerExport("disposition", chart, function () {
+          return {
+            header: ["Disposition", "Nachrichten"],
+            rows: slices.map(function (s) { return [s.label, s.total]; }),
+          };
+        });
         return chart;
       })
       .catch(function (err) {

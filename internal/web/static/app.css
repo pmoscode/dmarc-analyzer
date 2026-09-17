@@ -356,6 +356,40 @@ a {
   border-color: var(--status-critical);
 }
 
+.dropzone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 120px;
+  padding: 20px;
+  border: 2px dashed var(--gridline);
+  border-radius: 12px;
+  color: var(--ink-secondary);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.dropzone:hover,
+.dropzone-active {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 6%, var(--surface));
+}
+
+.dropzone-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+}
+
+.export-link {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+
 .app-main {
   max-width: 1100px;
   margin: 0 auto;
@@ -502,6 +536,28 @@ a {
 
 .chart-scroll {
   overflow-x: auto;
+}
+
+.chart-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.chart-export {
+  padding: 5px 10px;
+  border: 1px solid var(--gridline);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink-secondary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.chart-export:hover {
+  border-color: var(--primary);
+  color: var(--primary);
 }
 
 .chart-table-toggle {

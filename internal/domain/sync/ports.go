@@ -39,6 +39,41 @@ type ReportParser interface {
 	Parse(ctx context.Context, attachment RawAttachment) (*report.AggregateReport, error)
 }
 
+// MultiReportParser ist eine optionale Erweiterung von ReportParser für
+// Anhänge, die mehrere Reports enthalten können — bei DMARC-Aggregate-
+// Reports insbesondere ein .zip mit mehreren XML-Dateien
+// (internal/infra/dmarcxml.Parser implementiert dies bereits über
+// ParseAll). Aufrufer (importfiles/syncreports) prüfen per Typ-Assertion,
+// ob ein Parser diese Schnittstelle zusätzlich zu ReportParser erfüllt —
+// derselbe optionale-Schnittstellen-Zuschnitt wie MailboxLister weiter
+// unten. Ein Parser, der nur Parse() implementiert, liefert dann eben nur
+// den einen Report, den Parse() zurückgibt — kein Fehler, nur weniger
+// Funktionsumfang.
+type MultiReportParser interface {
+	ParseAll(ctx context.Context, attachment RawAttachment) ([]*report.AggregateReport, error)
+}
+
+// ParseAttachment liefert alle in attachment enthaltenen Reports —
+// bevorzugt über MultiReportParser.ParseAll, falls parser das zusätzlich
+// implementiert (z. B. für .zip-Anhänge mit mehreren XML-Dateien), sonst
+// über das einzelne Parse() aus ReportParser. Gemeinsam genutzt von
+// importfiles.UseCase und syncreports.UseCase, damit beide dasselbe
+// Verhalten haben (vor dieser Funktion importierte importfiles einen
+// .zip mit mehreren Reports nur unvollständig — es wurde stets nur der
+// erste enthaltene Report gespeichert, siehe Regressionstest
+// TestHandleImportSubmit_ZipWithMultipleReports_ImportsBoth in
+// internal/web).
+func ParseAttachment(ctx context.Context, parser ReportParser, attachment RawAttachment) ([]*report.AggregateReport, error) {
+	if multi, ok := parser.(MultiReportParser); ok {
+		return multi.ParseAll(ctx, attachment)
+	}
+	rep, err := parser.Parse(ctx, attachment)
+	if err != nil {
+		return nil, err
+	}
+	return []*report.AggregateReport{rep}, nil
+}
+
 // RawMessage ist eine unverarbeitete Nachricht aus einer Quelle: die
 // vollständigen Rohbytes (bei IMAP: BODY.PEEK[], bei Datei-Import
 // (AP 4/7): der Dateiinhalt) plus die UID, unter der die Quelle sie führt.

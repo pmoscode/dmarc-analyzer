@@ -14,7 +14,7 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/report"
 )
 
-func newTestServerWithReports(t *testing.T, repo *fakeReportRepository) *Server {
+func newTestServerWithReports(t *testing.T, repo report.Repository) *Server {
 	t.Helper()
 	isolateConfigDir(t)
 

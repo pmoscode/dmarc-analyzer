@@ -26,7 +26,28 @@ import (
 // report.Repository.Query-Dokumentation).
 func WriteReportsCSV(w io.Writer, reports []report.AggregateReport) error {
 	cw := csv.NewWriter(w)
+	if err := WriteReportsCSVHeader(cw); err != nil {
+		return err
+	}
+	for _, r := range reports {
+		if err := WriteReportCSVRow(cw, r); err != nil {
+			return err
+		}
+	}
+	cw.Flush()
+	if err := cw.Error(); err != nil {
+		return fmt.Errorf("csv konnte nicht vollständig geschrieben werden: %w", err)
+	}
+	return nil
+}
 
+// WriteReportsCSVHeader schreibt die Kopfzeile für WriteReportCSVRow —
+// beide einzeln exportiert für einen Aufrufer, der viele Seiten (z. B.
+// über Keyset-Pagination) nacheinander in denselben csv.Writer schreiben
+// und zwischendurch flushen will, ohne den gesamten gefilterten Bestand
+// vorher im Speicher zu sammeln (MIGRATIONSPLAN.md Meilenstein M4:
+// "CSV-Export ... gestreamt", siehe internal/web/handlers_export.go).
+func WriteReportsCSVHeader(cw *csv.Writer) error {
 	header := []string{
 		"OrgName", "ReportID", "Domain", "PeriodBegin", "PeriodEnd",
 		"Policy", "SubdomainPolicy", "Percentage", "DKIMAlignment", "SPFAlignment",
@@ -34,28 +55,26 @@ func WriteReportsCSV(w io.Writer, reports []report.AggregateReport) error {
 	if err := cw.Write(header); err != nil {
 		return fmt.Errorf("csv-kopfzeile konnte nicht geschrieben werden: %w", err)
 	}
+	return nil
+}
 
-	for _, r := range reports {
-		row := []string{
-			r.Metadata.OrgName,
-			r.Metadata.ReportID,
-			r.Policy.Domain.String(),
-			formatCSVTime(r.Metadata.Range.Begin),
-			formatCSVTime(r.Metadata.Range.End),
-			string(r.Policy.Policy),
-			string(r.Policy.SubdomainPolicy),
-			strconv.Itoa(r.Policy.Percentage),
-			string(r.Policy.DKIMAlignment),
-			string(r.Policy.SPFAlignment),
-		}
-		if err := cw.Write(row); err != nil {
-			return fmt.Errorf("csv-zeile für report %q konnte nicht geschrieben werden: %w", r.Metadata.ReportID, err)
-		}
+// WriteReportCSVRow schreibt eine einzelne Report-Zeile passend zur
+// Kopfzeile aus WriteReportsCSVHeader.
+func WriteReportCSVRow(cw *csv.Writer, r report.AggregateReport) error {
+	row := []string{
+		r.Metadata.OrgName,
+		r.Metadata.ReportID,
+		r.Policy.Domain.String(),
+		formatCSVTime(r.Metadata.Range.Begin),
+		formatCSVTime(r.Metadata.Range.End),
+		string(r.Policy.Policy),
+		string(r.Policy.SubdomainPolicy),
+		strconv.Itoa(r.Policy.Percentage),
+		string(r.Policy.DKIMAlignment),
+		string(r.Policy.SPFAlignment),
 	}
-
-	cw.Flush()
-	if err := cw.Error(); err != nil {
-		return fmt.Errorf("csv konnte nicht vollständig geschrieben werden: %w", err)
+	if err := cw.Write(row); err != nil {
+		return fmt.Errorf("csv-zeile für report %q konnte nicht geschrieben werden: %w", r.Metadata.ReportID, err)
 	}
 	return nil
 }

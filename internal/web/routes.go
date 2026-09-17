@@ -45,6 +45,10 @@ func (s *Server) routes() http.Handler {
 	protected.HandleFunc("POST /abgleich", s.handleSyncStart)
 	protected.HandleFunc("POST /abgleich/abbrechen", s.handleSyncCancel)
 	protected.HandleFunc("GET /ereignisse", s.handleEvents)
+	protected.HandleFunc("GET /import", s.handleImportForm)
+	protected.HandleFunc("POST /import", s.handleImportSubmit)
+	protected.HandleFunc("GET /export/berichte.csv", s.handleExportReportsCSV)
+	protected.HandleFunc("GET /export/quellen.csv", s.handleExportSourcesCSV)
 
 	mux.Handle("/", requireSession(s.auth, requireCSRF(s.auth, protected)))
 

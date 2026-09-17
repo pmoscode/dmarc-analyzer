@@ -78,7 +78,17 @@ func (uc *UseCase) ImportFile(ctx context.Context, path string) (Result, error) 
 		return Result{}, fmt.Errorf("datei konnte nicht gelesen werden: %w", err)
 	}
 
-	filename := filepath.Base(path)
+	return uc.ImportData(ctx, filepath.Base(path), data)
+}
+
+// ImportData importiert eine Datei, die bereits als Bytes im Speicher
+// vorliegt, statt von der Festplatte gelesen zu werden — Grundlage für
+// den Datei-Upload der Web-Oberfläche (MIGRATIONSPLAN.md Erweiterung
+// 9.3: "Import aus Bytes"), die keinen lokalen Dateipfad hat (nur den
+// vom Browser mitgeschickten Dateinamen und den Anfrage-Body). Dieselbe
+// Logik wie ImportFile ab dem Punkt, an dem die Datei bereits gelesen
+// ist.
+func (uc *UseCase) ImportData(ctx context.Context, filename string, data []byte) (Result, error) {
 	attachments, err := uc.extractAttachments(filename, data)
 	if err != nil {
 		result := Result{Failed: 1, Errors: []error{err}}
@@ -112,7 +122,11 @@ func (uc *UseCase) importAttachments(ctx context.Context, attachments []domainsy
 			continue // kein DMARC-Report, z. B. der Textkörper einer .eml
 		}
 
-		rep, err := parser.Parse(ctx, att)
+		// ParseAttachment nutzt ParseAll, falls der Parser das zusätzlich
+		// implementiert (z. B. dmarcxml.Parser bei einem .zip mit
+		// mehreren XML-Dateien) — ein einzelner Anhang kann so mehrere
+		// Reports liefern (siehe domainsync.ParseAttachment-Dokumentation).
+		reports, err := domainsync.ParseAttachment(ctx, parser, att)
 		if err != nil {
 			result.Failed++
 			result.Errors = append(result.Errors, fmt.Errorf("anhang %q: %w", att.Filename, err))
@@ -120,16 +134,18 @@ func (uc *UseCase) importAttachments(ctx context.Context, attachments []domainsy
 			continue
 		}
 
-		imported, err := report.SaveIfNew(ctx, uc.Reports, rep)
-		if err != nil {
-			result.Failed++
-			result.Errors = append(result.Errors, fmt.Errorf("anhang %q: report konnte nicht gespeichert werden: %w", att.Filename, err))
-			continue
-		}
-		if imported {
-			result.New++
-		} else {
-			result.Skipped++
+		for _, rep := range reports {
+			imported, err := report.SaveIfNew(ctx, uc.Reports, rep)
+			if err != nil {
+				result.Failed++
+				result.Errors = append(result.Errors, fmt.Errorf("anhang %q: report konnte nicht gespeichert werden: %w", att.Filename, err))
+				continue
+			}
+			if imported {
+				result.New++
+			} else {
+				result.Skipped++
+			}
 		}
 	}
 	return result

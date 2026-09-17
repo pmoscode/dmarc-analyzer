@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"iter"
+	"strings"
 	stdsync "sync"
 
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/account"
@@ -265,6 +266,52 @@ func (p fakeParser) Parse(_ context.Context, att domainsync.RawAttachment) (*rep
 		report.Metadata{OrgName: "fake-org.example", ReportID: content, Range: dateRange},
 		policy, nil, report.SourceReference{}, fixedBegin,
 	)
+}
+
+// fakeMultiParser implementiert zusätzlich domainsync.MultiReportParser
+// — simuliert einen Anhang (z. B. ein .zip), der mehrere Reports auf
+// einmal enthält. Anhangsinhalt "multi:a,b,c" liefert drei Reports mit
+// den ReportIDs a, b, c.
+type fakeMultiParser struct{}
+
+func (p fakeMultiParser) Supports(domainsync.RawAttachment) bool { return true }
+
+func (p fakeMultiParser) Parse(ctx context.Context, att domainsync.RawAttachment) (*report.AggregateReport, error) {
+	all, err := p.ParseAll(ctx, att)
+	if err != nil {
+		return nil, err
+	}
+	return all[0], nil
+}
+
+func (p fakeMultiParser) ParseAll(_ context.Context, att domainsync.RawAttachment) ([]*report.AggregateReport, error) {
+	ids := strings.Split(strings.TrimPrefix(string(att.Data), "multi:"), ",")
+
+	domain, err := report.NewDomainName("example.com")
+	if err != nil {
+		return nil, err
+	}
+	dateRange, err := report.NewDateRange(fixedBegin, fixedBegin.Add(hour))
+	if err != nil {
+		return nil, err
+	}
+	policy, err := report.NewPublishedPolicy(domain, report.PolicyReject, report.PolicyReject, report.AlignmentRelaxed, report.AlignmentRelaxed, 100, "")
+	if err != nil {
+		return nil, err
+	}
+
+	reports := make([]*report.AggregateReport, 0, len(ids))
+	for _, id := range ids {
+		rep, err := report.NewAggregateReport(
+			report.Metadata{OrgName: "fake-org.example", ReportID: id, Range: dateRange},
+			policy, nil, report.SourceReference{}, fixedBegin,
+		)
+		if err != nil {
+			return nil, err
+		}
+		reports = append(reports, rep)
+	}
+	return reports, nil
 }
 
 // --- domainsync.MessageSource -----------------------------------------------

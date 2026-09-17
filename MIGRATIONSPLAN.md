@@ -2,7 +2,7 @@
 
 > Stand: 2026-09-17. Ergänzt `UMSETZUNGSPLAN.md` und ist dort **vor AP 7**
 > einzuordnen (Packaging und Feinschliff hängen vom Ergebnis ab).
-> Fortschritt: M0–M3 umgesetzt (siehe Abschnitt 10), M4 offen.
+> Fortschritt: M0–M4 umgesetzt (siehe Abschnitt 10), M5 offen.
 
 ## 1. Anlass und Ziel
 
@@ -462,14 +462,82 @@ echten Server getestet, hier neu ist nur die Formular-Anbindung
 
 ### M4 — Import und Export (M)
 
-- [ ] Erweiterung 9.3; Upload mit Drag & Drop, Ergebnis-Anzeige (neu /
-  übersprungen / fehlerhaft)
-- [ ] CSV-Export des gesamten gefilterten Bestands, gestreamt
-- [ ] Diagramm-Export als PNG (Browser) und CSV (Tabellenansicht)
+- [x] Erweiterung 9.3: `importfiles.UseCase.ImportData(ctx, filename,
+  data)` — dieselbe Logik wie `ImportFile`, nur ohne Umweg über die
+  Festplatte (`ImportFile` ruft jetzt selbst `ImportData` auf). Web-Route
+  `POST /import` (Multipart-Upload, mehrere Dateien auf einmal), Seite
+  `GET /import` mit Drag-&-Drop-Bereich (natives `<input type="file">`,
+  JS nur für optisches Feedback beim Ziehen und zur Dateinamen-Anzeige,
+  siehe `static/app.js`) und Ergebnis-Anzeige (neu/übersprungen/
+  fehlerhaft) nach dem Hochladen. Größenbegrenzung wie im Plan notiert:
+  50 MB je Datei, dazu eine Obergrenze für die gesamte Anfrage
+  (`http.MaxBytesReader`).
+  **Dabei gefundener und behobener Bug (nicht Teil der ursprünglichen
+  Erweiterung 9.3, aber vom "Fertig wenn"-Kriterium unten direkt
+  gefordert):** `.zip`-Anhänge mit mehreren enthaltenen Reports wurden
+  sowohl von `importfiles.UseCase` als auch von `syncreports.UseCase`
+  nur zu einem Bruchteil importiert — beide riefen ausschließlich
+  `ReportParser.Parse()` auf, das laut eigener Dokumentation nur den
+  *ersten* Report liefert (`internal/infra/dmarcxml.Parser.ParseAll`
+  wäre für mehrere nötig gewesen). Ein Kommentar in
+  `importfiles/usecase.go` deutete das sogar schon an ("bei .zip ggf.
+  mehrere Reports"), ohne dass der Code das tatsächlich einlöste. Fix:
+  neue optionale Schnittstelle `domainsync.MultiReportParser` (gleiches
+  Muster wie das bereits bestehende `MailboxLister`) plus
+  `domainsync.ParseAttachment()`, das sie per Typ-Assertion nutzt, sonst
+  auf `Parse()` zurückfällt — von beiden Use Cases jetzt gemeinsam
+  benutzt. Gefunden durch einen neuen Test mit einer echten
+  Mehrfach-Report-Zip-Datei (`testdata/reports/multi/two_reports.zip`),
+  der ohne den Fix fehlschlug; Regressionstests in allen drei
+  betroffenen Paketen (`importfiles`, `syncreports`, `internal/web`).
+- [x] CSV-Export des gesamten gefilterten Bestands, gestreamt —
+  `GET /export/berichte.csv` und `GET /export/quellen.csv`, jeweils mit
+  demselben Filter wie die gerade angezeigte Tabelle. Lädt intern
+  seitenweise nach (`exportPageSize` 500, Keyset-Cursor wie die
+  Tabellenansicht selbst) und schreibt/flusht jede Seite direkt in die
+  HTTP-Antwort — der gesamte gefilterte Bestand liegt nie komplett im
+  Speicher. `exportdata.WriteReportsCSV`/`WriteSourceStatsCSV` dafür in
+  Kopfzeile/Zeile-Bausteine zerlegt (`WriteReportsCSVHeader`/
+  `WriteReportCSVRow` usw.), die bestehenden Funktionen bleiben als
+  Bequemlichkeits-Wrapper für den (weiterhin ungestreamten) Fall
+  "eine bereits geladene Seite exportieren" erhalten.
+- [x] Diagramm-Export als PNG (Browser) und CSV (Tabellenansicht) — pro
+  Diagramm zwei Knöpfe ("PNG exportieren"/"CSV exportieren") in
+  `dashboard.html`; `charts.js` hält dafür eine kleine Registry
+  (`chartExports`) von Diagrammschlüssel → Chart.js-Objekt + CSV-Zeilen-
+  Funktion, PNG über `chart.toBase64Image()`, CSV rein clientseitig aus
+  denselben Daten, die auch die Tabellenansicht zeigt. Kein
+  serverseitiger Bild-Export (wie im Plan vorgesehen).
 
 **Fertig wenn:** Eine `.zip` mit mehreren Reports lässt sich per Drag & Drop
 importieren, und ein Export von 100.000 Records läuft ohne spürbaren
-Speicheranstieg.
+Speicheranstieg. **Erreicht:**
+Zip-Mehrfach-Import mit dem echten CLI-Binary gegen
+`testdata/reports/multi/two_reports.zip` verifiziert (2 neu, vorher —
+vor dem oben beschriebenen Bugfix — nur 1). CSV-Export-Streaming mit
+einem Fake-Repository verifiziert, das die angeforderten Seiten erst
+bei Abruf nacheinander liefert (`TestHandleExportReportsCSV_StreamsAllPages`)
+— ein echter 100.000-Zeilen-Lasttest lief in dieser Sitzung nicht (siehe
+dieselbe Einschränkung wie bei M2: die zugrundeliegenden
+Keyset-Repositories sind bereits in AP 2/4 mit realistischen
+Datenmengen getestet, die Streaming-Schicht selbst lädt nachweislich
+nie mehr als eine Seite gleichzeitig).
+**Nicht mit dem echten Binary im Browser verifiziert:** Web-Upload
+(`POST /import`) und Diagramm-Export-Knöpfe — in dieser Sandbox hängt
+`dmarc-analyzer web` beim Start unbestimmt lange in
+`keyring.IsAvailable()` (OS-Keychain-Zugriff eines neu kompilierten,
+ad-hoc-signierten Binarys ohne grafische Sitzung, die einen
+Berechtigungsdialog beantworten könnte — bestätigt: `go test` gegen
+dieselbe Funktion antwortet in <100 ms, das kompilierte `bin/dmarc-
+analyzer` nicht innerhalb von mehreren Minuten). Reines Sandbox-/
+Session-Artefakt, keine Änderung an produktivem Code — die komplette
+HTTP-Schicht (Multipart-Upload inkl. echtem `dmarcxml`/`mailmime`,
+Größenlimits, CSRF, CSV-Streaming) ist stattdessen über `httptest`
+abgedeckt (siehe `internal/web/handlers_import_test.go`,
+`handlers_export_test.go`); die Chart.js-Export-Knöpfe sind reines
+Browser-JavaScript ohne Server-Gegenstück und damit ohnehin nur per
+echtem Browser prüfbar (derselbe, bereits in M2 dokumentierte
+`chromedp`-Vorbehalt).
 
 ### M5 — Umstellung und Rückbau (M)
 

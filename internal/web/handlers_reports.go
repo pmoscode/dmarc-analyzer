@@ -115,8 +115,12 @@ func parseSortDirection(raw string) report.SortDirection {
 }
 
 // query baut die Repository-Abfrage für diesen Filter mit dem
-// angegebenen Keyset-Cursor (leer für die erste Seite).
-func (f reportsFilter) query(cursor string) report.Query {
+// angegebenen Keyset-Cursor (leer für die erste Seite) und der
+// angegebenen Seitengröße — für die Berichtstabelle selbst immer
+// reportsPageSize, für den CSV-Export eine größere Seitengröße
+// (handlers_export.go: weniger Datenbank-Roundtrips, ohne den gesamten
+// gefilterten Bestand auf einmal zu laden).
+func (f reportsFilter) query(cursor string, limit int) report.Query {
 	period := f.Period
 	return report.Query{
 		Period:        &period,
@@ -126,7 +130,7 @@ func (f reportsFilter) query(cursor string) report.Query {
 		SortField:     f.SortField,
 		SortDirection: f.SortDirection,
 		GroupBy:       f.GroupBy,
-		Limit:         reportsPageSize,
+		Limit:         limit,
 		Cursor:        cursor,
 	}
 }
@@ -236,6 +240,11 @@ type reportsPageData struct {
 	SortPeriodURL       string
 	SortPeriodIndicator string
 
+	// ExportURL exportiert den GESAMTEN aktuell gefilterten Bestand als
+	// CSV (nicht nur die geladene Seite, siehe handlers_export.go) —
+	// derselbe Filter wie die Tabelle gerade zeigt.
+	ExportURL string
+
 	Rows reportsRowsData
 }
 
@@ -265,6 +274,7 @@ func buildReportsPageData(filter reportsFilter, page report.Page) reportsPageDat
 		SortDomainIndicator: filter.sortIndicator(report.SortByDomain),
 		SortPeriodURL:       filter.sortLink(report.SortByDateBegin),
 		SortPeriodIndicator: filter.sortIndicator(report.SortByDateBegin),
+		ExportURL:           "/export/berichte.csv?" + filter.values().Encode(),
 		Rows: reportsRowsData{
 			Rows:        reportRows(page.Reports),
 			HasMore:     page.NextCursor != "",
@@ -321,7 +331,7 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	page, err := s.deps.Reports.List(r.Context(), filter.query(""))
+	page, err := s.deps.Reports.List(r.Context(), filter.query("", reportsPageSize))
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -346,7 +356,7 @@ func (s *Server) handleReportsPage(w http.ResponseWriter, r *http.Request) {
 	}
 	cursor := r.URL.Query().Get("cursor")
 
-	page, err := s.deps.Reports.List(r.Context(), filter.query(cursor))
+	page, err := s.deps.Reports.List(r.Context(), filter.query(cursor, reportsPageSize))
 	if err != nil {
 		s.serverError(w, r, err)
 		return

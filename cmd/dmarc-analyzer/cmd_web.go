@@ -62,6 +62,7 @@ func runWeb(ctx context.Context, a *app, args []string) error {
 		Accounts:    a.accounts,
 		Credentials: a.credentials,
 		SyncJob:     syncjob.NewRunner(signalCtx, a.accounts.Accounts, a.sync),
+		Importer:    a.importer,
 	}, web.Options{Addr: *addr, Dev: *dev})
 	if err != nil {
 		return fmt.Errorf("web-oberfläche konnte nicht aufgebaut werden: %w", err)

@@ -322,3 +322,25 @@ func TestSyncAccount_SaveError_NonDuplicate_CountsAsFailed(t *testing.T) {
 	require.Zero(t, result.New)
 	require.Len(t, result.Errors, 1)
 }
+
+func TestSyncAccount_MultiReportParser_ImportsAllReportsFromOneMessage(t *testing.T) {
+	// Regression: decodeAndParse rief zuvor ausschließlich Parse() auf,
+	// das laut domainsync.ReportParser-Vertrag nur EINEN Report liefert —
+	// eine Nachricht mit einem Anhang (z. B. ein .zip), der über
+	// domainsync.MultiReportParser mehrere Reports zurückgeben kann,
+	// wurde dadurch nur zu einem Bruchteil importiert. Siehe auch
+	// internal/app/importfiles für denselben Fehler und internal/web
+	// TestHandleImportSubmit_ZipWithMultipleReports_ImportsBoth für den
+	// echten dmarcxml.Parser.
+	t.Parallel()
+
+	uc, deps := newTestUseCase(t, []domainsync.RawMessage{msg(1, "multi:report-a,report-b,report-c")}, nil)
+	uc.Parsers = []domainsync.ReportParser{fakeMultiParser{}}
+
+	result, err := uc.SyncAccount(context.Background(), testAccountID, nil)
+	require.NoError(t, err)
+	require.Equal(t, 3, result.New)
+	require.Zero(t, result.Skipped)
+	require.Zero(t, result.Failed)
+	require.Equal(t, 3, deps.reports.count())
+}

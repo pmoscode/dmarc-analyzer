@@ -219,11 +219,15 @@ func (uc *UseCase) decodeAndParse(ctx context.Context, msg domainsync.RawMessage
 			continue
 		}
 
-		rep, err := parser.Parse(ctx, att)
+		// ParseAttachment nutzt ParseAll, falls der Parser das zusätzlich
+		// implementiert (z. B. dmarcxml.Parser bei einem .zip-Anhang mit
+		// mehreren XML-Dateien) — ein einzelner Anhang kann so mehrere
+		// Reports liefern (siehe domainsync.ParseAttachment-Dokumentation).
+		parsed, err := domainsync.ParseAttachment(ctx, parser, att)
 		if err != nil {
 			return reports, fmt.Errorf("anhang %q konnte nicht geparst werden: %w", att.Filename, err)
 		}
-		reports = append(reports, rep)
+		reports = append(reports, parsed...)
 	}
 	return reports, nil
 }
