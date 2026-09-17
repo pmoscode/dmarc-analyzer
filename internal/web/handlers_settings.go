@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -11,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/account"
+	"github.com/pmoscode/dmarc-analyzer/internal/domain/settings"
 )
 
 // defaultIMAPPort/mailboxProbeAccountID: dieselben Vorgaben wie zuvor
@@ -113,6 +115,44 @@ func accountRows(accounts []account.MailAccount) []accountRowView {
 	return rows
 }
 
+// generalFormView sind die Werte des Formulars für programmweite
+// Einstellungen (AP 7), als Strings statt int: ein Validierungsfehler
+// (z. B. Buchstaben im Zahlenfeld) muss die eingegebene Zeichenkette
+// unverändert zurückgeben können, dieselbe Konvention wie accountFormView.
+type generalFormView struct {
+	RetentionMonths     string
+	SyncIntervalMinutes string
+}
+
+func generalFormFromSettings(s settings.Settings) generalFormView {
+	return generalFormView{
+		RetentionMonths:     strconv.Itoa(s.RetentionMonths),
+		SyncIntervalMinutes: strconv.Itoa(s.SyncIntervalMinutes),
+	}
+}
+
+func parseGeneralFormView(r *http.Request) generalFormView {
+	return generalFormView{
+		RetentionMonths:     strings.TrimSpace(r.PostFormValue("aufbewahrung_monate")),
+		SyncIntervalMinutes: strings.TrimSpace(r.PostFormValue("sync_intervall_minuten")),
+	}
+}
+
+// buildSettingsFromForm validiert die Formularwerte — negative Zahlen
+// lehnt bereits settings.Settings.Validate() ab, hier zusätzlich die reine
+// Zahlenform, die strconv.Atoi allein nicht verständlich meldet.
+func buildSettingsFromForm(view generalFormView) (settings.Settings, error) {
+	retention, err := strconv.Atoi(view.RetentionMonths)
+	if err != nil || retention < 0 {
+		return settings.Settings{}, fmt.Errorf("aufbewahrungsdauer muss eine nicht-negative ganze zahl sein")
+	}
+	interval, err := strconv.Atoi(view.SyncIntervalMinutes)
+	if err != nil || interval < 0 {
+		return settings.Settings{}, fmt.Errorf("sync-intervall muss eine nicht-negative ganze zahl sein")
+	}
+	return settings.Settings{RetentionMonths: retention, SyncIntervalMinutes: interval}, nil
+}
+
 type settingsPageData struct {
 	Title string
 	Nav   []navItem
@@ -120,8 +160,22 @@ type settingsPageData struct {
 	Accounts []accountRowView
 	Form     accountFormView
 
+	General generalFormView
+
 	Message        string
 	MessageIsError bool
+}
+
+// loadGeneralForm liest die aktuell gespeicherten Einstellungen für die
+// Anzeige — bei einem Fehler (z. B. beschädigte Einstellungsdatei) zeigt
+// die Seite die Vorgabewerte statt ganz zu scheitern: die Kontenverwaltung
+// auf derselben Seite bleibt davon unabhängig nutzbar.
+func (s *Server) loadGeneralForm(ctx context.Context) generalFormView {
+	current, err := s.deps.Retention.LoadSettings(ctx)
+	if err != nil {
+		current = settings.Default()
+	}
+	return generalFormFromSettings(current)
 }
 
 func (s *Server) renderSettingsWithMessage(w http.ResponseWriter, r *http.Request, message string, isError bool, form accountFormView) {
@@ -135,12 +189,63 @@ func (s *Server) renderSettingsWithMessage(w http.ResponseWriter, r *http.Reques
 		Nav:            navItems("/einstellungen"),
 		Accounts:       accountRows(accounts),
 		Form:           form,
+		General:        s.loadGeneralForm(r.Context()),
 		Message:        message,
 		MessageIsError: isError,
 	}
 	if err := s.views.render(w, "settings.html", data); err != nil {
 		s.serverError(w, r, err)
 	}
+}
+
+// renderSettingsWithGeneralMessage entspricht renderSettingsWithMessage,
+// zeigt aber die (möglicherweise ungültig eingegebenen) Formularwerte des
+// Allgemein-Formulars erneut an, statt die zuletzt gespeicherten zu laden
+// — dieselbe Konvention wie bei buildAccountFromForm/renderSettingsWithMessage
+// für das Kontoformular.
+func (s *Server) renderSettingsWithGeneralMessage(w http.ResponseWriter, r *http.Request, message string, isError bool, general generalFormView) {
+	accounts, err := s.deps.Accounts.List(r.Context())
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	data := settingsPageData{
+		Title:          "Einstellungen",
+		Nav:            navItems("/einstellungen"),
+		Accounts:       accountRows(accounts),
+		Form:           defaultAccountFormView(),
+		General:        general,
+		Message:        message,
+		MessageIsError: isError,
+	}
+	if err := s.views.render(w, "settings.html", data); err != nil {
+		s.serverError(w, r, err)
+	}
+}
+
+// handleGeneralSettingsUpdate speichert Aufbewahrungsdauer und
+// Sync-Intervall (AP 7, MIGRATIONSPLAN.md-Nachfolgeabschnitt "Einstellungen
+// erweitert um Aufbewahrung/Hintergrund-Sync") — braucht keinen
+// entsperrten Schlüsselbund, anders als die Kontoformulare.
+func (s *Server) handleGeneralSettingsUpdate(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+
+	view := parseGeneralFormView(r)
+	newSettings, err := buildSettingsFromForm(view)
+	if err != nil {
+		s.renderSettingsWithGeneralMessage(w, r, displayError(err), true, view)
+		return
+	}
+
+	if err := s.deps.Retention.SaveSettings(r.Context(), newSettings); err != nil {
+		s.renderSettingsWithGeneralMessage(w, r, "Einstellungen konnten nicht gespeichert werden.", true, view)
+		return
+	}
+
+	redirectToSettingsWithMessage(w, r, "Einstellungen gespeichert.", false)
 }
 
 func redirectToSettingsWithMessage(w http.ResponseWriter, r *http.Request, message string, isError bool) {
@@ -166,6 +271,7 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 		Nav:            navItems(r.URL.Path),
 		Accounts:       accountRows(accounts),
 		Form:           defaultAccountFormView(),
+		General:        s.loadGeneralForm(r.Context()),
 		Message:        r.URL.Query().Get("meldung"),
 		MessageIsError: r.URL.Query().Get("art") == "fehler",
 	}

@@ -43,6 +43,14 @@ func TestDatabasePath_EndsWithDBFile(t *testing.T) {
 	require.True(t, strings.HasSuffix(dbPath, "dmarc.db"))
 }
 
+func TestSettingsPath_EndsWithSettingsFile(t *testing.T) {
+	isolateHome(t)
+
+	path, err := paths.SettingsPath()
+	require.NoError(t, err)
+	require.True(t, strings.HasSuffix(path, "settings.json"))
+}
+
 func TestLogDir_IsCreated(t *testing.T) {
 	isolateHome(t)
 

@@ -4,6 +4,7 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/app/importfiles"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/manageaccount"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/queryreports"
+	"github.com/pmoscode/dmarc-analyzer/internal/app/retention"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/sourcestats"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/statistics"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/syncjob"
@@ -28,4 +29,8 @@ type Dependencies struct {
 	// aus hochgeladenen Dateien funktioniert auch bei gesperrtem
 	// Schlüsselspeicher (MIGRATIONSPLAN.md Meilenstein M4).
 	Importer *importfiles.UseCase
+	// Retention verwaltet Aufbewahrungsdauer und Sync-Intervall
+	// (AP 7, siehe handlers_settings.go) — braucht ebenfalls keine
+	// Zugangsdaten.
+	Retention *retention.UseCase
 }

@@ -11,11 +11,13 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/app/importfiles"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/manageaccount"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/queryreports"
+	"github.com/pmoscode/dmarc-analyzer/internal/app/retention"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/sourcestats"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/statistics"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/syncreports"
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/account"
 	domainsync "github.com/pmoscode/dmarc-analyzer/internal/domain/sync"
+	"github.com/pmoscode/dmarc-analyzer/internal/infra/config"
 	"github.com/pmoscode/dmarc-analyzer/internal/infra/dmarcxml"
 	"github.com/pmoscode/dmarc-analyzer/internal/infra/imap"
 	"github.com/pmoscode/dmarc-analyzer/internal/infra/keyring"
@@ -38,6 +40,11 @@ type app struct {
 	importer    *importfiles.UseCase
 	stats       *statistics.UseCase
 	sourceStats *sourcestats.UseCase
+	// retention ist unabhängig von Zugangsdaten für alle Unterbefehle
+	// verdrahtet (AP 7) — sowohl die Web-Oberfläche (Einstellungen-Seite,
+	// automatische Anwendung im Hintergrund) als auch ein künftiger
+	// eigener CLI-Unterbefehl brauchen keinen Schlüsselbund dafür.
+	retention *retention.UseCase
 	// credentials ist nur für "web" gesetzt — die Web-Oberfläche braucht
 	// den Store selbst (nicht nur die darauf aufbauenden Use Cases), um
 	// auf /entsperren einen sperrbaren Store (LockableFileStore)
@@ -78,6 +85,13 @@ func newApp(ctx context.Context, cmd string) (*app, error) {
 	statsRepo := sqlite.NewStatisticsRepository(db)
 	sourceStatsRepo := sqlite.NewSourceStatsRepository(db)
 
+	settingsPath, err := paths.SettingsPath()
+	if err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("einstellungspfad konnte nicht ermittelt werden: %w", err)
+	}
+	settingsStore := config.NewStore(settingsPath)
+
 	decoder := mailmime.NewDecoder()
 	parsers := []domainsync.ReportParser{dmarcxml.NewParser()}
 	newSource := func() domainsync.MessageSource { return imap.NewAdapter() }
@@ -99,6 +113,10 @@ func newApp(ctx context.Context, cmd string) (*app, error) {
 		sourceStats: &sourcestats.UseCase{
 			Sources:  sourceStatsRepo,
 			Enricher: enricher,
+		},
+		retention: &retention.UseCase{
+			Settings: settingsStore,
+			Reports:  reportRepo,
 		},
 	}
 

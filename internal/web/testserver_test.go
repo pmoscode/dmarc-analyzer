@@ -8,6 +8,7 @@ import (
 
 	"github.com/pmoscode/dmarc-analyzer/internal/app/manageaccount"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/queryreports"
+	"github.com/pmoscode/dmarc-analyzer/internal/app/retention"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/sourcestats"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/statistics"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/syncjob"
@@ -23,6 +24,7 @@ type fullDeps struct {
 	credentials *fakeCredentialStore
 	source      *fakeMessageSource
 	syncer      *fakeJobSyncer
+	settings    *fakeSettingsRepository
 }
 
 // newTestServerWithAccounts baut einen Server mit vollständig verdrahteten
@@ -40,6 +42,7 @@ func newTestServerWithAccounts(t *testing.T, accounts ...account.MailAccount) (*
 		credentials: newFakeCredentialStore(),
 		source:      &fakeMessageSource{},
 		syncer:      &fakeJobSyncer{},
+		settings:    &fakeSettingsRepository{},
 	}
 
 	accountsUC := &manageaccount.UseCase{
@@ -55,6 +58,7 @@ func newTestServerWithAccounts(t *testing.T, accounts ...account.MailAccount) (*
 		Accounts:    accountsUC,
 		Credentials: fd.credentials,
 		SyncJob:     syncjob.NewRunner(context.Background(), fd.accounts, fd.syncer),
+		Retention:   &retention.UseCase{Settings: fd.settings, Reports: &fakePruner{}},
 	}
 
 	srv, err := New(deps, Options{})

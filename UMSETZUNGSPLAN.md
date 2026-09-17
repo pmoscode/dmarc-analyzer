@@ -600,14 +600,30 @@ Dovecot, `.` bei Courier) blind erraten.
 > (Desktop-Benachrichtigung → Browser-Benachrichtigung, Packaging ohne
 > `fyne package`) bzw. bereits durch M5 ganz oder teilweise erledigt.
 
-- [ ] Aufbewahrungsrichtlinie, Standard 24 Monate (Vorschlag 11.11)
-- [ ] Hintergrund-Sync nach Zeitplan + **Browser-Benachrichtigung bei
-  offenem Tab** (statt der ursprünglich vorgesehenen
+- [x] ~~Aufbewahrungsrichtlinie, Standard 24 Monate (Vorschlag 11.11)~~ —
+  Einstellungen-Seite (Feld "Aufbewahrungsdauer für Berichte (Monate)",
+  Vorgabe 24, 0 = unbegrenzt), persistiert über
+  `internal/infra/config.Store` (JSON-Datei, `internal/domain/settings`),
+  angewendet über `internal/app/retention` und automatisch im Hintergrund
+  per `internal/app/retentionjob` (einmal beim Start, danach alle 24 h).
+  Löschung über `report.Pruner`/`ReportRepository.DeleteOlderThan`
+  (SQLite `DELETE ... WHERE date_end < ?`, kaskadiert über bestehende
+  Fremdschlüssel).
+- [x] ~~Hintergrund-Sync nach Zeitplan + **Browser-Benachrichtigung bei
+  offenem Tab**~~ (statt der ursprünglich vorgesehenen
   `fyne.App.SendNotification`-Desktop-Benachrichtigung — es gibt seit dem
   Umstieg auf die Web-Oberfläche kein Desktop-App-Fenster mehr, das eine
   systemeigene Benachrichtigung auslösen könnte; die Benachrichtigung
-  müsste über die Browser-Notifications-API laufen und setzt daher einen
-  geöffneten Tab voraus)
+  läuft daher über die Browser-Notifications-API und setzt einen
+  geöffneten Tab voraus) — Sync-Intervall (Minuten, 0 = aus, Vorgabe 60)
+  ebenfalls auf der Einstellungen-Seite, geplanter Abgleich über
+  `internal/app/syncscheduler` (prüft minütlich anhand der aktuellen
+  Einstellung, ob ein Lauf fällig ist, startet ihn über den bestehenden
+  `syncjob.Runner`). Benachrichtigung in `static/app.js`: Knopf auf der
+  Einstellungen-Seite fragt `Notification.requestPermission()` auf
+  Nutzerklick ab, das bestehende SSE-Skript zeigt bei Übergang von
+  "läuft" zu "fertig"/"abgebrochen"/"fehlgeschlagen" eine
+  Browser-Benachrichtigung, wenn die Berechtigung erteilt ist.
 - [ ] Backup/Restore per `VACUUM INTO` (Vorschlag 11.12)
 - [ ] Barrierefreiheits-Durchgang nach den Kriterien aus 3.1 (siehe auch
   `MIGRATIONSPLAN.md` M6)

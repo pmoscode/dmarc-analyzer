@@ -24,10 +24,39 @@
     return t.new + " neu, " + t.skipped + " übersprungen, " + t.failed + " fehlerhaft";
   }
 
+  // notifyResult zeigt eine Browser-Benachrichtigung für ein beendetes
+  // Sync-Ergebnis (AP 7: "Browser-Benachrichtigung bei offenem Tab") — nur
+  // wenn die Berechtigung bereits erteilt ist (siehe unten, Abschnitt
+  // "Browser-Benachrichtigungen"). Ein serverseitig laufender Abgleich
+  // läuft über die HTTP-Anfrage hinaus weiter (internal/app/syncjob) —
+  // diese Benachrichtigung ist der einzige Hinweis, wenn der Tab
+  // währenddessen in den Hintergrund gerückt ist.
+  function notifyResult(title, body) {
+    if (!("Notification" in window) || Notification.permission !== "granted") {
+      return;
+    }
+    try {
+      new Notification(title, { body: body, tag: "dmarc-analyzer-sync" });
+    } catch (err) {
+      console.error("Benachrichtigung konnte nicht angezeigt werden", err);
+    }
+  }
+
+  // lastStatus verfolgt den zuletzt gerenderten Status, damit
+  // notifyResult nur beim ÜBERGANG von "running" zu einem Endzustand
+  // feuert — nicht bei jedem der vielen Fortschritts-Ereignisse während
+  // eines laufenden Abgleichs, und nicht erneut beim ersten Ereignis nach
+  // einem Seitenwechsel (das den zuletzt beendeten Lauf lediglich erneut
+  // meldet, siehe Runner.Subscribe-Dokumentation).
+  var lastStatus = null;
+
   function render(state) {
     if (!state) {
       return;
     }
+
+    var wasRunning = lastStatus === "running";
+    lastStatus = state.status;
 
     if (state.status === "running") {
       startForm.hidden = true;
@@ -43,12 +72,21 @@
     switch (state.status) {
       case "done":
         statusEl.textContent = "Letzter Abgleich: " + totalText(state.total);
+        if (wasRunning) {
+          notifyResult("Abgleich abgeschlossen", totalText(state.total));
+        }
         break;
       case "cancelled":
         statusEl.textContent = "Abgleich abgebrochen.";
+        if (wasRunning) {
+          notifyResult("Abgleich abgebrochen", "");
+        }
         break;
       case "failed":
         statusEl.textContent = "Abgleich fehlgeschlagen" + (state.err ? ": " + state.err : ".");
+        if (wasRunning) {
+          notifyResult("Abgleich fehlgeschlagen", state.err || "");
+        }
         break;
       default:
         statusEl.textContent = "";
@@ -63,6 +101,46 @@
       console.error("Sync-Ereignis konnte nicht gelesen werden", err);
     }
   };
+})();
+
+// Browser-Benachrichtigungen aktivieren (AP 7) — der Knopf sitzt auf
+// settings.html, existiert also nur dort; die eigentliche Anzeige einer
+// Benachrichtigung (notifyResult oben) läuft seitenunabhängig, sobald die
+// Berechtigung einmal erteilt ist (der Browser merkt sie sich dauerhaft,
+// keine eigene Ablage nötig). Berechtigungen werden bewusst nur auf einen
+// Klick hin angefragt (Nutzergeste), nie automatisch beim Laden — die
+// meisten Browser blenden einen unaufgeforderten Prompt ohnehin aus oder
+// verweigern ihn.
+(function () {
+  "use strict";
+
+  var button = document.getElementById("notifications-enable-btn");
+  var status = document.getElementById("notifications-status");
+  if (!button || !status || !("Notification" in window)) {
+    return;
+  }
+
+  function render() {
+    switch (Notification.permission) {
+      case "granted":
+        button.hidden = true;
+        status.textContent = "Browser-Benachrichtigungen sind aktiviert.";
+        break;
+      case "denied":
+        button.hidden = true;
+        status.textContent = "Browser-Benachrichtigungen wurden blockiert — Berechtigung in den Browser-Einstellungen dieser Seite ändern.";
+        break;
+      default:
+        button.hidden = false;
+        status.textContent = "";
+    }
+  }
+
+  button.addEventListener("click", function () {
+    Notification.requestPermission().then(render);
+  });
+
+  render();
 })();
 
 // Bestätigungsabfrage vor destruktiven Formularen (z. B. Konto löschen,

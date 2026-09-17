@@ -33,6 +33,16 @@ func DatabasePath() (string, error) {
 	return filepath.Join(dir, "dmarc.db"), nil
 }
 
+// SettingsPath liefert den vollständigen Pfad zur JSON-Datei mit den
+// nicht-geheimen Einstellungen (internal/infra/config.Store, AP 7).
+func SettingsPath() (string, error) {
+	dir, err := ConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "settings.json"), nil
+}
+
 // LogDir liefert das Verzeichnis für Log-Dateien
 // (z. B. macOS: ~/Library/Logs/dmarc-analyzer).
 // Das Verzeichnis wird bei Bedarf angelegt.

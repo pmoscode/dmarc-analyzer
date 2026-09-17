@@ -21,6 +21,7 @@ type ReportRepository struct {
 }
 
 var _ report.Repository = (*ReportRepository)(nil)
+var _ report.Pruner = (*ReportRepository)(nil)
 
 // NewReportRepository erzeugt ein einsatzbereites Repository. db muss
 // bereits über Open() geöffnet (und damit migriert) sein.
@@ -183,6 +184,23 @@ func insertRecords(ctx context.Context, tx *sql.Tx, reportID int64, records []re
 	}
 
 	return nil
+}
+
+// DeleteOlderThan implementiert report.Pruner — löscht per DELETE ... WHERE
+// mit den bestehenden Fremdschlüsseln (ON DELETE CASCADE, siehe
+// migrations/0001_init.sql), keine separate Transaktion nötig: ein
+// einzelnes DELETE ist bereits atomar.
+func (repo *ReportRepository) DeleteOlderThan(ctx context.Context, cutoff time.Time) (int64, error) {
+	res, err := repo.db.ExecContext(ctx, "DELETE FROM reports WHERE date_end < ?", cutoff.Unix())
+	if err != nil {
+		return 0, fmt.Errorf("alte reports konnten nicht gelöscht werden: %w", err)
+	}
+
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("anzahl gelöschter reports konnte nicht ermittelt werden: %w", err)
+	}
+	return n, nil
 }
 
 // Exists prüft die fachliche Identität (Abschnitt 6.3), Grundlage der

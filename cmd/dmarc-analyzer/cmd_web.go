@@ -9,12 +9,44 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
+	"github.com/pmoscode/dmarc-analyzer/internal/app/retentionjob"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/syncjob"
+	"github.com/pmoscode/dmarc-analyzer/internal/app/syncscheduler"
 	"github.com/pmoscode/dmarc-analyzer/internal/platform/logging"
 	"github.com/pmoscode/dmarc-analyzer/internal/platform/paths"
 	"github.com/pmoscode/dmarc-analyzer/internal/web"
 )
+
+// retentionCheckInterval ist der Abstand zwischen zwei Anwendungen der
+// Aufbewahrungsrichtlinie (AP 7) — Löschen alter Reports ist unauffällige
+// Wartung, ein Tag Verzögerung nach einer geänderten Einstellung ist
+// unproblematisch.
+const retentionCheckInterval = 24 * time.Hour
+
+// syncSchedulerCheckInterval ist der Abstand, in dem geprüft wird, ob laut
+// den aktuell gespeicherten Einstellungen ein automatischer Abgleich
+// fällig ist (AP 7) — bewusst kurz, damit eine gerade geänderte
+// Sync-Intervall-Einstellung zeitnah wirkt, siehe syncscheduler.Scheduler.
+const syncSchedulerCheckInterval = time.Minute
+
+// syncJobAdapter bildet syncjob.Runner auf syncscheduler.Starter ab —
+// eigener, kleiner Adapter statt syncscheduler von syncjob.State abhängig
+// zu machen (AGENTS.md: nur cmd/dmarc-analyzer verdrahtet konkrete Typen
+// miteinander).
+type syncJobAdapter struct{ runner *syncjob.Runner }
+
+func (a syncJobAdapter) Start() error { return a.runner.Start() }
+
+func (a syncJobAdapter) Snapshot() syncscheduler.Snapshot {
+	s := a.runner.Snapshot()
+	last := s.EndedAt
+	if last.IsZero() {
+		last = s.StartedAt
+	}
+	return syncscheduler.Snapshot{Running: s.Status == syncjob.StatusRunning, LastActivity: last}
+}
 
 // runWeb startet die eingebettete Web-Oberfläche (siehe MIGRATIONSPLAN.md).
 // Lebenszyklus bewusst nur über Strg+C/SIGTERM (Entscheidung E-3, siehe
@@ -69,18 +101,29 @@ func runWeb(ctx context.Context, a *app, args []string) error {
 	signalCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	syncJob := syncjob.NewRunner(signalCtx, a.accounts.Accounts, a.sync)
+
 	srv, err := web.New(web.Dependencies{
 		Statistics:  a.stats,
 		Reports:     a.queries,
 		Sources:     a.sourceStats,
 		Accounts:    a.accounts,
 		Credentials: a.credentials,
-		SyncJob:     syncjob.NewRunner(signalCtx, a.accounts.Accounts, a.sync),
+		SyncJob:     syncJob,
 		Importer:    a.importer,
+		Retention:   a.retention,
 	}, web.Options{Addr: *addr, Dev: *dev})
 	if err != nil {
 		return fmt.Errorf("web-oberfläche konnte nicht aufgebaut werden: %w", err)
 	}
+
+	// Hintergrund-Aufträge (AP 7) — laufen über die Lebensdauer des
+	// Servers (signalCtx), unabhängig von einzelnen HTTP-Anfragen: die
+	// Aufbewahrungsrichtlinie greift auch, wenn nie jemand die
+	// Einstellungen-Seite besucht, und der geplante Abgleich läuft auch
+	// bei geschlossenem Browser weiter.
+	go retentionjob.NewRunner(a.retention, retentionCheckInterval, slog.Default()).Run(signalCtx)
+	go syncscheduler.NewScheduler(a.retention.Settings, syncJobAdapter{syncJob}, syncSchedulerCheckInterval, slog.Default()).Run(signalCtx)
 
 	loginURL, err := srv.Start(signalCtx)
 	if err != nil {

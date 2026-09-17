@@ -13,6 +13,7 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/account"
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/analysis"
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/report"
+	"github.com/pmoscode/dmarc-analyzer/internal/domain/settings"
 	domainsources "github.com/pmoscode/dmarc-analyzer/internal/domain/sources"
 	domainsync "github.com/pmoscode/dmarc-analyzer/internal/domain/sync"
 )
@@ -139,6 +140,44 @@ func (f *fakeReportRepository) Query(_ context.Context, q report.Query) (report.
 		return report.Page{}, f.queryErr
 	}
 	return f.page, nil
+}
+
+// fakeSettingsRepository implementiert settings.Repository in-memory —
+// für Tests von /einstellungen/allgemein (AP 7).
+type fakeSettingsRepository struct {
+	mu       sync.Mutex
+	s        settings.Settings
+	hasValue bool
+	saveErr  error
+}
+
+func (f *fakeSettingsRepository) Load(context.Context) (settings.Settings, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if !f.hasValue {
+		return settings.Default(), nil
+	}
+	return f.s, nil
+}
+
+func (f *fakeSettingsRepository) Save(_ context.Context, s settings.Settings) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.saveErr != nil {
+		return f.saveErr
+	}
+	f.s = s
+	f.hasValue = true
+	return nil
+}
+
+// fakePruner implementiert report.Pruner mit einem festen Rückgabewert —
+// die eigentliche Löschlogik ist bereits in internal/app/retention und
+// internal/infra/sqlite getestet, hier reicht ein einfacher Stub.
+type fakePruner struct{}
+
+func (f *fakePruner) DeleteOlderThan(context.Context, time.Time) (int64, error) {
+	return 0, nil
 }
 
 // fakeSourcesRepository implementiert domainsources.Repository mit fest

@@ -70,4 +70,26 @@
     </div>
   </form>
 </section>
+
+<section class="detail-card narrow-card">
+  <h2>Allgemein</h2>
+  <form method="post" action="/einstellungen/allgemein" class="stacked-form">
+    <input type="hidden" name="csrf_token" value="{{csrfToken}}">
+    <label>Aufbewahrungsdauer für Berichte (Monate)
+      <input type="number" name="aufbewahrung_monate" value="{{.General.RetentionMonths}}" min="0" required>
+    </label>
+    <p class="field-hint">0 = unbegrenzt aufbewahren. Ältere Berichte werden automatisch im Hintergrund gelöscht.</p>
+    <label>Automatischer Hintergrund-Abgleich (Minuten)
+      <input type="number" name="sync_intervall_minuten" value="{{.General.SyncIntervalMinutes}}" min="0" required>
+    </label>
+    <p class="field-hint">0 = kein automatischer Abgleich, nur der manuell über den Abgleich-Knopf gestartete.</p>
+    <div class="button-row">
+      <button type="submit">Speichern</button>
+    </div>
+  </form>
+  <div class="stacked-form">
+    <button type="button" id="notifications-enable-btn" class="secondary" hidden>Browser-Benachrichtigungen für Abgleich-Ergebnisse aktivieren</button>
+    <p class="field-hint" id="notifications-status" aria-live="polite"></p>
+  </div>
+</section>
 {{end}}

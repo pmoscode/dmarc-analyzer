@@ -223,3 +223,76 @@ func TestHandleAccountCreate_CredentialsLocked_RedirectsToUnlock(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, accounts, "Konto darf bei fehlgeschlagenem Credential-Store nicht als gespeichert gelten")
 }
+
+func TestHandleSettings_ShowsCurrentRetentionAndSyncIntervalDefaults(t *testing.T) {
+	srv, _ := newTestServerWithAccounts(t)
+	client := authenticatedClient(t, srv)
+
+	resp := httpGet(t, client, "http://"+srv.Addr()+"/einstellungen")
+	defer func() { _ = resp.Body.Close() }()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	html := string(body)
+
+	require.Contains(t, html, `name="aufbewahrung_monate" value="24"`)
+	require.Contains(t, html, `name="sync_intervall_minuten" value="60"`)
+}
+
+func TestHandleGeneralSettingsUpdate_ValidData_PersistsAndRedirects(t *testing.T) {
+	srv, fd := newTestServerWithAccounts(t)
+	client := authenticatedClient(t, srv)
+
+	resp := postForm(t, client, srv.Addr(), "/einstellungen/allgemein", csrfFormValues(srv, map[string]string{
+		"aufbewahrung_monate":    "12",
+		"sync_intervall_minuten": "30",
+	}))
+	defer func() { _ = resp.Body.Close() }()
+	require.Equal(t, http.StatusOK, resp.StatusCode) // Client folgt dem 303-Redirect
+
+	got, err := fd.settings.Load(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, 12, got.RetentionMonths)
+	require.Equal(t, 30, got.SyncIntervalMinutes)
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Contains(t, string(body), "Einstellungen gespeichert.")
+}
+
+func TestHandleGeneralSettingsUpdate_NegativeValue_ShowsErrorWithoutSaving(t *testing.T) {
+	srv, fd := newTestServerWithAccounts(t)
+	client := authenticatedClient(t, srv)
+
+	resp := postForm(t, client, srv.Addr(), "/einstellungen/allgemein", csrfFormValues(srv, map[string]string{
+		"aufbewahrung_monate":    "-1",
+		"sync_intervall_minuten": "30",
+	}))
+	defer func() { _ = resp.Body.Close() }()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	require.False(t, fd.settings.hasValue, "ungültige Eingabe darf nicht gespeichert werden")
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	html := string(body)
+	require.Contains(t, html, "form-error")
+	require.Contains(t, html, `name="aufbewahrung_monate" value="-1"`, "eingegebener Wert bleibt im Formular sichtbar")
+}
+
+func TestHandleGeneralSettingsUpdate_NonNumericValue_ShowsError(t *testing.T) {
+	srv, _ := newTestServerWithAccounts(t)
+	client := authenticatedClient(t, srv)
+
+	resp := postForm(t, client, srv.Addr(), "/einstellungen/allgemein", csrfFormValues(srv, map[string]string{
+		"aufbewahrung_monate":    "abc",
+		"sync_intervall_minuten": "30",
+	}))
+	defer func() { _ = resp.Body.Close() }()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Contains(t, string(body), "form-error")
+}

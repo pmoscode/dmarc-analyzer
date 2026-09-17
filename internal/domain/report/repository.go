@@ -108,3 +108,18 @@ type Repository interface {
 	// Lazy-Datenquelle). Records eines einzelnen Reports lädt FindByID.
 	Query(ctx context.Context, q Query) (Page, error)
 }
+
+// Pruner ist ein optionaler Zusatz-Port zu Repository für die
+// Aufbewahrungsrichtlinie (AP 7, IMPLEMENTIERUNG.md O-7) — bewusst
+// getrennt von Repository statt einer weiteren Methode dort: Löschen nach
+// Alter ist eine reine Wartungsoperation, die nur internal/app/retention
+// braucht, nicht jeder Aufrufer von Repository (dieselbe Zuschnitt-Idee
+// wie domain/sync.MultiReportParser/MailboxLister). sqlite.ReportRepository
+// implementiert Pruner zusätzlich zu Repository.
+type Pruner interface {
+	// DeleteOlderThan löscht alle Reports, deren Berichtszeitraum
+	// vollständig vor cutoff endet (DateRange.End < cutoff), und liefert
+	// die Anzahl gelöschter Reports. Löscht über die ON DELETE CASCADE-
+	// Fremdschlüssel auch Records, report_errors und raw_reports mit.
+	DeleteOlderThan(ctx context.Context, cutoff time.Time) (int64, error)
+}
