@@ -17,13 +17,13 @@ var version = "dev"
 
 const usage = `dmarc-analyzer ` + `%s` + `
 
-Ohne Argumente startet das grafische Programm. Für den Kommandozeilen-
-Betrieb (z. B. Cron/launchd) stehen folgende Unterbefehle bereit:
+Ohne Argumente startet die Web-Oberfläche im Standardbrowser (siehe
+MIGRATIONSPLAN.md). Für den Kommandozeilen-Betrieb (z. B. Cron/launchd)
+stehen folgende Unterbefehle bereit:
 
 Verwendung:
   dmarc-analyzer web [--adresse H:P] [--kein-browser] [--entwicklung]
-                                             Web-Oberfläche starten (siehe MIGRATIONSPLAN.md) — vorerst
-                                             neben dem grafischen Programm, das ohne Argumente startet
+                                             Web-Oberfläche starten (auch ohne Argumente der Standard)
   dmarc-analyzer sync [--headless]          Alle konfigurierten Konten synchronisieren
   dmarc-analyzer import <pfad>...           DMARC-Reports aus Dateien importieren (.eml, .xml, .xml.gz, .zip)
   dmarc-analyzer stats [--days N] [--domain D]
@@ -34,10 +34,9 @@ Verwendung:
   dmarc-analyzer account delete <id>        Konto entfernen (Metadaten und Zugangsdaten)
 `
 
-// main entscheidet zwischen grafischem und Kommandozeilen-Betrieb — bewusst
-// hier und nicht in run(): run() wird von cmd_*_test.go direkt mit leeren
-// Argumenten aufgerufen (TestRun_NoArgs_PrintsUsageWithoutError) und darf
-// dabei nie ein echtes Fenster öffnen, siehe cmd_gui.go.
+// main entscheidet, ob main.go selbst ein Argument ergänzen muss (kein
+// Unterbefehl → "web", MIGRATIONSPLAN.md M3), bevor run() den
+// eigentlichen Unterbefehl verarbeitet.
 func main() {
 	args := os.Args[1:]
 
@@ -47,11 +46,10 @@ func main() {
 	}
 
 	if len(args) == 0 {
-		if err := runGUI(context.Background()); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-		return
+		// Web-Oberfläche ist seit M3 der Standard ohne Argumente (zuvor
+		// das grafische Fyne-Programm, weiterhin über den versteckten
+		// Unterbefehl "gui" erreichbar, siehe cmd_gui.go).
+		args = []string{"web"}
 	}
 
 	if err := run(context.Background(), args); err != nil {
@@ -91,9 +89,11 @@ func run(ctx context.Context, args []string) error {
 	return handler(ctx, application, rest)
 }
 
-// subcommands bildet Unterbefehlsnamen auf ihre Handler ab.
+// subcommands bildet Unterbefehlsnamen auf ihre Handler ab. "gui" ist
+// bewusst nicht in der usage-Hilfe dokumentiert (siehe cmd_gui.go).
 var subcommands = map[string]func(context.Context, *app, []string) error{
 	"web":     runWeb,
+	"gui":     runGUI,
 	"sync":    runSync,
 	"import":  runImport,
 	"stats":   runStats,

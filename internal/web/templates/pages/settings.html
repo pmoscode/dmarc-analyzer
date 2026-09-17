@@ -1,0 +1,73 @@
+{{define "content"}}
+{{if .Message}}
+<p class="{{if .MessageIsError}}form-error{{else}}form-success{{end}}">{{.Message}}</p>
+{{end}}
+
+<section class="detail-card">
+  <h2>Konten ({{len .Accounts}})</h2>
+  {{if .Accounts}}
+  <table class="data-table" aria-label="Konfigurierte Konten">
+    <thead>
+      <tr><th>Anzeigename</th><th>Host</th><th>Benutzername</th><th>Postfach</th><th></th></tr>
+    </thead>
+    <tbody>
+      {{range .Accounts}}
+      <tr>
+        <td>{{.DisplayName}}</td>
+        <td>{{.Host}}:{{.Port}}</td>
+        <td>{{.Username}}</td>
+        <td>{{.Mailbox}}</td>
+        <td class="row-actions">
+          <form method="post" action="/konten/{{.ID}}/test">
+            <input type="hidden" name="csrf_token" value="{{csrfToken}}">
+            <button type="submit">Verbindung testen</button>
+          </form>
+          <form method="post" action="/konten/{{.ID}}/loeschen" data-confirm="Konto wirklich löschen?">
+            <input type="hidden" name="csrf_token" value="{{csrfToken}}">
+            <button type="submit" class="danger">Löschen</button>
+          </form>
+        </td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <p class="empty-state">Noch keine Konten konfiguriert.</p>
+  {{end}}
+</section>
+
+<section class="detail-card narrow-card">
+  <h2>Konto hinzufügen</h2>
+  <form method="post" action="/konten" class="stacked-form">
+    <input type="hidden" name="csrf_token" value="{{csrfToken}}">
+    <label>Anzeigename
+      <input type="text" name="anzeigename" value="{{.Form.DisplayName}}" placeholder="z. B. Firmenpostfach">
+    </label>
+    <label>Host
+      <input type="text" name="host" value="{{.Form.Host}}" placeholder="imap.example.com" required>
+    </label>
+    <label>Port
+      <input type="number" name="port" value="{{.Form.Port}}" min="1" max="65535" required>
+    </label>
+    <label>Benutzername
+      <input type="text" name="benutzername" value="{{.Form.Username}}" placeholder="name@example.com" required>
+    </label>
+    <label>Postfach
+      <input type="text" name="postfach" value="{{.Form.Mailbox}}" list="postfach-optionen" placeholder="INBOX">
+      <datalist id="postfach-optionen">
+        {{range .Form.MailboxOptions}}<option value="{{.}}">{{end}}
+      </datalist>
+    </label>
+    <label class="checkbox-row">
+      <input type="checkbox" name="tls" value="on"{{if .Form.UseTLS}} checked{{end}}> Verschlüsselte Verbindung (TLS)
+    </label>
+    <label>Passwort
+      <input type="password" name="passwort" autocomplete="new-password" required>
+    </label>
+    <div class="button-row">
+      <button type="submit" formaction="/konten/ordner" class="secondary">Ordner auflisten</button>
+      <button type="submit" formaction="/konten">Speichern</button>
+    </div>
+  </form>
+</section>
+{{end}}

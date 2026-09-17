@@ -34,7 +34,32 @@ type dashboardPageData struct {
 // URL (M1). Die zwei Diagramme lädt die Seite selbst per JavaScript von
 // /api/diagramme/* nach (Abschnitt 6a) — sie stehen bewusst nicht schon
 // in dashboardPageData.
+//
+// "/" ist außerdem die einzige Stelle, die auf Ersteinrichtung bzw.
+// Entsperren umleitet (MIGRATIONSPLAN.md Abschnitt 3: "Keine Konten
+// vorhanden → / leitet auf die Ersteinrichtung um" / "Kein
+// Betriebssystem-Schlüsselbund → Oberfläche zeigt zuerst eine
+// Entsperr-Seite") — andere Seiten (Berichte, Sendequellen, …)
+// funktionieren unabhängig von Konten/Schlüsselspeicher (sie lesen nur
+// bereits importierte Daten), eine Umleitung dort wäre unnötig
+// einschränkend.
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
+	if s.deps.Accounts != nil {
+		accounts, err := s.deps.Accounts.List(r.Context())
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		if len(accounts) == 0 {
+			http.Redirect(w, r, "/einrichtung", http.StatusSeeOther)
+			return
+		}
+		if s.credentialsLocked() {
+			s.redirectToUnlock(w, r, "/")
+			return
+		}
+	}
+
 	filter := parseFilterParams(r)
 	q, err := filter.query()
 	if err != nil {

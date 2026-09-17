@@ -2,7 +2,7 @@
 
 > Stand: 2026-09-17. Ergänzt `UMSETZUNGSPLAN.md` und ist dort **vor AP 7**
 > einzuordnen (Packaging und Feinschliff hängen vom Ergebnis ab).
-> Fortschritt: M0 und M1 umgesetzt (siehe Abschnitt 10), M2 offen.
+> Fortschritt: M0–M3 umgesetzt (siehe Abschnitt 10), M4 offen.
 
 ## 1. Anlass und Ziel
 
@@ -378,16 +378,87 @@ Browser-Rauchtest fehlt (siehe chromedp-Punkt oben).
 
 ### M3 — Schreibende Abläufe (L)
 
-- [ ] Erweiterungen 9.1, 9.2, 9.4 umgesetzt und getestet
-- [ ] Einstellungen: Konten anlegen, testen, löschen, Ordner auflisten
-- [ ] Ersteinrichtung in drei Schritten
-- [ ] Sync mit Fortschritt (SSE) und Abbruch
-- [ ] Entsperr-Seite für den Datei-Schlüsselspeicher
-- [ ] **Umschalten:** `dmarc-analyzer` ohne Argumente startet die Web-Oberfläche
+- [x] Erweiterungen 9.1, 9.2, 9.4 umgesetzt und getestet:
+  - 9.1: `syncreports.UseCase.SyncAccount` bekommt einen zusätzlichen
+    `onProgress`-Parameter (`OnProgress func(Progress)`, nil erlaubt) —
+    Parameter statt Struct-Feld, damit der geteilte `*syncreports.UseCase`
+    nicht durch parallele Aufrufe verschiedener Fortschritts-Callbacks
+    verwechselt werden kann. Bestehende Aufrufer (CLI, Fyne, Onboarding)
+    übergeben `nil`.
+  - 9.2: neues Paket `internal/app/syncjob` (`Runner`) — höchstens ein
+    Lauf gleichzeitig (`Start`/`ErrAlreadyRunning`), Abbruch per
+    `context.CancelFunc` (`Cancel`), Fortschritt für beliebig viele
+    Zuhörer (`Subscribe`, gepufferter Kanal mit "neuesten Stand
+    behalten"-Semantik). Hängt über eine eigene `Syncer`-Schnittstelle an
+    `syncreports.UseCase` statt an der konkreten Struct — vereinfacht
+    Tests erheblich (Fake statt vollständig verdrahtetem IMAP-Stack).
+    Ein echter, beim Schreiben dieses Plans nicht vorhergesehener Bug
+    wurde dabei gefunden und mit Regressionstest behoben: Cancel()
+    während des LETZTEN (oder einzigen) Kontos wurde fälschlich als
+    `done` statt `cancelled` gemeldet (die Abbruch-Prüfung saß nur vor
+    dem jeweils NÄCHSTEN Konto).
+  - 9.4: `account.ErrCredentialStoreLocked` (neuer Sentinel) +
+    `internal/infra/keyring.LockableFileStore` — startet gesperrt,
+    liefert bis `Unlock(passphrase)` diesen Fehler; `newCredentialStore`
+    in `cmd/dmarc-analyzer/wire.go` verwendet ihn nur für `cmd == "web"`
+    ohne OS-Schlüsselbund (CLI-Befehle fragen weiterhin blockierend auf
+    der Konsole, das ist dort unverändert richtig). In dieser Sandbox
+    tatsächlich beobachtet (kein Schlüsselbund verfügbar) und den
+    kompletten Entsperren→Einrichtung-Weg damit real durchlaufen, nicht
+    nur mit Fakes getestet.
+- [x] Einstellungen (`/einstellungen`): Konten anlegen (`POST /konten`),
+  testen (`POST /konten/{id}/test`), löschen
+  (`POST /konten/{id}/loeschen`), Ordner auflisten
+  (`POST /konten/ordner`, füllt ein `<datalist>` fürs Postfach-Feld).
+  Kein Verbindungstest vor dem Speichern (Parität zu
+  `internal/ui/settings.View` — nur die Ersteinrichtung testet vorher,
+  siehe unten). Passwort wird im erneut angezeigten Formular nie
+  echot (Validierungsfehler, Ordner-Liste) — Standardkonvention gegen
+  Klartext-Passwörter im HTML-Quelltext, auch wenn das erneutes
+  Eintippen nach "Ordner auflisten" verlangt.
+- [x] Ersteinrichtung in drei Schritten (`/einrichtung`, serverseitiger
+  Zustand zwischen den Schritten über `onboardingState` — bewusst nicht
+  über versteckte Formularfelder, aus demselben Passwort-Grund):
+  1. Konto eingeben, 2. Verbindung testen (Speichern erst bei Erfolg,
+  Parität zu `internal/ui/onboarding.Wizard`), 3. ersten Abgleich
+  anstoßen oder überspringen. `/` leitet auf `/einrichtung` um, solange
+  keine Konten existieren.
+- [x] Sync mit Fortschritt (SSE, `GET /ereignisse`) und Abbruch
+  (`POST /abgleich/abbrechen`) — Sync-Knopf samt Fortschrittsanzeige sitzt
+  in `layout.html` (jede Seite), nicht nur auf der Übersicht: der Abgleich
+  betrifft alle Konten gleichzeitig und soll beim Seitenwechsel sichtbar
+  bleiben (`static/app.js`, kein Framework, reines `EventSource`).
+  **Vereinfacht gegenüber der Fyne-Oberfläche:** kein eigener
+  Zwischenschritt "Ergebnis des ersten Abgleichs anzeigen" nach der
+  Ersteinrichtung (`showDoneStep`-Äquivalent) — die SSE-Anzeige im Header
+  übernimmt das durchgängig, auch über den Redirect zur Übersicht hinweg.
+- [x] Entsperr-Seite für den Datei-Schlüsselspeicher (`/entsperren`) —
+  verifiziert eine eingegebene Passphrase zusätzlich gegen ein
+  tatsächlich gespeichertes Secret, falls schon ein Konto existiert
+  (`Unlock()` selbst prüft das nicht aktiv, siehe Store-Dokumentation);
+  bei Fehlschlag wird wieder gesperrt statt eine falsche Passphrase
+  stillschweigend zu akzeptieren — ein echter Bug dieser Art (jede
+  Passphrase wurde akzeptiert, wenn noch kein Secret existierte) wurde
+  beim Testen gefunden und behoben (`account.ErrCredentialNotFound` ist
+  kein Beweis für eine falsche Passphrase, jeder andere Fehler schon).
+- [x] **Umschalten:** `dmarc-analyzer` ohne Argumente startet die
+  Web-Oberfläche (`main.go` reicht `["web"]` an `run()` durch). Die
+  alte Fyne-Oberfläche bleibt bis zum Rückbau in M5 über den
+  nicht mehr beworbenen Unterbefehl `gui` erreichbar (manueller
+  Vergleichs-/Rückfallpfad, siehe `cmd_gui.go`).
 
 **Fertig wenn:** Ein Nutzer richtet ohne Dokumentation im Browser ein Konto ein,
 wählt einen Unterordner, gleicht ab und sieht seine Reports — derselbe
-Abnahmesatz wie AP 5.
+Abnahmesatz wie AP 5. **Erreicht** (manuell mit dem gebauten Binary
+durchgespielt: Entsperren → Ersteinrichtung → Konto → Verbindungstest →
+Abgleich anstoßen → Einstellungen → Konto testen/löschen, jeweils mit
+den erwarteten Ergebnissen inklusive echter, aussagekräftiger
+Fehlermeldungen bei nicht erreichbaren Test-Hostnamen). Ordner-Picker
+selbst nicht gegen einen echten IMAP-Server verifiziert (keiner in dieser
+Sandbox verfügbar) — die zugrundeliegende
+`manageaccount.UseCase.ListMailboxes` ist aus AP 3/4 bereits gegen einen
+echten Server getestet, hier neu ist nur die Formular-Anbindung
+(`POST /konten/ordner`), die mit einem Fake-`MessageSource` abgedeckt ist.
 
 ### M4 — Import und Export (M)
 

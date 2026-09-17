@@ -17,14 +17,21 @@ import (
 // Programms das Repository-Wurzelverzeichnis sein muss (z. B. `task run`).
 const devTemplatesDir = "internal/web/templates"
 
-// templateFuncs stellt Vorlagen-Hilfsfunktionen bereit — aktuell nur
-// "glossarLink", das einen Glossar-Begriffsnamen in einen Link auf die
-// passende Erklärung auf /glossar umwandelt (MIGRATIONSPLAN.md
-// Meilenstein M2: "Begriffs-Tooltips"). Zentral hier statt in jeder
-// Vorlage neu gebaut, damit Vorlage und /glossar-Seite (handlers_nav.go)
-// garantiert denselben Slug verwenden.
-var templateFuncs = template.FuncMap{
-	"glossarLink": func(term string) string { return "/glossar#" + glossary.Slug(term) },
+// templateFuncs stellt Vorlagen-Hilfsfunktionen bereit: "glossarLink"
+// wandelt einen Glossar-Begriffsnamen in einen Link auf die passende
+// Erklärung auf /glossar um (MIGRATIONSPLAN.md Meilenstein M2:
+// "Begriffs-Tooltips"), "csrfToken" liefert das CSRF-Token dieser
+// Sitzung für versteckte Formularfelder (Meilenstein M3, siehe
+// middleware.go requireCSRF) — als Funktion statt als Feld auf jeder
+// einzelnen Seiten-Datenstruktur, weil sonst jede der inzwischen
+// zahlreichen page-data-Structs (dashboardPageData, reportsPageData, …)
+// dieses eine Feld einzeln bräuchte, nur weil layout.html jetzt überall
+// ein Sync-Formular zeigt.
+func newTemplateFuncs(csrfToken func() string) template.FuncMap {
+	return template.FuncMap{
+		"glossarLink": func(term string) string { return "/glossar#" + glossary.Slug(term) },
+		"csrfToken":   csrfToken,
+	}
 }
 
 // views lädt und rendert HTML-Vorlagen. Jede Seite (pages/*.html) wird
@@ -35,14 +42,15 @@ var templateFuncs = template.FuncMap{
 // je einem eigenen "content"-Block in einem Baum würden sich gegenseitig
 // überschreiben (letzte gewinnt), nicht wie ein Aufrufer erwarten würde.
 type views struct {
-	dev bool
+	dev   bool
+	funcs template.FuncMap
 
 	mu    sync.RWMutex
 	pages map[string]*template.Template
 }
 
-func newViews(dev bool) (*views, error) {
-	v := &views{dev: dev}
+func newViews(dev bool, csrfToken func() string) (*views, error) {
+	v := &views{dev: dev, funcs: newTemplateFuncs(csrfToken)}
 	if err := v.load(); err != nil {
 		return nil, err
 	}
@@ -63,7 +71,7 @@ func (v *views) load() error {
 	pages := make(map[string]*template.Template, len(pageFiles))
 	for _, pf := range pageFiles {
 		name := path.Base(pf)
-		t, err := template.New("layout.html").Funcs(templateFuncs).ParseFS(tmplFS, "layout.html", pf)
+		t, err := template.New("layout.html").Funcs(v.funcs).ParseFS(tmplFS, "layout.html", pf)
 		if err != nil {
 			return fmt.Errorf("vorlage %q konnte nicht geparst werden: %w", name, err)
 		}

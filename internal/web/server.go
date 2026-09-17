@@ -46,6 +46,11 @@ type Server struct {
 	httpServer   *http.Server
 	listener     net.Listener
 	instancePath string
+
+	// onboarding hält das noch nicht gespeicherte Konto zwischen den
+	// Schritten der Ersteinrichtung fest (MIGRATIONSPLAN.md Meilenstein
+	// M3) — siehe handlers_onboarding.go.
+	onboarding *onboardingState
 }
 
 // New baut den Server auf (Vorlagen laden, Instanz-Geheimnis erzeugen),
@@ -63,7 +68,7 @@ func New(deps Dependencies, opts Options) (*Server, error) {
 		return nil, err
 	}
 
-	v, err := newViews(opts.Dev)
+	v, err := newViews(opts.Dev, func() string { return a.csrfToken })
 	if err != nil {
 		return nil, fmt.Errorf("vorlagen konnten nicht geladen werden: %w", err)
 	}
@@ -74,12 +79,13 @@ func New(deps Dependencies, opts Options) (*Server, error) {
 	}
 
 	s := &Server{
-		deps:     deps,
-		logger:   logger,
-		auth:     a,
-		views:    v,
-		devMode:  opts.Dev,
-		staticFS: sfs,
+		deps:       deps,
+		logger:     logger,
+		auth:       a,
+		views:      v,
+		devMode:    opts.Dev,
+		staticFS:   sfs,
+		onboarding: &onboardingState{},
 	}
 	s.httpServer = &http.Server{
 		Handler:           s.routes(),

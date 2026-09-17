@@ -79,7 +79,7 @@ func TestSyncAccount_HappyPath_ImportsAllNewReports(t *testing.T) {
 		msg(3, "report-c"),
 	}, nil)
 
-	result, err := uc.SyncAccount(context.Background(), testAccountID)
+	result, err := uc.SyncAccount(context.Background(), testAccountID, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 3, result.New)
@@ -94,6 +94,43 @@ func TestSyncAccount_HappyPath_ImportsAllNewReports(t *testing.T) {
 	require.True(t, deps.source.closed, "MessageSource muss nach dem Lauf geschlossen werden")
 }
 
+func TestSyncAccount_OnProgress_ReportsCumulativeCountsAfterEachMessage(t *testing.T) {
+	t.Parallel()
+
+	uc, _ := newTestUseCase(t, []domainsync.RawMessage{
+		msg(1, "report-a"),
+		msg(2, "report-b"),
+		msg(3, "report-c"),
+	}, nil)
+
+	var updates []syncreports.Progress
+	_, err := uc.SyncAccount(context.Background(), testAccountID, func(p syncreports.Progress) {
+		updates = append(updates, p)
+	})
+	require.NoError(t, err)
+
+	require.Len(t, updates, 3, "ein Aufruf je verarbeiteter Nachricht")
+	// Reihenfolge der Nachrichten ist nicht garantiert (nebenläufige
+	// Parser-Worker, siehe runPipeline-Dokumentation) — deshalb nur die
+	// letzte, kumulierte Momentaufnahme prüfen, nicht jeden Zwischenwert.
+	last := updates[len(updates)-1]
+	require.Equal(t, 3, last.Processed)
+	require.Equal(t, 3, last.New)
+	require.Zero(t, last.Skipped)
+	require.Zero(t, last.Failed)
+}
+
+func TestSyncAccount_NilOnProgress_DoesNotPanic(t *testing.T) {
+	t.Parallel()
+
+	uc, _ := newTestUseCase(t, []domainsync.RawMessage{msg(1, "report-a")}, nil)
+
+	require.NotPanics(t, func() {
+		_, err := uc.SyncAccount(context.Background(), testAccountID, nil)
+		require.NoError(t, err)
+	})
+}
+
 func TestSyncAccount_SecondRun_SkipsAlreadyImportedReports(t *testing.T) {
 	// Der zentrale End-to-End-Fall über MessageSource hinaus: derselbe
 	// Report kommt (z. B. durch eine erneut zugestellte Mail) ein zweites
@@ -103,13 +140,13 @@ func TestSyncAccount_SecondRun_SkipsAlreadyImportedReports(t *testing.T) {
 
 	uc, deps := newTestUseCase(t, []domainsync.RawMessage{msg(1, "report-a")}, nil)
 
-	_, err := uc.SyncAccount(context.Background(), testAccountID)
+	_, err := uc.SyncAccount(context.Background(), testAccountID, nil)
 	require.NoError(t, err)
 
 	// Zweiter Lauf: MessageSource liefert dieselbe Nachricht erneut (z. B.
 	// weil die Postfach-UIDVALIDITY sich geändert hätte).
 	deps.source.messages = []domainsync.RawMessage{msg(1, "report-a")}
-	result, err := uc.SyncAccount(context.Background(), testAccountID)
+	result, err := uc.SyncAccount(context.Background(), testAccountID, nil)
 	require.NoError(t, err)
 
 	require.Zero(t, result.New)
@@ -125,7 +162,7 @@ func TestSyncAccount_ParseError_CountsAsFailedAndQuarantines(t *testing.T) {
 		msg(2, "kaputter-report"),
 	}, map[string]error{"kaputter-report": errTest})
 
-	result, err := uc.SyncAccount(context.Background(), testAccountID)
+	result, err := uc.SyncAccount(context.Background(), testAccountID, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 1, result.New)
@@ -145,7 +182,7 @@ func TestSyncAccount_DecodeError_CountsAsFailed(t *testing.T) {
 	uc, deps := newTestUseCase(t, []domainsync.RawMessage{msg(1, "irrelevant")}, nil)
 	uc.Decoder = failingDecoder{err: errTest}
 
-	result, err := uc.SyncAccount(context.Background(), testAccountID)
+	result, err := uc.SyncAccount(context.Background(), testAccountID, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, result.Failed)
 	require.Equal(t, 1, deps.failedImports.count())
@@ -156,7 +193,7 @@ func TestSyncAccount_NoNewMessages_StillPersistsBaseline(t *testing.T) {
 
 	uc, deps := newTestUseCase(t, nil, nil)
 
-	result, err := uc.SyncAccount(context.Background(), testAccountID)
+	result, err := uc.SyncAccount(context.Background(), testAccountID, nil)
 	require.NoError(t, err)
 	require.Zero(t, result.New)
 
@@ -172,7 +209,7 @@ func TestSyncAccount_ConnectFailure_ReturnsErrorWithoutPartialState(t *testing.T
 	uc, deps := newTestUseCase(t, nil, nil)
 	deps.source.connectErr = errTest
 
-	_, err := uc.SyncAccount(context.Background(), testAccountID)
+	_, err := uc.SyncAccount(context.Background(), testAccountID, nil)
 	require.Error(t, err)
 	require.Empty(t, deps.states.saves, "bei fehlgeschlagener Verbindung darf kein Fortschritt gespeichert werden")
 }
@@ -183,7 +220,7 @@ func TestSyncAccount_FetchFailure_ReturnsError(t *testing.T) {
 	uc, deps := newTestUseCase(t, nil, nil)
 	deps.source.fetchErr = errTest
 
-	_, err := uc.SyncAccount(context.Background(), testAccountID)
+	_, err := uc.SyncAccount(context.Background(), testAccountID, nil)
 	require.Error(t, err)
 }
 
@@ -191,7 +228,7 @@ func TestSyncAccount_UnknownAccount_ReturnsError(t *testing.T) {
 	t.Parallel()
 
 	uc, _ := newTestUseCase(t, nil, nil)
-	_, err := uc.SyncAccount(context.Background(), "nie-angelegt")
+	_, err := uc.SyncAccount(context.Background(), "nie-angelegt", nil)
 	require.Error(t, err)
 }
 
@@ -201,7 +238,7 @@ func TestSyncAccount_MissingCredentials_ReturnsError(t *testing.T) {
 	uc, deps := newTestUseCase(t, nil, nil)
 	require.NoError(t, deps.credentials.Delete(testAccountID))
 
-	_, err := uc.SyncAccount(context.Background(), testAccountID)
+	_, err := uc.SyncAccount(context.Background(), testAccountID, nil)
 	require.Error(t, err)
 }
 
@@ -227,7 +264,7 @@ func TestSyncAccount_ContextCancelledMidSync_LeavesConsistentState(t *testing.T)
 	uc.Parsers = []domainsync.ReportParser{cancelingParser{parser: fakeParser{}, cancel: cancel}}
 	uc.Concurrency = 1 // deterministische Reihenfolge für diesen Test
 
-	result, err := uc.SyncAccount(ctx, testAccountID)
+	result, err := uc.SyncAccount(ctx, testAccountID, nil)
 	require.NoError(t, err, "SyncAccount selbst meldet den Abbruch über Result.Errors, nicht als Rückgabefehler")
 
 	state, loadErr := deps.states.Load(context.Background(), testAccountID, "INBOX")
@@ -266,7 +303,7 @@ func TestSyncAccount_ExistsCheckError_CountsAsFailed(t *testing.T) {
 	uc, deps := newTestUseCase(t, []domainsync.RawMessage{msg(1, "report-a")}, nil)
 	deps.reports.existsErr = errTest
 
-	result, err := uc.SyncAccount(context.Background(), testAccountID)
+	result, err := uc.SyncAccount(context.Background(), testAccountID, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, result.Failed)
 	require.Zero(t, result.New)
@@ -279,7 +316,7 @@ func TestSyncAccount_SaveError_NonDuplicate_CountsAsFailed(t *testing.T) {
 	uc, deps := newTestUseCase(t, []domainsync.RawMessage{msg(1, "report-a")}, nil)
 	deps.reports.saveErr = errTest
 
-	result, err := uc.SyncAccount(context.Background(), testAccountID)
+	result, err := uc.SyncAccount(context.Background(), testAccountID, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, result.Failed)
 	require.Zero(t, result.New)

@@ -14,6 +14,17 @@
         {{range .Nav}}<li><a href="{{.Href}}"{{if .Active}} class="active" aria-current="page"{{end}}>{{.Label}}</a></li>{{end}}
       </ul>
     </nav>
+    <div class="sync-area">
+      <form method="post" action="/abgleich" id="sync-start-form" class="sync-form">
+        <input type="hidden" name="csrf_token" value="{{csrfToken}}">
+        <button type="submit" id="sync-start-button">Abgleich starten</button>
+      </form>
+      <form method="post" action="/abgleich/abbrechen" id="sync-cancel-form" class="sync-form" hidden>
+        <input type="hidden" name="csrf_token" value="{{csrfToken}}">
+        <button type="submit">Abbrechen</button>
+      </form>
+      <span id="sync-status" class="sync-status" aria-live="polite"></span>
+    </div>
   </header>
   <main class="app-main">
     {{template "content" .}}
@@ -24,5 +35,6 @@
   <script src="/static/vendor/chartjs-plugin-zoom.min.js"></script>
   <script src="/static/vendor/htmx.min.js"></script>
   <script src="/static/charts.js"></script>
+  <script src="/static/app.js"></script>
 </body>
 </html>

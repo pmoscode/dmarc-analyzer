@@ -204,7 +204,7 @@ func (w *Wizard) runFirstSync() {
 	w.setBody(widget.NewLabel(i18n.SyncRunning), progress)
 
 	w.runBackground(func() {
-		result, err := w.sync.SyncAccount(context.Background(), id)
+		result, err := w.sync.SyncAccount(context.Background(), id, nil)
 		fyne.Do(func() {
 			if err != nil {
 				w.banner.SetError(i18n.SyncErrorPrefix+err.Error(), "")

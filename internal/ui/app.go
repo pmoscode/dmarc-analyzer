@@ -260,7 +260,7 @@ func (s *shell) startSync() {
 			if ctx.Err() != nil {
 				break
 			}
-			result, syncErr := s.deps.Sync.SyncAccount(ctx, acc.ID)
+			result, syncErr := s.deps.Sync.SyncAccount(ctx, acc.ID, nil)
 			total.New += result.New
 			total.Skipped += result.Skipped
 			total.Failed += result.Failed

@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/pmoscode/dmarc-analyzer/internal/app/syncjob"
 	"github.com/pmoscode/dmarc-analyzer/internal/web"
 )
 
@@ -43,22 +44,28 @@ func runWeb(ctx context.Context, a *app, args []string) error {
 		}
 	}
 
-	srv, err := web.New(web.Dependencies{
-		Statistics: a.stats,
-		Reports:    a.queries,
-		Sources:    a.sourceStats,
-	}, web.Options{Addr: *addr, Dev: *dev})
-	if err != nil {
-		return fmt.Errorf("web-oberfläche konnte nicht aufgebaut werden: %w", err)
-	}
-
 	// Eigener, auf diesen Aufruf begrenzter signal-Kontext statt den
 	// übergebenen ctx global umzustellen — sync/import/stats/account
 	// sollen von dieser Änderung im Lebenszyklus unberührt bleiben (siehe
 	// AGENTS.md: Composition Root verdrahtet nur, was der jeweilige
-	// Unterbefehl tatsächlich braucht).
+	// Unterbefehl tatsächlich braucht). Derselbe Kontext ist gleich unten
+	// die Basis für syncjob.Runner — ein laufender Sync wird spätestens
+	// beim Herunterfahren des Servers abgebrochen, nicht schon mit der
+	// HTTP-Anfrage, die ihn angestoßen hat.
 	signalCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
+
+	srv, err := web.New(web.Dependencies{
+		Statistics:  a.stats,
+		Reports:     a.queries,
+		Sources:     a.sourceStats,
+		Accounts:    a.accounts,
+		Credentials: a.credentials,
+		SyncJob:     syncjob.NewRunner(signalCtx, a.accounts.Accounts, a.sync),
+	}, web.Options{Addr: *addr, Dev: *dev})
+	if err != nil {
+		return fmt.Errorf("web-oberfläche konnte nicht aufgebaut werden: %w", err)
+	}
 
 	loginURL, err := srv.Start(signalCtx)
 	if err != nil {

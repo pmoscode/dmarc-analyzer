@@ -53,8 +53,33 @@ type Result struct {
 	Errors []error
 }
 
+// Progress ist der Zwischenstand eines laufenden Sync — dieselben
+// Zähler wie Result, aber nach jeder abgeschlossenen Nachricht gemeldet
+// statt erst am Ende (MIGRATIONSPLAN.md Erweiterung 9.1: "Fortschritts-
+// Callback (verarbeitet / neu / übersprungen / fehlerhaft)"). Processed
+// zählt Nachrichten (eine Nachricht kann mehrere Reports als Anhang
+// haben, die einzeln in New/Skipped/Failed einfließen), New/Skipped/
+// Failed zählen wie in Result Reports.
+type Progress struct {
+	Processed int
+	New       int
+	Skipped   int
+	Failed    int
+}
+
+// OnProgress wird — falls nicht nil — nach jeder abgeschlossenen
+// Nachricht mit dem kumulierten Zwischenstand aufgerufen. Läuft auf der
+// seriellen Schreiber-Goroutine (siehe write()), nie nebenläufig — ein
+// Aufrufer braucht keine eigene Synchronisierung, darf aber selbst nicht
+// blockieren (sonst blockiert der gesamte Sync).
+type OnProgress func(Progress)
+
 // SyncAccount führt einen inkrementellen Sync für accountID durch.
-func (uc *UseCase) SyncAccount(ctx context.Context, accountID account.AccountID) (Result, error) {
+// onProgress ist optional (nil: kein Fortschritt gemeldet) — die
+// Web-Oberfläche hängt hier den SSE-Sender ein (internal/app/syncjob),
+// die CLI und die Fyne-Oberfläche übergeben nil (MIGRATIONSPLAN.md
+// Erweiterung 9.1).
+func (uc *UseCase) SyncAccount(ctx context.Context, accountID account.AccountID, onProgress OnProgress) (Result, error) {
 	acc, err := uc.Accounts.FindByID(ctx, accountID)
 	if err != nil {
 		return Result{}, fmt.Errorf("konto %q konnte nicht geladen werden: %w", accountID, err)
@@ -90,7 +115,7 @@ func (uc *UseCase) SyncAccount(ctx context.Context, accountID account.AccountID)
 		return Result{}, fmt.Errorf("sync-fortschritt für konto %q konnte nicht gespeichert werden: %w", accountID, err)
 	}
 
-	return uc.runPipeline(ctx, baseline, seq)
+	return uc.runPipeline(ctx, baseline, seq, onProgress)
 }
 
 // fetchResult transportiert entweder eine abgeholte Nachricht oder den
@@ -118,7 +143,7 @@ type parseResult struct {
 // garantiert), der Aufrufer selbst schreibt seriell und schreibt den
 // Fortschritt nur über eine lückenlose Grenze fort (progressTracker) —
 // das bleibt auch bei außer der Reihe abgeschlossenen Nachrichten korrekt.
-func (uc *UseCase) runPipeline(ctx context.Context, baseline domainsync.State, seq func(func(domainsync.RawMessage, error) bool)) (Result, error) {
+func (uc *UseCase) runPipeline(ctx context.Context, baseline domainsync.State, seq func(func(domainsync.RawMessage, error) bool), onProgress OnProgress) (Result, error) {
 	jobs := make(chan fetchResult)
 	results := make(chan parseResult)
 
@@ -141,7 +166,7 @@ func (uc *UseCase) runPipeline(ctx context.Context, baseline domainsync.State, s
 		close(results)
 	}()
 
-	return uc.write(ctx, baseline, results)
+	return uc.write(ctx, baseline, results, onProgress)
 }
 
 func (uc *UseCase) fetch(ctx context.Context, seq func(func(domainsync.RawMessage, error) bool), jobs chan<- fetchResult) {
@@ -215,16 +240,19 @@ func (uc *UseCase) findParser(att domainsync.RawAttachment) domainsync.ReportPar
 // write ist die einzige Goroutine, die Reports speichert und den
 // Fortschritt fortschreibt — seriell, wie von IMPLEMENTIERUNG.md
 // Abschnitt 7.3 gefordert ("SQLite mag keine konkurrierenden Schreiber").
-func (uc *UseCase) write(ctx context.Context, baseline domainsync.State, results <-chan parseResult) (Result, error) {
+func (uc *UseCase) write(ctx context.Context, baseline domainsync.State, results <-chan parseResult, onProgress OnProgress) (Result, error) {
 	result := Result{}
 	state := baseline
 	tracker := newProgressTracker(baseline.LastUID)
+	processed := 0
 
 	for res := range results {
 		if res.isFetchErr {
 			result.Errors = append(result.Errors, res.err)
 			continue
 		}
+
+		processed++
 
 		if res.err != nil {
 			result.Failed++
@@ -244,6 +272,15 @@ func (uc *UseCase) write(ctx context.Context, baseline domainsync.State, results
 
 		if err := uc.advanceProgress(ctx, tracker, &state, res.msg.UID); err != nil {
 			result.Errors = append(result.Errors, err)
+		}
+
+		if onProgress != nil {
+			onProgress(Progress{
+				Processed: processed,
+				New:       result.New,
+				Skipped:   result.Skipped,
+				Failed:    result.Failed,
+			})
 		}
 	}
 

@@ -91,6 +91,44 @@ a {
   font-weight: 600;
 }
 
+.sync-area {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.sync-form {
+  margin: 0;
+}
+
+.sync-form button {
+  padding: 6px 12px;
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  background: var(--primary);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.sync-form button:hover {
+  filter: brightness(1.08);
+}
+
+#sync-cancel-form button {
+  background: var(--surface);
+  color: var(--status-critical);
+  border-color: var(--status-critical);
+}
+
+.sync-status {
+  font-size: 12px;
+  color: var(--ink-secondary);
+  max-width: 320px;
+}
+
 .placeholder {
   background: var(--surface);
   border: 1px solid var(--gridline);
@@ -200,6 +238,122 @@ a {
 
 .detail-list dd {
   margin: 0;
+}
+
+.narrow-card {
+  max-width: 440px;
+  margin: 0 auto;
+}
+
+.form-error {
+  background: color-mix(in srgb, var(--status-critical) 12%, var(--surface));
+  border: 1px solid var(--status-critical);
+  color: var(--status-critical);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+.form-success {
+  background: color-mix(in srgb, var(--status-good) 12%, var(--surface));
+  border: 1px solid var(--status-good);
+  color: var(--status-good);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+.stacked-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.stacked-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--ink-secondary);
+}
+
+.stacked-form input[type="text"],
+.stacked-form input[type="password"],
+.stacked-form input[type="number"] {
+  padding: 7px 10px;
+  border: 1px solid var(--gridline);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.stacked-form .checkbox-row {
+  flex-direction: row;
+  align-items: center;
+}
+
+.stacked-form button,
+.stacked-form input[type="submit"] {
+  align-self: flex-start;
+  padding: 8px 16px;
+  border: 1px solid var(--primary);
+  border-radius: 8px;
+  background: var(--primary);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.stacked-form button.secondary {
+  background: var(--surface);
+  color: var(--primary);
+}
+
+.stacked-form .button-row {
+  display: flex;
+  gap: 10px;
+}
+
+.button-link {
+  align-self: flex-start;
+  padding: 8px 16px;
+  border: 1px solid var(--gridline);
+  border-radius: 8px;
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.button-link:hover {
+  background: var(--gridline);
+}
+
+.row-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.row-actions form {
+  margin: 0;
+}
+
+.row-actions button {
+  padding: 5px 10px;
+  border: 1px solid var(--gridline);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.row-actions button.danger {
+  color: var(--status-critical);
+  border-color: var(--status-critical);
 }
 
 .app-main {

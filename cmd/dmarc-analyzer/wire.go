@@ -38,6 +38,11 @@ type app struct {
 	importer    *importfiles.UseCase
 	stats       *statistics.UseCase
 	sourceStats *sourcestats.UseCase
+	// credentials ist nur für "web" gesetzt — die Web-Oberfläche braucht
+	// den Store selbst (nicht nur die darauf aufbauenden Use Cases), um
+	// auf /entsperren einen sperrbaren Store (LockableFileStore)
+	// entsperren zu können (MIGRATIONSPLAN.md Erweiterung 9.4).
+	credentials account.CredentialStore
 }
 
 // credentialAwareCommands sind die einzigen Unterbefehle, die Zugangsdaten
@@ -47,8 +52,9 @@ type app struct {
 // interaktiv nach einer Master-Passphrase fragen), obwohl stats gar keine
 // Zugangsdaten braucht. "gui" ist Zugangsdaten-bewusst, weil sowohl die
 // Konten- als auch die Sync-Ansicht des grafischen Programms Konten
-// verwalten bzw. abgleichen können (siehe cmd_gui.go).
-var credentialAwareCommands = map[string]bool{"sync": true, "account": true, "gui": true}
+// verwalten bzw. abgleichen können (siehe cmd_gui.go). "web" ebenso, seit
+// M3 (Einstellungen/Ersteinrichtung/Sync in der Web-Oberfläche).
+var credentialAwareCommands = map[string]bool{"sync": true, "account": true, "gui": true, "web": true}
 
 // newApp öffnet die Datenbank und verdrahtet die für cmd tatsächlich
 // benötigten Adapter mit den Use Cases. Einziger Ort im Programm, der
@@ -97,11 +103,12 @@ func newApp(ctx context.Context, cmd string) (*app, error) {
 	}
 
 	if credentialAwareCommands[cmd] {
-		credentialStore, err := newCredentialStore()
+		credentialStore, err := newCredentialStore(cmd)
 		if err != nil {
 			_ = db.Close()
 			return nil, err
 		}
+		a.credentials = credentialStore
 
 		a.accounts = &manageaccount.UseCase{
 			Accounts:    accountRepo,
@@ -132,18 +139,30 @@ func (a *app) Close() error {
 // Kanarienwert, ob der Schlüsselbund tatsächlich nutzbar ist, statt aus
 // einer bestimmten Fehlerklasse zu raten (IMPLEMENTIERUNG.md Abschnitt 9,
 // siehe auch internal/infra/keyring/probe.go).
-func newCredentialStore() (account.CredentialStore, error) {
+//
+// Für cmd == "web" wird beim Datei-Fallback NIE auf der Konsole nach der
+// Passphrase gefragt (anders als bei den übrigen Unterbefehlen): ein per
+// Doppelklick gestarteter Server hat keine Konsole, die blockierend auf
+// Eingabe wartet, würde also einfach hängen. Stattdessen liefert
+// LockableFileStore einen gesperrten Store — die Web-Oberfläche fragt
+// die Passphrase stattdessen auf /entsperren ab (MIGRATIONSPLAN.md
+// Erweiterung 9.4).
+func newCredentialStore(cmd string) (account.CredentialStore, error) {
 	if keyring.IsAvailable() {
 		return keyring.NewOSStore(), nil
 	}
-
-	fmt.Fprintln(os.Stderr, "Kein Betriebssystem-Schlüsselbund verfügbar — Zugangsdaten werden "+
-		"stattdessen verschlüsselt lokal abgelegt (IMPLEMENTIERUNG.md Abschnitt 9).")
 
 	dir, err := paths.ConfigDir()
 	if err != nil {
 		return nil, fmt.Errorf("konfigverzeichnis konnte nicht ermittelt werden: %w", err)
 	}
+
+	if cmd == "web" {
+		return keyring.NewLockableFileStore(dir), nil
+	}
+
+	fmt.Fprintln(os.Stderr, "Kein Betriebssystem-Schlüsselbund verfügbar — Zugangsdaten werden "+
+		"stattdessen verschlüsselt lokal abgelegt (IMPLEMENTIERUNG.md Abschnitt 9).")
 
 	passphrase, err := readMasterPassphrase()
 	if err != nil {

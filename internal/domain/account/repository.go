@@ -12,6 +12,16 @@ import (
 // wissen zu müssen, welcher Adapter gerade aktiv ist.
 var ErrCredentialNotFound = errors.New("kein geheimnis für diese account-id gespeichert")
 
+// ErrCredentialStoreLocked wird von einem sperrbaren CredentialStore
+// zurückgegeben (aktuell: internal/infra/keyring.LockableFileStore),
+// solange die Master-Passphrase noch nicht eingegeben wurde
+// (MIGRATIONSPLAN.md Erweiterung 9.4). Die Web-Oberfläche fängt diesen
+// Fehler an jeder Stelle ab, die den Store benutzt, und leitet auf
+// /entsperren um, statt einen technischen Fehler zu zeigen. Der
+// OS-Schlüsselbund-Adapter kennt diesen Zustand nicht (liefert ihn nie) —
+// dort ist nach dem Programmstart nichts zu entsperren.
+var ErrCredentialStoreLocked = errors.New("schlüsselspeicher ist noch gesperrt — master-passphrase erforderlich")
+
 // Repository ist der Port zur Persistenz der MailAccount-Metadaten
 // (niemals Zugangsdaten — die liegen hinter CredentialStore). Implementiert
 // in AP 4 gegen SQLite, zusammen mit der Kontoverwaltung

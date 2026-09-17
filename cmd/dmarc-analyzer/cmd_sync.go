@@ -30,7 +30,7 @@ func runSync(ctx context.Context, a *app, args []string) error {
 
 	var runErrs []error
 	for _, acc := range accounts {
-		result, err := a.sync.SyncAccount(ctx, acc.ID)
+		result, err := a.sync.SyncAccount(ctx, acc.ID, nil)
 		if err != nil {
 			runErrs = append(runErrs, fmt.Errorf("konto %q: %w", acc.DisplayName, err))
 			continue
