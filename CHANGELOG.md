@@ -178,3 +178,85 @@ die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
   zugrunde liegende `widget.ModalPopUp` nicht durch Antippen außerhalb,
   der Dialog blieb also dauerhaft offen. Jetzt `dialog.NewCustom(...)`
   mit einem "Schließen"-Knopf.
+
+### Geändert
+
+- Migration der gesamten Präsentationsschicht von der Fyne-Desktop-
+  Oberfläche zu einer im Programm eingebetteten Web-Oberfläche
+  (`internal/web`, `MIGRATIONSPLAN.md` Meilensteine M0–M5): Beim Start
+  läuft ein lokaler HTTP-Server auf `127.0.0.1`, der Standardbrowser
+  öffnet automatisch eine Seite mit Einmal-Anmeldelink (60 s gültig, gegen
+  ein `HttpOnly`/`SameSite=Strict`-Sitzungs-Cookie eingetauscht).
+  Einzelinstanz-Erkennung über `instance.json`: ein zweiter Start holt
+  sich nur einen frischen Anmeldelink. Sicherheitsmodell: `Host`-Prüfung
+  gegen DNS-Rebinding, CSRF-Token- und `Origin`/`Sec-Fetch-Site`-Prüfung
+  bei jeder zustandsändernden Anfrage, Content-Security-Policy ohne
+  `unsafe-inline`. Lebenszyklus ausschließlich über Strg+C/SIGTERM (kein
+  Auto-Ende, kein „Beenden"-Knopf) — siehe README „Start und Beenden".
+- Alle vier Dashboard-Diagramme (Zeitreihe, Top-Sendequellen, Disposition,
+  Heatmap) werden jetzt clientseitig mit Chart.js gezeichnet
+  (`internal/web/static/charts.js`, Plugins `chartjs-chart-matrix` für die
+  Heatmap und `chartjs-plugin-zoom` für die Zeitreihe) statt serverseitig
+  als PNG (`go-chart`) — dadurch Tooltips, umschaltbare Legende, Zoom in
+  der Zeitreihe und Klick-Drilldown (ein Klick auf Tag/Quelle/Zelle/
+  Segment öffnet die passend gefilterten Berichte). Jedes Diagramm hat
+  zusätzlich eine zuschaltbare Tabellenansicht (Barrierefreiheit) sowie
+  PNG-/CSV-Export-Knöpfe.
+- Berichte- und Sendequellen-Tabellen laufen jetzt über seitenweises
+  Nachladen mit htmx statt einer virtualisierten Fyne-Tabelle; CSV-Export
+  lädt den gesamten gefilterten Bestand gestreamt nach, ohne ihn
+  vollständig im Speicher zu halten.
+- Import (`importfiles.UseCase.ImportData`) jetzt zusätzlich per Web-
+  Upload (`POST /import`, Drag & Drop, mehrere Dateien gleichzeitig,
+  50 MB je Datei) statt nur per CLI-Dateipfad.
+- Sync läuft jetzt als serverseitiger Hintergrund-Auftrag
+  (`internal/app/syncjob`, höchstens ein Lauf gleichzeitig, Abbruch per
+  Kontext) mit Live-Fortschritt über Server-Sent Events
+  (`GET /ereignisse`) statt eines synchronen Fyne-Fortschrittsdialogs.
+- Zugangsdaten-Sperre: `account.CredentialStore` kann jetzt gesperrt sein
+  (`account.ErrCredentialStoreLocked`) — die Oberfläche leitet dann auf
+  eine Entsperr-Seite (`/entsperren`) für die Master-Passphrase des
+  Datei-Fallback-Schlüsselspeichers (Linux ohne Secret Service), statt
+  wie zuvor auf der Konsole danach zu fragen (die es beim Start ohne
+  Terminal, z. B. per Doppelklick, nicht gibt).
+
+### Entfernt
+
+- `internal/ui` (gesamte Fyne-Oberfläche, ~4.900 Zeilen inkl. Tests),
+  `cmd/dmarc-analyzer/cmd_gui.go` sowie `fyne.io/fyne/v2` und alle
+  transitiven Fyne-Abhängigkeiten aus `go.mod` (Meilenstein M5). Der
+  versteckte Übergangs-Unterbefehl `gui` (Vergleichs-/Rückfallpfad
+  während der Migration) entfällt damit ebenfalls.
+- `internal/infra/charts` (`go-chart`-Implementierung des
+  `ChartRenderer`-Ports), `analysis.ChartRenderer` selbst sowie
+  `exportdata.WriteChartPNG` — Diagramme entstehen jetzt vollständig im
+  Browser (siehe „Geändert" oben). `github.com/wcharczuk/go-chart/v2`
+  damit ebenfalls aus `go.mod` entfernt. Begründung in
+  `docs/adr/0001-web-oberflaeche-statt-fyne.md` und
+  `docs/adr/0002-chartjs-statt-chartrenderer-port.md`.
+- Damit ist das gesamte Modul jetzt frei von CGO-Abhängigkeiten
+  (`go list -deps ./... | grep fyne` liefert nichts mehr); `task release`
+  baut alle Zielplattformen (macOS arm64/amd64, Windows amd64, Linux
+  amd64/arm64) als reine `CGO_ENABLED=0`-Cross-Compiles auf einem
+  einzigen Rechner, ohne `fyne package` oder plattformspezifische
+  Toolchains — siehe `Taskfile.yml` (`release:darwin`/`release:windows`/
+  `release:linux`/`release`) und die neue GitHub-Actions-Pipeline
+  (`.github/workflows/ci.yml`: `task check` bei jedem Push/PR, `task
+  release` samt GitHub-Release bei Versions-Tags).
+
+### Behoben
+
+- `.zip`-Anhänge mit mehreren enthaltenen DMARC-Reports wurden sowohl
+  beim Datei-Import als auch beim IMAP-Sync nur zu einem Report
+  importiert (`ReportParser.Parse()` statt `ParseAll()`) — behoben über
+  eine neue, optionale Schnittstelle `domainsync.MultiReportParser` und
+  eine gemeinsame Hilfsfunktion `domainsync.ParseAttachment`.
+- `syncjob.Runner` meldete einen Abbruch während des letzten Kontos
+  fälschlich als `done`.
+- `/entsperren` akzeptierte jede Passphrase, wenn noch kein Konto
+  existierte.
+- Ein Chart.js-Diagramm (Nachrichtenvolumen pro Tag) wuchs beim Laden des
+  Dashboards unbegrenzt nach unten — klassischer Chart.js-
+  Rückkopplungsschleifen-Bug bei `responsive: true` +
+  `maintainAspectRatio: false` ohne Wrapper-Element mit fester,
+  vom Canvas unabhängiger Höhe (siehe `AGENTS.md`).

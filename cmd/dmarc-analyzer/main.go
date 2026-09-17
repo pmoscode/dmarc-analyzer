@@ -46,9 +46,7 @@ func main() {
 	}
 
 	if len(args) == 0 {
-		// Web-Oberfläche ist seit M3 der Standard ohne Argumente (zuvor
-		// das grafische Fyne-Programm, weiterhin über den versteckten
-		// Unterbefehl "gui" erreichbar, siehe cmd_gui.go).
+		// Web-Oberfläche ist seit M3 der Standard ohne Argumente.
 		args = []string{"web"}
 	}
 
@@ -89,11 +87,9 @@ func run(ctx context.Context, args []string) error {
 	return handler(ctx, application, rest)
 }
 
-// subcommands bildet Unterbefehlsnamen auf ihre Handler ab. "gui" ist
-// bewusst nicht in der usage-Hilfe dokumentiert (siehe cmd_gui.go).
+// subcommands bildet Unterbefehlsnamen auf ihre Handler ab.
 var subcommands = map[string]func(context.Context, *app, []string) error{
 	"web":     runWeb,
-	"gui":     runGUI,
 	"sync":    runSync,
 	"import":  runImport,
 	"stats":   runStats,

@@ -53,3 +53,15 @@ func TestLogDir_IsCreated(t *testing.T) {
 	require.NoError(t, err, "Verzeichnis wurde nicht angelegt")
 	require.True(t, info.IsDir())
 }
+
+func TestLogFilePath_LiesInLogDirAndEndsWithLogFile(t *testing.T) {
+	isolateHome(t)
+
+	dir, err := paths.LogDir()
+	require.NoError(t, err)
+
+	file, err := paths.LogFilePath()
+	require.NoError(t, err)
+	require.True(t, strings.HasSuffix(file, "dmarc-analyzer.log"))
+	require.True(t, strings.HasPrefix(file, dir))
+}

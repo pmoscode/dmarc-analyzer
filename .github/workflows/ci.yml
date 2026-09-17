@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
 
 permissions:
@@ -48,3 +49,42 @@ jobs:
 
       - name: Build
         run: task build
+
+  # release baut seit M5 (MIGRATIONSPLAN.md: Fyne/go-chart entfernt, siehe
+  # Taskfile.yml "release:*") reine CGO_ENABLED=0-Cross-Compiles für alle
+  # Zielplattformen auf einem einzigen Runner — kein fyne package, keine
+  # plattformspezifische Toolchain nötig. macos-latest statt ubuntu-latest,
+  # weil "task release" "zip" und "shasum" direkt aus der Shell aufruft
+  # (siehe Taskfile.yml) — auf macOS beides ohne Zusatzinstallation
+  # vorhanden, auf dem Ubuntu-Runner nicht garantiert (insbesondere
+  # "shasum" fehlt dort standardmäßig, das GNU-Äquivalent hieße
+  # "sha256sum"). Läuft nur bei einem Versions-Tag und erst nachdem
+  # "check" auf allen drei Betriebssystemen grün war.
+  release:
+    name: Release-Binärdateien bauen
+    needs: check
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.1"
+          cache: true
+
+      - name: Task installieren
+        uses: arduino/setup-task@v2
+        with:
+          version: "3.53.1"
+
+      - name: task release (macOS arm64/amd64, Windows amd64, Linux amd64/arm64)
+        run: task release
+
+      - name: GitHub-Release mit Binärdateien und Checksummen erstellen
+        uses: softprops/action-gh-release@v2
+        with:
+          files: bin/release/*
+          generate_release_notes: true

@@ -44,6 +44,19 @@ func LogDir() (string, error) {
 	return ensureDir(filepath.Join(base, appDirName))
 }
 
+// LogFilePath liefert den vollständigen Pfad zur persistenten Log-Datei
+// (siehe LogDir()). Wichtig vor allem für den Windows-Release-Build ohne
+// Konsolenfenster (MIGRATIONSPLAN.md M5: "-H windowsgui") — dort verpufft
+// alles, was nur nach os.Stderr geschrieben wird, spurlos; siehe
+// cmd/dmarc-analyzer/cmd_web.go.
+func LogFilePath() (string, error) {
+	dir, err := LogDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "dmarc-analyzer.log"), nil
+}
+
 func ensureDir(dir string) (string, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", fmt.Errorf("verzeichnis %q konnte nicht angelegt werden: %w", dir, err)

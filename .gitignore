@@ -29,13 +29,9 @@ go.work.sum
 .juni
 
 ### Projektspezifisch
-# Build-Ausgabe von "task build" / "task release"
+# Build-Ausgabe von "task build" / "task release" (inkl. bin/release/*)
 /bin/
 coverage.html
-
-# Packaging-Ausgaben von "task package:*" (fyne package)
-*.app/
-*.tar.xz
 
 # Checksumm-Cache von go-task (Grundlage für "sources"/"generates")
 .task/

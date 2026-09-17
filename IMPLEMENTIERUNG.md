@@ -58,26 +58,39 @@ Ein eigenständiges Desktop-Programm (macOS, Windows, Linux) als einzelne Binär
 
 ## 3. Technologie-Stack
 
+> **Nachtrag M5 (siehe `MIGRATIONSPLAN.md`, `docs/adr/0001-web-oberflaeche-statt-fyne.md`,
+> `docs/adr/0002-chartjs-statt-chartrenderer-port.md`):** Die ursprünglich
+> vorgesehenen Zeilen „UI" (Fyne), „Diagramme" (go-chart) und „UI-Tests"
+> (Fyne-Testtreiber) unten sind durch eine eingebettete Web-Oberfläche
+> ersetzt worden — Begründung und Konsequenzen in den beiden ADRs.
+
 | Zweck | Bibliothek | Begründung |
 | --- | --- | --- |
-| UI | `fyne.io/fyne/v2` | Vorgabe aus `FEATURES.md`. |
+| UI | `internal/web`: `net/http` + `html/template` (Standardbibliothek) + `htmx` | Eingebettete Web-Oberfläche im Standardbrowser statt Fyne — kein Bundler, kein Node-Werkzeug, `go build` bleibt der einzige Build-Schritt (ADR 0001). |
 | IMAP | `github.com/emersion/go-imap/v2` | Aktueller Stand, IMAP4rev1+rev2, sauberes API. |
 | MIME/Anhänge | `github.com/emersion/go-message` | Robustes Parsen von Multipart-Mails und Encodings. |
 | Datenbank | `modernc.org/sqlite` (via `database/sql`) | CGO-frei, Cross-Compile ohne C-Toolchain. |
 | Credentials | `github.com/zalando/go-keyring` | macOS Keychain, Windows Credential Manager, Linux Secret Service. |
-| Diagramme | `github.com/wcharczuk/go-chart/v2` | Rendert nach `image.Image`, direkt in `canvas.Image` einbettbar. Hinter einem Port gekapselt (siehe 8.2). |
+| Diagramme | Chart.js + `chartjs-chart-matrix` + `chartjs-plugin-zoom` (`internal/web/static/vendor/`, minifizierte UMD-Dateien im Repository statt CDN) | Im Browser gerendert, interaktiv (Tooltip, umschaltbare Legende, Zoom, Klick-Drilldown); der Server liefert nur JSON über `/api/diagramme/*`. Ersetzt den ursprünglich vorgesehenen `ChartRenderer`-Port (siehe 8.2, ADR 0002). |
 | Logging | `log/slog` (Standardbibliothek) | Kein zusätzliches Dependency, strukturierte Logs. |
 | XML/Archive | `encoding/xml`, `compress/gzip`, `archive/zip` | Standardbibliothek reicht vollständig aus. |
 | Tests | `testing` + `github.com/stretchr/testify/require` | Table-driven Tests, knappe Assertions. |
-| UI-Tests | `fyne.io/fyne/v2/test` | Headless-Rendering, Widget-Interaktion ohne Display. |
+| Web-Tests | `net/http/httptest` (Standardbibliothek) | Handler- und Template-Tests ohne echten Server/Browser — jede Seite wird gerendert und als HTML geparst (siehe 12.2). |
 | Task-Runner | `Taskfile.yml` (go-task) | Vorgabe; `task` ist lokal bereits installiert. |
 | Linting | `golangci-lint` | Sammelt vet, staticcheck, errcheck, revive u. a. |
 
 **Go-Version:** 1.27 (lokal 1.27.1 vorhanden).
-**Modulpfad (Vorschlag):** `github.com/Freie-Schule/dmarc-analyzer` — siehe offene Frage O-1.
+**Modulpfad:** `github.com/pmoscode/dmarc-analyzer`.
 
 Abhängigkeiten werden bewusst knapp gehalten: alles, was die Standardbibliothek
-sauber erledigt, wird nicht durch ein Dependency ersetzt.
+sauber erledigt, wird nicht durch ein Dependency ersetzt. Konkrete gepinnte
+Versionen (inkl. der Frontend-Dateien unter `internal/web/static/vendor/`)
+stehen in `docs/DEPENDENCIES.md`.
+
+Zurückgestellt: ein `chromedp`-Browser-Rauchtest für die vier Chart.js-
+Diagramme (MIGRATIONSPLAN.md Entscheidung E-8) — bislang ungeschrieben, da
+in den bisherigen Entwicklungsumgebungen kein Chrome/Chromium verfügbar
+war; siehe `MIGRATIONSPLAN.md` Abschnitt 11.
 
 ---
 
@@ -86,14 +99,14 @@ sauber erledigt, wird nicht durch ein Dependency ersetzt.
 ### 4.1 Schichtenmodell (Clean Architecture)
 
 Abhängigkeiten zeigen ausschließlich **nach innen**. Die Domänenschicht kennt weder
-SQL noch IMAP noch Fyne.
+SQL noch IMAP noch die Web-Oberfläche.
 
 ```
 ┌───────────────────────────────────────────────────────────┐
 │  cmd/dmarc-analyzer  — Composition Root, Wiring, Start     │
 ├───────────────────────────────────────────────────────────┤
-│  internal/ui         — Fyne: Views, Widgets, ViewModels    │
-│  internal/infra      — IMAP, SQLite, Keyring, Charts, XML  │
+│  internal/web        — html/template + Chart.js (Browser) │
+│  internal/infra      — IMAP, SQLite, Keyring, XML         │
 ├───────────────────────────────────────────────────────────┤
 │  internal/app        — Use Cases (Anwendungsfälle)         │
 ├───────────────────────────────────────────────────────────┤
@@ -105,7 +118,9 @@ SQL noch IMAP noch Fyne.
   Definiert die *Ports* (Interfaces), die außen implementiert werden.
 * **app** — orchestriert Use Cases, kennt nur Domänen-Ports.
 * **infra** — *Adapter*: implementiert die Ports gegen konkrete Technik.
-* **ui** — Fyne-Präsentation, ruft ausschließlich Use Cases auf.
+* **web** — Web-Oberfläche (`html/template` + Chart.js), ruft ausschließlich
+  Use Cases auf (ursprünglich als Fyne-Desktop-UI geplant, siehe
+  `MIGRATIONSPLAN.md`/ADR 0001 zur Migration).
 * **cmd** — einziger Ort, an dem konkrete Implementierungen verdrahtet werden.
 
 ### 4.2 Bezug zu den geforderten Prinzipien
@@ -139,6 +154,11 @@ SQL noch IMAP noch Fyne.
 
 ## 5. Projektstruktur
 
+> **Nachtrag M5:** `internal/ui` (Fyne) ist vollständig entfernt,
+> `internal/infra/charts` (go-chart) ebenso — ersetzt durch `internal/web`
+> (siehe `MIGRATIONSPLAN.md`, ADR 0001/0002). Baum unten spiegelt den
+> aktuellen Stand.
+
 ```
 dmarc-analyzer/
 ├── cmd/
@@ -153,25 +173,32 @@ dmarc-analyzer/
 │   │   │   ├── policy.go
 │   │   │   ├── valueobjects.go
 │   │   │   └── repository.go        # Port: ReportRepository
-│   │   ├── account/                 # Aggregate: MailAccount
+│   │   ├── account/                 # Aggregat: MailAccount
 │   │   │   ├── account.go
 │   │   │   ├── credentials.go
 │   │   │   └── repository.go        # Ports: AccountRepository, CredentialStore
 │   │   ├── sync/
 │   │   │   ├── state.go             # SyncState je Konto/Postfach
-│   │   │   └── ports.go             # Ports: MessageSource, ReportParser
+│   │   │   ├── failedimport.go      # Fehlgeschlagene Importe (Protokoll, Wiederholen)
+│   │   │   └── ports.go             # Ports: MessageSource, ReportParser, MultiReportParser
+│   │   ├── sources/                 # Sendequellen-Anreicherung (Dienst-Erkennung, PTR)
 │   │   └── analysis/
-│   │       ├── statistics.go        # Kennzahlen, Aggregationen
-│   │       └── alignment.go         # AlignmentEvaluator
+│   │       ├── statistics.go        # Kennzahlen, Aggregationen fürs Dashboard
+│   │       └── charts.go            # Diagramm-Datentypen (DailyVolume, Heatmap, …) für /api/diagramme/*
 │   ├── app/
 │   │   ├── syncreports/             # Use Case: Reports abholen + importieren
+│   │   ├── syncjob/                 # Use Case: Sync als serverseitiger Auftrag (höchstens ein Lauf gleichzeitig)
 │   │   ├── queryreports/            # Use Case: Filtern, Sortieren, Gruppieren
 │   │   ├── statistics/              # Use Case: Dashboard-Kennzahlen
+│   │   ├── sourcestats/             # Use Case: Sendequellen-Statistik
 │   │   ├── manageaccount/           # Use Case: Konto anlegen/testen/löschen
-│   │   └── exportdata/              # Use Case: CSV-/PNG-Export
+│   │   ├── importfiles/             # Use Case: Import aus Datei/Bytes (.eml/.xml/.zip)
+│   │   └── exportdata/              # Use Case: CSV-Export (gestreamt)
 │   ├── infra/
 │   │   ├── imap/                    # MessageSource-Adapter
 │   │   ├── dmarcxml/                # ReportParser-Adapter (XML + gz/zip)
+│   │   ├── mailmime/                # MIME-Zerlegung von Postfach-Nachrichten
+│   │   ├── sourceinfo/              # PTR/Dienst-Erkennung für Sendequellen
 │   │   ├── sqlite/
 │   │   │   ├── migrations/          # *.sql, per go:embed eingebettet
 │   │   │   ├── db.go
@@ -179,23 +206,28 @@ dmarc-analyzer/
 │   │   │   ├── reportrepo.go
 │   │   │   ├── accountrepo.go
 │   │   │   └── syncstaterepo.go
-│   │   ├── keyring/                 # CredentialStore-Adapter
-│   │   ├── charts/                  # ChartRenderer-Adapter
+│   │   ├── keyring/                 # CredentialStore-Adapter (OS-Schlüsselbund + Datei-Fallback)
 │   │   └── config/                  # Einstellungen (nicht-geheim)
-│   ├── ui/
-│   │   ├── app.go                   # Fenster, Navigation, Theme
-│   │   ├── dashboard/
-│   │   ├── reports/
-│   │   ├── sources/
-│   │   ├── settings/
-│   │   ├── components/              # Wiederverwendbare Widgets
-│   │   └── i18n/                    # Zentrale UI-Texte (deutsch)
+│   ├── web/
+│   │   ├── server.go, routes.go     # http.Server, Handler-Baum, Middleware-Verdrahtung
+│   │   ├── middleware.go            # CSP/Sicherheits-Header, Host-Prüfung, CSRF, Sitzung
+│   │   ├── auth.go, instance.go     # Einmal-Anmeldelink, Sitzungs-Cookie, instance.json
+│   │   ├── handlers_*.go            # je Seite/Aktion ein Handler (Dashboard, Berichte, Quellen, Import, Export, Konten, Sync, …)
+│   │   ├── api_charts.go            # JSON-Endpunkte für die vier Chart.js-Diagramme
+│   │   ├── templates/               # html/template (layout.html + pages/*.html)
+│   │   ├── static/                  # app.css, app.js, charts.js, vendor/ (htmx, Chart.js, Plugins)
+│   │   └── glossary/                # Zentrale Begriffs-Erklärungen (deutsch)
 │   └── platform/
 │       ├── logging/
 │       └── paths/                   # Pfade für DB, Logs, Config
 ├── testdata/
 │   └── reports/                     # Echte Beispiel-Reports (anonymisiert)
 ├── docs/
+│   ├── adr/                         # Architecture Decision Records
+│   └── DEPENDENCIES.md
+├── packaging/
+│   └── darwin/Info.plist.tmpl       # Minimales .app-Bundle-Manifest für "task release:darwin"
+├── .github/workflows/                # CI: fmt+lint+test, Cross-Compile-Release bei Tags
 ├── Taskfile.yml
 ├── README.md
 ├── CHANGELOG.md
@@ -451,9 +483,17 @@ Zeitzonenlogik gehört in die Darstellungsschicht, nicht in die Daten.
   typischen Report-Größen (einige hundert Records) ist das irrelevant, beim Erstimport
   großer Archive macht Batching den Unterschied.
 * **Speicherort** — `os.UserConfigDir()/dmarc-analyzer/dmarc.db`, plattformkonform.
-* **ChartRenderer als Port** — `analysis.ChartRenderer` liefert `image.Image`. v1
-  implementiert das mit `go-chart`. Sollten sich später native, interaktive
-  Fyne-Widgets (Hover, Klick auf Datenpunkt) lohnen, wird nur der Adapter getauscht.
+* **~~ChartRenderer als Port~~ (M5: entfernt)** — ursprünglich sollte
+  `analysis.ChartRenderer` `image.Image` liefern (v1 mit `go-chart`
+  implementiert), gedacht als austauschbarer Adapter für später native,
+  interaktive Fyne-Widgets. Mit dem Umstieg auf die Web-Oberfläche
+  entfällt die Motivation dafür vollständig: Diagramme sind im Browser
+  ohnehin clientseitig (Chart.js), ein serverseitiger Bild-Renderer-Port
+  wird nicht mehr gebraucht. Die reinen Datentypen
+  (`analysis.DailyVolume`/`SourceVolume`/`Heatmap`/`HeatmapCell`) bleiben
+  bestehen und werden jetzt direkt als JSON an `/api/diagramme/*`
+  ausgeliefert. Begründung und Alternativenabwägung:
+  `docs/adr/0002-chartjs-statt-chartrenderer-port.md`.
 
 ---
 
@@ -473,20 +513,30 @@ Zeitzonenlogik gehört in die Darstellungsschicht, nicht in die Daten.
 
 ---
 
-## 10. UI-Konzept (Fyne)
+## 10. UI-Konzept (Web-Oberfläche)
+
+> **Nachtrag M5:** Ursprünglich als Fyne-Desktop-Oberfläche geplant
+> (Hauptfenster mit seitlicher Navigation, `widget.Table` usw.) — durch die
+> Migration auf eine im Browser laufende Web-Oberfläche ersetzt
+> (`internal/web`, siehe `MIGRATIONSPLAN.md`, ADR 0001). Die fachlichen
+> Ansichten und Kennzahlen (10.1–10.3) blieben inhaltlich gleich, nur die
+> Umsetzung (10.4) ist komplett anders.
 
 ### 10.1 Navigation
 
-Haupt­fenster mit seitlicher Navigation (`container.NewBorder` + `widget.List`):
+Kopfzeilen-Navigation, serverseitig aktiv markiert anhand des angeforderten
+Pfads (`internal/web/handlers_nav.go`, kein JavaScript nötig):
 
-| Ansicht | Inhalt |
-| --- | --- |
-| **Übersicht** | Kennzahlen-Kacheln, Zeitreihe, Top-Absender, Verteilung der Dispositions. |
-| **Berichte** | Virtualisierte Tabelle aller Reports; Filter nach Zeitraum, Domain, Absender-Org. Doppelklick öffnet Details. |
-| **Bericht-Detail** | Metadaten, veröffentlichte Policy, Record-Tabelle mit Auth-Ergebnissen. |
-| **Sendequellen** | Aggregiert nach Quell-IP: Volumen, Pass-Rate, PTR/rDNS, erkannter Dienst. |
-| **Einstellungen** | Konten verwalten, Verbindung testen, Sync-Intervall, Aufbewahrungsdauer, Theme. |
-| **Protokoll** | Sync-Historie, fehlgeschlagene Importe mit Wiederholen-Aktion. |
+| Ansicht | Route | Inhalt |
+| --- | --- | --- |
+| **Übersicht** | `/` | Kennzahlen-Kacheln, Zeitreihe, Top-Sendequellen, Verteilung nach Disposition, Heatmap Quelle × Tag. |
+| **Berichte** | `/berichte`, `/berichte/{id}` | Paginierte Tabelle aller Reports; Filter nach Zeitraum, Domain, Absender-Org, Quell-IP; CSV-Export des gesamten gefilterten Bestands. Klick öffnet Detailansicht (Metadaten, veröffentlichte Policy, Record-Tabelle mit Auth-Ergebnissen). |
+| **Sendequellen** | `/quellen` | Aggregiert nach Quell-IP: Volumen, Pass-Rate, PTR/rDNS, erkannter Dienst; CSV-Export. |
+| **Import** | `/import` | Drag-&-Drop-/Datei-Upload für `.eml`/`.xml`/`.xml.gz`/`.zip`, Ergebnisanzeige (neu/übersprungen/fehlerhaft). |
+| **Glossar** | `/glossar` | Zentrale Begriffs-Erklärungen (deutsch), von „?"-Links auf anderen Seiten verlinkt. |
+| **Einstellungen** | `/einstellungen` | Konten verwalten, Verbindung testen, Postfach-Sync anstoßen/abbrechen. |
+| **Ersteinrichtung** | `/einrichtung` | Erstes Konto anlegen — automatische Weiterleitung, solange kein Konto existiert. |
+| **Entsperren** | `/entsperren` | Master-Passphrase für den Datei-Schlüsselspeicher (Linux ohne Secret Service). |
 
 ### 10.2 Kennzahlen auf der Übersicht
 
@@ -500,24 +550,46 @@ Haupt­fenster mit seitlicher Navigation (`container.NewBorder` + `widget.List`)
 ### 10.3 Visualisierungen
 
 * **Zeitreihe** — Nachrichtenvolumen pro Tag, gestapelt nach Pass/Fail.
-* **Balken** — Top-10-Sendequellen nach Volumen, eingefärbt nach Pass-Rate.
+* **Balken** — Top-Sendequellen nach Volumen, eingefärbt nach Pass-Rate.
 * **Donut** — Verteilung der Dispositions.
 * **Heatmap** — Sendequelle × Tag, Farbe = Pass-Rate. Macht ausfallende Dienste sofort sichtbar.
 * **Tabelle mit Gruppierung** — nach Domain, Org oder Quell-IP klappbar.
 
-### 10.4 Fyne-Praxis
+Alle vier Diagramme sind interaktiv (Chart.js im Browser, siehe ADR 0002):
+Tooltip beim Hover, umschaltbare Legende, Zoom/Verschieben in der
+Zeitreihe, Klick öffnet die passend gefilterten Berichte (Drill-down).
+Jedes Diagramm hat zusätzlich eine zuschaltbare Tabellenansicht (für
+Screenreader, da `<canvas>` selbst nicht barrierefrei ist) sowie
+PNG-/CSV-Export-Knöpfe.
 
-* **Nie im UI-Thread blockieren** — jede I/O-Operation läuft in einer Goroutine;
-  Aktualisierungen gehen über `fyne.Do()` zurück in den UI-Thread.
-* **`widget.Table` mit Lazy-Datenquelle** — die Tabelle virtualisiert bereits das
-  Rendern; die Datenquelle muss seitenweise aus SQLite nachladen (`LIMIT`/`OFFSET`
-  bzw. Keyset-Pagination), damit auch 100.000 Records flüssig bleiben.
-* **`data binding`** für einfache Felder, eigene ViewModels für komplexe Ansichten.
-* **Eigenes Theme** mit Farbpalette, die sowohl im hellen als auch im dunklen Modus
-  funktioniert; Pass/Fail-Farben zusätzlich durch Symbole unterscheidbar (Barrierefreiheit).
-* **Fortschrittsanzeige** beim Sync mit Abbruch-Möglichkeit.
-* **Desktop-Benachrichtigung** (`fyne.App.SendNotification`) nach Abschluss eines
-  Hintergrund-Syncs.
+### 10.4 Web-Praxis
+
+* **Kein Inline-JavaScript** — Content-Security-Policy verbietet
+  `unsafe-inline`; jedes Verhalten liegt in `internal/web/static/*.js`
+  (siehe `AGENTS.md`).
+* **Diagrammlogik gehört nach Go** — Aggregation, Filterung und
+  Drill-down-Ziele entstehen serverseitig; `charts.js` bekommt fertig
+  aufbereitete JSON-Daten und bleibt bewusst dünn (reine Darstellung).
+* **Jede Zustandsänderung per POST mit CSRF-Token** — nie ein GET mit
+  Seiteneffekt (siehe `internal/web/middleware.go: requireCSRF`).
+* **Seitenweises Nachladen statt Virtualisierung** — anders als eine
+  Fyne-`widget.Table` lädt die Web-Tabelle Seiten explizit nach
+  (Keyset-Pagination aus SQLite, `LIMIT`-artig aber ohne teure
+  `OFFSET`-Zählung bei großen Tabellen), auch für CSV-Exports über den
+  gesamten gefilterten Bestand (gestreamt, siehe
+  `internal/app/exportdata`).
+* **Farbpalette für hell und dunkel** über CSS-Variablen
+  (`internal/web/static/app.css`), dieselben Werte wie in den
+  Chart.js-Diagrammen; Pass/Fail-Farben zusätzlich durch Symbole/Text
+  unterscheidbar (Barrierefreiheit) — Palette folgt der `dataviz`-Skill-
+  Referenzpalette, siehe `AGENTS.md`.
+* **Fortschrittsanzeige** beim Sync mit Abbruch-Möglichkeit, über
+  Server-Sent Events (`GET /ereignisse`) statt Polling.
+* Eine Desktop-Benachrichtigung nach Abschluss eines Hintergrund-Syncs
+  (ursprünglich mit `fyne.App.SendNotification` geplant) ist mit dem
+  Wechsel zur Web-Oberfläche noch offen — vorgesehen als
+  Browser-Benachrichtigung bei geöffnetem Tab, siehe `UMSETZUNGSPLAN.md`
+  AP 7.
 
 ---
 
@@ -598,7 +670,8 @@ begründete Optionen, kein Muss.
 | `infra/dmarcxml` | **Golden-File-Tests** gegen echte, anonymisierte Reports von Google, Microsoft, Yahoo, Mail.ru, Enterprise-Anbietern — jeder Provider weicht anders vom RFC ab. Zusätzlich Fuzzing auf dem XML-Parser. | ≥ 85 % |
 | `infra/sqlite` | Integrationstests gegen eine temporäre Datei-DB (nicht `:memory:`, damit WAL und Transaktionen realistisch getestet werden). Migrationen vorwärts und wiederholt anwenden. | ≥ 80 % |
 | `infra/imap` | Tests gegen einen In-Process-IMAP-Server (`go-imap`-Serverkomponente) mit vorbereiteten Nachrichten. Prüft besonders UID-Logik und `UIDVALIDITY`-Wechsel. | ≥ 70 % |
-| `ui` | `fyne.io/fyne/v2/test`: Widget-Aufbau, Navigation, Formularvalidierung. Keine Pixelvergleiche — die sind zu brüchig. | Smoke-Level |
+| `web` | `net/http/httptest` mit handgeschriebenen Fakes der App-Ports: Statuscodes, Weiterleitungen, Sicherheits-Verhalten (Sitzung/CSRF/`Host`-Prüfung), jede Seite gerendert und als HTML geparst. JSON-Diagramm-Endpunkte zusätzlich auf gültiges JSON und korrekte Drill-down-URLs geprüft. Keine Pixelvergleiche. | ≥ 80 % |
+| Browser (Chart.js) | **Zurückgestellt:** ein `chromedp`-Rauchtest (MIGRATIONSPLAN.md E-8) soll die vier Diagramme tatsächlich im Browser prüfen (gezeichnet, keine Konsolenfehler, ein Drill-down-Klick funktioniert) — `httptest` sieht kein JavaScript. Noch ungeschrieben, siehe `MIGRATIONSPLAN.md` Abschnitt 11. | — |
 
 ### 12.3 Besondere Testfälle
 
@@ -626,9 +699,9 @@ begründete Optionen, kein Muss.
 
 | Task | Zweck |
 | --- | --- |
-| `task setup` | Werkzeuge installieren (`golangci-lint`, `fyne` CLI), `go mod download`. |
-| `task build` | Binärdatei nach `bin/` bauen, Version per `-ldflags` einbetten. |
-| `task run` | Programm im Entwicklungsmodus starten. |
+| `task setup` | Werkzeuge installieren (`golangci-lint`), `go mod download`. |
+| `task build` | Binärdatei nach `bin/` bauen (`CGO_ENABLED=0`), Version per `-ldflags` einbetten. |
+| `task run` | Programm im Entwicklungsmodus starten (öffnet den Standardbrowser). |
 | `task test` | Alle Tests mit `-race`. |
 | `task test:unit` | Nur schnelle Tests (ohne Build-Tag `integration`). |
 | `task test:integration` | Integrationstests (Build-Tag `integration`). |
@@ -636,14 +709,18 @@ begründete Optionen, kein Muss.
 | `task lint` | `golangci-lint run`. |
 | `task fmt` | `gofmt -s -w` + `goimports`. |
 | `task tidy` | `go mod tidy` und Prüfung auf ungenutzte Abhängigkeiten. |
-| `task package:darwin` | `.app`-Bundle via `fyne package`. |
-| `task package:windows` | `.exe` mit Icon. |
-| `task package:linux` | `.tar.xz` mit Desktop-Eintrag. |
-| `task release` | Alle Plattformen bauen, Checksummen erzeugen. |
+| `task release:darwin` | macOS-Binärdateien (arm64, amd64) cross-kompilieren, als minimales `.app`-Bündel zippen (`packaging/darwin/Info.plist.tmpl`, kein `fyne package` mehr — siehe M5). |
+| `task release:windows` | Windows-Binärdatei (amd64) ohne Konsolenfenster (`-H windowsgui`) cross-kompilieren, zippen. |
+| `task release:linux` | Linux-Binärdateien (amd64, arm64) cross-kompilieren, als `.tar.gz` packen. |
+| `task release` | Alle drei `release:*`-Tasks ausführen, Checksummen (`checksums.txt`) erzeugen. |
 | `task clean` | Build-Artefakte entfernen. |
 | `task check` | `fmt` + `lint` + `test` — das, was auch die CI ausführt. |
 
-`task check` ist der Standardbefehl vor jedem Commit.
+`task check` ist der Standardbefehl vor jedem Commit. Alle Release-Tasks
+sind reine `go build`-Cross-Compiles mit `CGO_ENABLED=0` (kein
+plattformspezifisches Paketierwerkzeug mehr nötig, siehe M5 und
+`docs/adr/0001-web-oberflaeche-statt-fyne.md`) — laufen daher auf einem
+einzigen Entwicklungsrechner für alle Zielplattformen.
 
 ---
 

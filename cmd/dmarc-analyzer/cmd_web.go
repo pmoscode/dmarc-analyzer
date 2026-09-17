@@ -4,11 +4,15 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/pmoscode/dmarc-analyzer/internal/app/syncjob"
+	"github.com/pmoscode/dmarc-analyzer/internal/platform/logging"
+	"github.com/pmoscode/dmarc-analyzer/internal/platform/paths"
 	"github.com/pmoscode/dmarc-analyzer/internal/web"
 )
 
@@ -26,6 +30,14 @@ func runWeb(ctx context.Context, a *app, args []string) error {
 		return err
 	}
 
+	// Zusätzlich in eine Datei loggen (siehe openLogFile): auf macOS/Linux
+	// bleibt os.Stderr unverändert nutzbar, auf Windows verschwindet es im
+	// Release-Build ohne Konsolenfenster spurlos (MIGRATIONSPLAN.md M5:
+	// "-H windowsgui") — die Datei ist dann der einzige Weg, im Fehlerfall
+	// nachzusehen, wo der Anmeldelink war.
+	closeLog := attachLogFile()
+	defer closeLog()
+
 	// Einzelinstanz-Erkennung (MIGRATIONSPLAN.md Abschnitt 3/Meilenstein
 	// M1): läuft bereits ein Server, holt sich dieser zweite Aufruf nur
 	// einen frischen Anmeldelink und beendet sich sofort, statt einen
@@ -35,9 +47,11 @@ func runWeb(ctx context.Context, a *app, args []string) error {
 	if inst, ok := web.FindRunningInstance(); ok {
 		if loginURL, err := web.RequestLoginURL(ctx, inst); err == nil {
 			fmt.Printf("dmarc-analyzer läuft bereits: %s\n", loginURL)
+			slog.Info("laufende instanz gefunden, neuer anmeldelink angefordert", "login_url", loginURL)
 			if !*noBrowser {
 				if err := web.OpenBrowser(loginURL); err != nil {
 					fmt.Fprintf(os.Stderr, "Browser konnte nicht automatisch geöffnet werden — bitte den Anmeldelink von Hand öffnen: %v\n", err)
+					slog.Warn("browser konnte nicht automatisch geöffnet werden", "error", err, "login_url", loginURL)
 				}
 			}
 			return nil
@@ -76,15 +90,41 @@ func runWeb(ctx context.Context, a *app, args []string) error {
 	fmt.Printf("dmarc-analyzer läuft: http://%s\n", srv.Addr())
 	fmt.Printf("Anmeldelink (60 s gültig): %s\n", loginURL)
 	fmt.Println("Strg+C zum Beenden.")
+	slog.Info("web-oberfläche gestartet", "addr", srv.Addr(), "login_url", loginURL)
 
 	if !*noBrowser {
 		if err := web.OpenBrowser(loginURL); err != nil {
 			fmt.Fprintf(os.Stderr, "Browser konnte nicht automatisch geöffnet werden — bitte den Anmeldelink von Hand öffnen: %v\n", err)
+			slog.Warn("browser konnte nicht automatisch geöffnet werden", "error", err, "login_url", loginURL)
 		}
 	}
 
 	<-signalCtx.Done()
 	fmt.Println("\nWird beendet …")
+	slog.Info("web-oberfläche wird beendet")
 
 	return srv.Shutdown(context.Background())
+}
+
+// attachLogFile öffnet die persistente Log-Datei (paths.LogFilePath()) zum
+// Anhängen und baut den globalen Logger so um, dass er zusätzlich zu
+// os.Stderr auch dorthin schreibt — im normalen Terminal-Betrieb bleibt
+// die bisherige Ausgabe also unverändert sichtbar. Schlägt das Öffnen
+// fehl (z. B. weil kein Home-Verzeichnis ermittelbar ist), wird
+// stillschweigend nur bei os.Stderr geblieben; das ist kein Grund, den
+// Start abzubrechen. Die zurückgegebene Funktion schließt die Datei
+// wieder (per defer im Aufrufer).
+func attachLogFile() func() {
+	path, err := paths.LogFilePath()
+	if err != nil {
+		return func() {}
+	}
+
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return func() {}
+	}
+
+	logging.New(logging.WithWriter(io.MultiWriter(os.Stderr, file)))
+	return func() { _ = file.Close() }
 }

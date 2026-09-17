@@ -6,6 +6,7 @@ vars:
   BIN_DIR: bin
   BIN_NAME: dmarc-analyzer
   COVER_FILE: coverage.out
+  RELEASE_DIR: "{{.BIN_DIR}}/release"
   VERSION:
     sh: git describe --tags --always --dirty 2>/dev/null || echo dev
 
@@ -20,13 +21,12 @@ tasks:
     cmds:
       - go mod download
       - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
-      - go install fyne.io/tools/cmd/fyne@latest
 
   build:
     desc: Binärdatei nach bin/ bauen, Version eingebettet.
     cmds:
       - mkdir -p {{.BIN_DIR}}
-      - go build -ldflags "-X main.version={{.VERSION}}" -o {{.BIN_DIR}}/{{.BIN_NAME}} ./cmd/dmarc-analyzer
+      - CGO_ENABLED=0 go build -ldflags "-X main.version={{.VERSION}}" -o {{.BIN_DIR}}/{{.BIN_NAME}} ./cmd/dmarc-analyzer
     sources:
       - "**/*.go"
       - go.mod
@@ -35,7 +35,7 @@ tasks:
       - "{{.BIN_DIR}}/{{.BIN_NAME}}"
 
   run:
-    desc: Programm im Entwicklungsmodus starten.
+    desc: Programm im Entwicklungsmodus starten (ohne Argumente öffnet sich der Standardbrowser mit der Web-Oberfläche).
     cmds:
       - go run ./cmd/dmarc-analyzer {{.CLI_ARGS}}
 
@@ -78,35 +78,75 @@ tasks:
       - go mod tidy
       - go run golang.org/x/tools/cmd/deadcode@latest ./cmd/dmarc-analyzer || true
 
-  package:darwin:
-    desc: .app-Bundle via fyne package.
-    dir: cmd/dmarc-analyzer
+  # release:* baut seit M5 (MIGRATIONSPLAN.md: Fyne/go-chart vollständig
+  # entfernt) reine Cross-Compiles mit CGO_ENABLED=0 statt "fyne package" —
+  # das Programm ist nur noch ein Server-Prozess ohne native GUI-Toolkit,
+  # ein Fenster-Toolkit-Paketierer wird also nicht mehr gebraucht.
+  release:darwin:
+    desc: >-
+      macOS-Binärdateien (arm64, amd64) bauen und als minimales .app-Bündel
+      zippen (kein "fyne package" mehr, siehe packaging/darwin/Info.plist.tmpl
+      zur Begründung von LSUIElement).
     cmds:
-      - fyne package -os darwin -name {{.BIN_NAME}} -release
+      - mkdir -p {{.RELEASE_DIR}}
+      - for: ["arm64", "amd64"]
+        cmd: |
+          set -e
+          arch="{{.ITEM}}"
+          app="{{.RELEASE_DIR}}/{{.BIN_NAME}}-darwin-$arch.app"
+          rm -rf "$app"
+          mkdir -p "$app/Contents/MacOS"
+          CGO_ENABLED=0 GOOS=darwin GOARCH="$arch" go build \
+            -ldflags "-X main.version={{.VERSION}}" \
+            -o "$app/Contents/MacOS/{{.BIN_NAME}}" ./cmd/dmarc-analyzer
+          sed 's/__VERSION__/{{.VERSION}}/g' packaging/darwin/Info.plist.tmpl > "$app/Contents/Info.plist"
+          (cd {{.RELEASE_DIR}} && zip -r -q -X "{{.BIN_NAME}}-{{.VERSION}}-darwin-$arch.app.zip" "{{.BIN_NAME}}-darwin-$arch.app")
+          rm -rf "$app"
 
-  package:windows:
-    desc: .exe mit Icon.
-    dir: cmd/dmarc-analyzer
+  release:windows:
+    desc: >-
+      Windows-Binärdatei (amd64) ohne Konsolenfenster bauen ("-H
+      windowsgui", MIGRATIONSPLAN.md M5 — Ausgaben landen dafür zusätzlich
+      in einer Log-Datei, siehe cmd/dmarc-analyzer/cmd_web.go) und zippen.
     cmds:
-      - fyne package -os windows -name {{.BIN_NAME}} -release
+      - mkdir -p {{.RELEASE_DIR}}
+      - |
+        set -e
+        exe="{{.RELEASE_DIR}}/{{.BIN_NAME}}.exe"
+        CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build \
+          -ldflags "-H windowsgui -X main.version={{.VERSION}}" \
+          -o "$exe" ./cmd/dmarc-analyzer
+        (cd {{.RELEASE_DIR}} && zip -q -X "{{.BIN_NAME}}-{{.VERSION}}-windows-amd64.zip" "{{.BIN_NAME}}.exe")
+        rm -f "$exe"
 
-  package:linux:
-    desc: .tar.xz mit Desktop-Eintrag.
-    dir: cmd/dmarc-analyzer
+  release:linux:
+    desc: Linux-Binärdateien (amd64, arm64) bauen und als .tar.gz packen.
     cmds:
-      - fyne package -os linux -name {{.BIN_NAME}} -release
+      - mkdir -p {{.RELEASE_DIR}}
+      - for: ["amd64", "arm64"]
+        cmd: |
+          set -e
+          arch="{{.ITEM}}"
+          dir="{{.RELEASE_DIR}}/{{.BIN_NAME}}-linux-$arch"
+          mkdir -p "$dir"
+          CGO_ENABLED=0 GOOS=linux GOARCH="$arch" go build \
+            -ldflags "-X main.version={{.VERSION}}" \
+            -o "$dir/{{.BIN_NAME}}" ./cmd/dmarc-analyzer
+          tar -C "{{.RELEASE_DIR}}" -czf "{{.RELEASE_DIR}}/{{.BIN_NAME}}-{{.VERSION}}-linux-$arch.tar.gz" "{{.BIN_NAME}}-linux-$arch"
+          rm -rf "$dir"
 
   release:
-    desc: Alle Plattformen bauen, Checksummen erzeugen.
-    deps: [package:darwin, package:windows, package:linux]
+    desc: >-
+      Alle Plattformen cross-kompilieren (macOS arm64/amd64, Windows amd64,
+      Linux amd64/arm64) und Checksummen erzeugen.
+    deps: [release:darwin, release:windows, release:linux]
     cmds:
-      - shasum -a 256 cmd/dmarc-analyzer/*.{app,exe,tar.xz} > {{.BIN_DIR}}/checksums.txt
+      - shasum -a 256 {{.RELEASE_DIR}}/*.{zip,tar.gz} > {{.RELEASE_DIR}}/checksums.txt
 
   clean:
     desc: Build-Artefakte entfernen.
     cmds:
       - rm -rf {{.BIN_DIR}} {{.COVER_FILE}} coverage.html
-      - find . -name "*.app" -o -name "*.tar.xz" | xargs -r rm -rf
 
   check:
     desc: fmt + lint + test — das, was auch die CI ausführt.

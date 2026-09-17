@@ -7,11 +7,12 @@ Mitwirkende finden dieselben Informationen ausführlicher in
 
 ## Worum es geht
 
-DMARC Analyzer: ein Go/Fyne-Desktopprogramm, das DMARC-Aggregate-Reports aus
-einem IMAP-Postfach holt, lokal in SQLite speichert und auswertet. Aktueller
-Stand und nächste Schritte immer zuerst in `UMSETZUNGSPLAN.md` prüfen, bevor
-mit einer Änderung begonnen wird — dort steht, welches Arbeitspaket (AP)
-gerade dran ist und was bereits abgehakt ist.
+DMARC Analyzer: ein Go-Programm mit eingebetteter Web-Oberfläche (im
+Standardbrowser, siehe `MIGRATIONSPLAN.md`), das DMARC-Aggregate-Reports
+aus einem IMAP-Postfach holt, lokal in SQLite speichert und auswertet.
+Aktueller Stand und nächste Schritte immer zuerst in `UMSETZUNGSPLAN.md`
+prüfen, bevor mit einer Änderung begonnen wird — dort steht, welches
+Arbeitspaket (AP) gerade dran ist und was bereits abgehakt ist.
 
 ## Sprachregel — wichtig, bricht sonst CI
 
@@ -41,21 +42,37 @@ task --list          # alle Tasks
 Clean Architecture, vier Schichten, Abhängigkeiten zeigen nur nach innen:
 
 ```
-cmd/dmarc-analyzer  →  internal/ui  →  internal/app  →  internal/domain
+cmd/dmarc-analyzer  →  internal/web  →  internal/app  →  internal/domain
                         internal/infra ─────────────────↗
 ```
 
 - `internal/domain/*`: reine Fachlogik, **keine** Imports außerhalb der
-  Standardbibliothek. Kein `encoding/xml`-Import hier, kein SQL, kein Fyne.
+  Standardbibliothek. Kein `encoding/xml`-Import hier, kein SQL.
 - `internal/app/*`: Use Cases, hängen nur an domain-Ports (Interfaces).
 - `internal/infra/*`: Adapter, implementieren die domain-Ports gegen
-  konkrete Technik (SQLite, IMAP, Keyring, go-chart, dmarcxml).
-- `internal/ui/*`: Fyne, ruft ausschließlich Use Cases aus `internal/app` auf.
+  konkrete Technik (SQLite, IMAP, Keyring, dmarcxml).
+- `internal/web/*`: Go-`html/template` + Chart.js (`static/charts.js`),
+  ruft ausschließlich Use Cases aus `internal/app` auf. Diagrammlogik
+  (Aggregation, Filter, Drill-down-Ziele) gehört nach Go — `charts.js`
+  bekommt fertig aufbereitete JSON-Daten und bleibt bewusst dünn.
 - `cmd/dmarc-analyzer`: einziger Ort, an dem Adapter mit Use Cases verdrahtet
   werden (Composition Root).
 
 Details und Begründung (SOLID/DDD/Clean Code) in `IMPLEMENTIERUNG.md`
 Abschnitt 4.
+
+## Web-Oberfläche: keine Inline-Skripte, jede Zustandsänderung per POST mit CSRF
+
+- Content-Security-Policy verbietet `unsafe-inline` (siehe
+  `internal/web/middleware.go`, `middleware_test.go`) — jedes Verhalten
+  gehört in `internal/web/static/*.js`, nie in ein `<script>`-Tag oder ein
+  `onclick`-Attribut im Template.
+- Jede Zustandsänderung (Formular, Knopf mit Seiteneffekt) ist ein POST mit
+  CSRF-Token (`templateFuncs["csrfToken"]`, geprüft von `requireCSRF`) —
+  niemals ein GET mit Seiteneffekt.
+- Jede neue Seite/jeder neue Template-Zustand (leer, Fehler, gefüllt)
+  gehört mit `httptest` gerendert und als HTML geparst getestet — ein
+  Template-Fehler soll im Test auffallen, nicht erst im Browser.
 
 ## Namenskonvention: kein Package-Stutter
 
@@ -86,8 +103,8 @@ nur mit einer Handvoll Testzeilen — dort fällt das Problem nicht auf.
 **Nichts in `go.mod` aufnehmen, das nicht tatsächlich importiert wird.**
 `go.mod` wächst organisch pro Arbeitspaket, wenn Code die jeweilige
 Bibliothek wirklich importiert — nicht vorab. Recherchierte Zielversionen
-für später gebrauchte Bibliotheken (Fyne, go-imap, go-message, sqlite,
-go-keyring, go-chart) stehen in `docs/DEPENDENCIES.md`, nicht in `go.mod`.
+für später gebrauchte Bibliotheken (go-imap, go-message, sqlite,
+go-keyring) stehen in `docs/DEPENDENCIES.md`, nicht in `go.mod`.
 `task tidy` entfernt ungenutzte Requires ohnehin wieder.
 
 ## Tests
@@ -160,156 +177,20 @@ dann auch den "gespeicherten" Wert. Immer `account.NewSecret(s.Expose())`
 statt `s` speichern. Gefunden über einen echten Testausfall in
 `cmd/dmarc-analyzer/cmd_account_test.go` (AP 4).
 
-## Fyne-Tests: TestMain mit test.NewApp() nicht vergessen
+## Diagrammfarben (`internal/web/static/app.css`) folgen der `dataviz`-Skill-Referenzpalette
 
-Jedes `internal/ui/*`-Testpaket braucht eine laufende Headless-Test-App,
-sonst crasht schon `widget.Entry.SetText()` (Textmessung braucht
-`fyne.CurrentApp()`). Immer eine `main_test.go` mit
-`func TestMain(m *testing.M) { test.NewApp(); m.Run() }` anlegen, bevor
-Widget-Konstruktoren aufgerufen werden — nicht erst beim ersten
-Panic merken.
-
-## Fyne-Widgets mit Hintergrund-I/O: `runBackground` injizierbar machen
-
-Fynes Test-Treiber führt `fyne.Do()`/`fyne.DoAndWait()` **synchron auf der
-aufrufenden Goroutine** aus (`test/driver.go: DoFromGoroutine` ruft `f()`
-direkt) — anders als der echte Treiber, der auf die UI-Goroutine
-marshalt. Ein Widget, das im Konstruktor oder bei einer Aktion `go
-func() { ...; fyne.Do(...) }()` startet, und ein Test, der danach
-denselben Zustand liest (auch über Polling/`require.Eventually`), erzeugt
-dadurch einen **echten, von `-race` zu Recht gemeldeten Data Race** — die
-Hintergrund-Goroutine mutiert Widget-Felder unsynchronisiert parallel zum
-Testcode.
-
-Lösung: I/O-startende Methoden nie direkt `go func(){}()` aufrufen,
-sondern über ein Feld `runBackground func(f func())` (Default `func(f
-func()) { go f() }`), das ein internes Testpaket (`package <name>`, nicht
-`<name>_test`) vor dem Aufruf auf `func(f func()) { f() }` umstellen kann
-— macht Tests synchron und deterministisch, ganz ohne Polling. Siehe
-`internal/ui/settings/view.go` (`runBackground`-Feld) und
-`internal/ui/settings/view_test.go` (`newSyncTestView`). Gilt für jedes
-neue `internal/ui/*`-Widget mit eigener Hintergrund-I/O (onboarding,
-reports, Hauptfenster-Sync-Knopf).
-
-## `container.NewBorder`: Center-Objekt liegt an Index 0, nicht am Ende
-
-`container.NewBorder(top, bottom, left, right fyne.CanvasObject, objects
-...fyne.CanvasObject) *fyne.Container` baut `.Objects` als `objects`
-(die variadic Center-Objekte, in Reihenfolge) **gefolgt von** den
-nicht-nil top/bottom/left/right-Objekten. Wird nur `top` gesetzt und genau
-ein Center-Objekt übergeben, ist `.Objects[0]` das Center und
-`.Objects[len-1]` (hier `.Objects[1]`) die Kopfzeile — **nicht umgekehrt**.
-
-Ein Widget, das seinen Inhalt per `container.Objects[len(...)-1] = neu`
-austauschen will (z. B. Leerzustand ↔ Liste), trifft damit versehentlich
-die Kopfzeile statt des Centers. Genau dieser Bug steckte in
-`settings.View.refreshContent()` und wurde erst durch den
-Navigationstest `TestShell_SelectNav_SwitchesToSettings` sichtbar (Label
-„Konten" verschwand nach `Reload()`). Immer `Objects[0]` für den
-Center-Slot verwenden, wenn genau ein Objekt an `objects...` übergeben
-wurde — siehe `reports/list.go` (`setCenter`) als korrektes Vorbild.
-
-## `widget.Select.SetSelected()` löst `OnChanged` synchron aus
-
-`widget.NewSelect(options, onChanged)` gefolgt von einem
-`select.SetSelected(default)` im Konstruktor ruft `onChanged` **sofort,
-synchron, noch im Konstruktor** auf, wenn sich der Wert ändert — nicht
-erst bei einer Nutzerinteraktion. Greift `onChanged` auf ein Feld zu, das
-der Konstruktor erst *danach* zuweist (typischerweise `v.container`, für
-`Reload()`/`setCenter()`), panict das mit Nil-Pointer, sobald die
-Standardauswahl gesetzt wird — reproduziert in `reports.View` (Gruppierung
-nach Domain/Organisation, AP 6): `v.group.SetSelected(...)` lief vor
-`v.container = container.NewBorder(...)`.
-
-Lösung: `widget.NewSelect(options, nil)` konstruieren, `SetSelected()` für
-die Standardauswahl aufrufen (harmlos ohne Callback), und `OnChanged` erst
-danach zuweisen, wenn der Rest des Widgets fertig aufgebaut ist — siehe
-`reports/list.go`. Gilt für jeden `widget.Select`, dessen `OnChanged` auf
-später im Konstruktor zugewiesene Felder zugreift.
-
-## `uitest.FindEntries` findet `*widget.SelectEntry` nicht
-
-`uitest.FindEntries` (internal/ui/uitest/walk.go) macht eine
-Typassertion auf den konkreten Typ `*widget.Entry`. `widget.SelectEntry`
-*bettet* `Entry` ein, ist aber ein eigener konkreter Typ — die Assertion
-schlägt fehl, ein `SelectEntry`-Feld (z. B. `settings.AccountForm.mailbox`,
-seit AP 6 ein Ordner-Picker) taucht in `FindEntries`-Ergebnissen **nicht**
-auf, obwohl es sich wie ein Entry verhält und `.Text`/`.SetText()` genauso
-funktionieren. Tests, die Formularfelder über feste Indizes in
-`FindEntries(...)` ansprechen (z. B.
-`onboarding/wizard_test.go:fillValidAccountForm`), müssen bei jeder
-Umstellung eines Feldes von `*widget.Entry` auf `*widget.SelectEntry` neu
-durchgezählt werden — das Feld verschwindet aus der Liste, alle
-nachfolgenden Indizes rutschen um eins nach vorn. Kein Bug im Widget
-selbst, nur eine Falle für index-basierte Testhelfer.
-
-## Eigenes Theme + Diagrammfarben folgen der `dataviz`-Skill-Referenzpalette
-
-`internal/ui/theme.go` (`appTheme`) definiert Hintergrund/Oberflächen/
-Text/Trenner/Primär-/Status-Farben für hell **und** dunkel vollständig
-selbst, statt (wie vor der Überarbeitung) fast alles an
-`theme.DefaultTheme()` zu delegieren — Grund war ein Nutzerfeedback, dass
-die Oberfläche im dunklen Systemmodus "altbacken" und "alles schwarz"
-wirkte: ohne eigene Farbrollen für Oberflächen/Karten/Trenner blieb nur
-Fynes generisches Grau/Schwarz ohne erkennbare Struktur.
-
-Die konkreten Hex-Werte (Primärblau `#2a78d6`/`#3987e5`,
-Status-Grün/-Gelb/-Rot `#0ca30c`/`#fab219`/`#d03b3b`) stammen unverändert
-aus der Referenzpalette der `dataviz`-Skill (`references/palette.md`) —
-**nicht** frei erfunden. Dieselben Statusfarben verwendet
-`internal/infra/charts` (Pass/Fail/Disposition-Diagramme) — Oberfläche und
-Diagramme sprechen dadurch dieselbe Farbsprache. Vor einer Änderung dieser
-Werte: `dataviz`-Skill laden und `scripts/validate_palette.js` gegen die
-neuen Werte laufen lassen (nicht nach Auge entscheiden) — siehe dortige
+Die konkreten Hex-Werte in `:root`/`prefers-color-scheme: dark`
+(Primärblau `#2a78d6`/`#3987e5`, Status-Grün/-Gelb/-Rot
+`#0ca30c`/`#fab219`/`#d03b3b`) stammen unverändert aus der
+Referenzpalette der `dataviz`-Skill (`references/palette.md`) — **nicht**
+frei erfunden. Dieselben Statusfarben verwendet `internal/web/static/
+charts.js` (Pass/Fail/Disposition-Diagramme) über dieselben CSS-Variablen
+(`cssVar("--status-good")` usw.) — Oberfläche und Diagramme sprechen
+dadurch dieselbe Farbsprache. Vor einer Änderung dieser Werte:
+`dataviz`-Skill laden und `scripts/validate_palette.js` gegen die neuen
+Werte laufen lassen (nicht nach Auge entscheiden) — siehe dortige
 Anleitung. Statusfarben sind laut Skill bewusst **modusunabhängig fest**
 (nicht pro hell/dunkel verschieden), Primärfarbe/Oberflächen dagegen schon.
-
-Kacheln und Diagramm-Panels im Dashboard (`internal/ui/dashboard`) stecken
-seither in `widget.Card` statt frei auf dem Fensterhintergrund zu stehen —
-das war der zweite Hebel gegen "alles schwarz": eine sichtbare
-Kartenfläche macht auch im dunklen Modus erkennbar, wo eine Kennzahl/ein
-Diagramm anfängt und aufhört. Die vier Dashboard-Diagramme sind bewusst
-nicht mehr eine lange, eintönige Spalte, sondern gruppiert: Zeitreihe und
-Disposition-Donut nebeneinander (beide etwa quadratisch), Top-Sendequellen
-und Heatmap je eine eigene volle Zeile mit horizontalem Scrollbereich um
-das Bild (ihre Breite wächst mit Anzahl Sendequellen/Tagen und würde im
-Raster sonst die Spaltenbreite aller anderen Karten erzwingen).
-
-**Nicht in diesem Kontainer visuell verifiziert:** Diese Session hat keinen
-Zugriff auf ein echtes Display — die Änderungen sind ausschließlich über
-`fyne.io/fyne/v2/test` (Headless-Treiber) und Farbwert-Prüfungen
-abgesichert, nicht durch einen echten Bildschirmvergleich. Vor einem
-Release lohnt sich ein tatsächlicher Blick auf das laufende Fenster
-(`task build && ./bin/dmarc-analyzer`), auch im hellen UND dunklen
-Systemmodus.
-
-## `dialog.NewCustomWithoutButtons` schließt nicht durch Antippen außerhalb
-
-`dialog.NewCustom*` baut intern immer ein `widget.NewModalPopUp` (siehe
-`fyne.io/fyne/v2/dialog/base.go:create`). "Modal" ist hier wörtlich
-gemeint: anders als ein gewöhnliches Popup/Dropdown schließt ein
-`ModalPopUp` **nicht**, wenn man daneben tippt. `NewCustomWithoutButtons`
-liefert dazu noch nicht einmal einen Knopf — ohne einen Code-Pfad, der
-explizit `.Hide()` auf den zurückgegebenen `*dialog.CustomDialog` aufruft,
-bleibt ein so erzeugter Dialog für den Nutzer **dauerhaft offen und
-unschließbar**. Genau das war ein echter Bug im
-Bericht-Detaildialog (`reports.View.showDetail`): der zweite (eigentliche
-Inhalts-)Dialog benutzte `NewCustomWithoutButtons`, aber nichts rief
-danach `Hide()` auf.
-
-`NewCustomWithoutButtons` ist nur für Dialoge richtig, die der
-aufrufende Code selbst wieder schließt (z. B. ein Fortschritts-Spinner,
-der nach Abschluss einer Hintergrundoperation per `progress.Hide()`
-verschwindet — siehe `settings.View.testAccount` und die
-Lade-Zwischenanzeige in `reports.View.showDetail`). Für jeden Dialog, den
-der **Nutzer** selbst schließen soll, gehört ein echter Dismiss-Knopf
-dazu: `dialog.NewCustom(title, dismissText, content, window)`.
-
-Regressionstest-Muster für "kann der Nutzer diesen Dialog wieder
-schließen": `w.Canvas().Overlays().Top()` liefert den obersten Dialog als
-`fyne.CanvasObject`, darin per `uitest.FindButton` den Dismiss-Knopf
-suchen, `test.Tap(...)`, danach `w.Canvas().Overlays().Top()` muss `nil`
-sein — siehe `reports/list_test.go:TestView_ShowDetail_DialogCanBeClosed`.
 
 ## Chart.js `responsive: true` + `maintainAspectRatio: false`: Canvas braucht einen Elternknoten mit fester Höhe
 

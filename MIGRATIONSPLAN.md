@@ -2,7 +2,7 @@
 
 > Stand: 2026-09-17. Ergänzt `UMSETZUNGSPLAN.md` und ist dort **vor AP 7**
 > einzuordnen (Packaging und Feinschliff hängen vom Ergebnis ab).
-> Fortschritt: M0–M4 umgesetzt (siehe Abschnitt 10), M5 offen.
+> Fortschritt: M0–M5 umgesetzt (siehe Abschnitt 10), M6 offen.
 
 ## 1. Anlass und Ziel
 
@@ -541,20 +541,105 @@ echtem Browser prüfbar (derselbe, bereits in M2 dokumentierte
 
 ### M5 — Umstellung und Rückbau (M)
 
-- [ ] `internal/ui` und `cmd/dmarc-analyzer/cmd_gui.go` gelöscht; Fyne aus `go.mod`
-- [ ] Erweiterung 9.5 (Diagramm-Port, `internal/infra/charts`, go-chart entfernt)
-- [ ] Build mit `CGO_ENABLED=0`; `task release` als Cross-Compile für
-  macOS (arm64, amd64), Windows (amd64), Linux (amd64, arm64) mit Checksummen
-- [ ] Windows-Build ohne Konsolenfenster (`-H windowsgui`), Log in Datei —
-  Verhalten beim Doppelklick prüfen
-- [ ] macOS: Verhalten einer Nicht-Cocoa-Binärdatei im `.app`-Bündel prüfen (Dock-Symbol, „reagiert nicht"-Anzeige);
-  falls nötig `LSUIElement`
-- [ ] Taskfile: `package:*` und `fyne`-Installation entfernt, `run` öffnet den Browser
-- [ ] CI: Cross-Compile-Schritt ergänzt
-- [ ] Dokumentation nach Abschnitt 12 angepasst
+- [x] `internal/ui` und `cmd/dmarc-analyzer/cmd_gui.go` gelöscht; Fyne aus
+  `go.mod` — 40 Dateien/4916 Zeilen `internal/ui` entfernt, `main.go`s
+  `subcommands`-Map um den (ohnehin nirgends dokumentierten) Eintrag
+  `"gui"` bereinigt. `go mod tidy` hat danach automatisch `fyne.io/*` und
+  alle nur dafür nötigen transitiven Abhängigkeiten (u. a. `go-gl/*`,
+  `go-text/*`, `srwiley/*`, `nfnt/resize`, `rymdport/portal`,
+  `fyne-io/*`) aus `go.mod` entfernt.
+- [x] Erweiterung 9.5 (Diagramm-Port, `internal/infra/charts`, go-chart
+  entfernt) — `analysis.ChartRenderer`-Interface aus
+  `internal/domain/analysis/charts.go` entfernt (die reinen Datentypen
+  `DailyVolume`/`SourceVolume`/`Heatmap`/`HeatmapCell` bleiben, `Total`
+  war bereits vorhanden); `internal/infra/charts` (4 Dateien, go-chart-
+  Implementierung inkl. manueller Heatmap-Zeichnung mit `image/draw`)
+  sowie `internal/app/exportdata/png.go`+`png_test.go`
+  (`WriteChartPNG`, einziger Aufrufer war das jetzt gelöschte Fyne-
+  Dashboard) gelöscht. `github.com/wcharczuk/go-chart/v2` damit
+  ebenfalls durch `go mod tidy` entfernt. Begründung:
+  `docs/adr/0002-chartjs-statt-chartrenderer-port.md`.
+- [x] Build mit `CGO_ENABLED=0`; `task release` als Cross-Compile für
+  macOS (arm64, amd64), Windows (amd64), Linux (amd64, arm64) mit
+  Checksummen — `Taskfile.yml` hat jetzt `release:darwin`/
+  `release:windows`/`release:linux`/`release`, alle als reine
+  `CGO_ENABLED=0 go build`-Cross-Compiles (kein `fyne package`,
+  keine plattformspezifische Toolchain nötig — bereits vorher war
+  `modernc.org/sqlite` CGO-frei, Fyne war die einzige CGO-Abhängigkeit
+  im gesamten Modul). Lokal auf einem einzigen (macOS-)Rechner
+  verifiziert: alle fünf Artefakte (`darwin-arm64.app.zip`,
+  `darwin-amd64.app.zip`, `windows-amd64.zip`, `linux-amd64.tar.gz`,
+  `linux-arm64.tar.gz`) bauen fehlerfrei, `checksums.txt` entsteht; der
+  native `darwin-arm64`-Build wurde zusätzlich tatsächlich ausgeführt
+  (`--help`, `stats` gegen ein frisches `HOME`) und funktioniert.
+- [x] Windows-Build ohne Konsolenfenster (`-H windowsgui`), Log in Datei —
+  `release:windows` linkt mit `-H windowsgui`. Da `os.Stderr` unter einem
+  GUI-Subsystem-Build ohne Konsolenfenster ins Leere schreibt, wurde
+  `internal/platform/logging` um eine `WithWriter`-Option erweitert und
+  `internal/platform/paths` um `LogFilePath()` (`~/Library/Logs/
+  dmarc-analyzer/dmarc-analyzer.log` unter macOS, sonst analog zu
+  `ConfigDir()`); `cmd_web.go` (`attachLogFile`) schreibt beim Start des
+  `web`-Unterbefehls zusätzlich in diese Datei (`io.MultiWriter` mit
+  `os.Stderr` — im normalen Terminal-Betrieb bleibt die bisherige
+  Ausgabe unverändert sichtbar), inklusive Anmeldelink/Adresse als
+  strukturierte `slog`-Einträge. **Nicht auf echtem Windows getestet**
+  (keine Windows-Maschine in dieser Sandbox verfügbar) — nur der
+  Cross-Compile selbst (`GOOS=windows GOARCH=amd64`) und die Logik der
+  neuen `logging`-/`paths`-Funktionen sind durch Unit-Tests abgesichert.
+- [x] macOS: Verhalten einer Nicht-Cocoa-Binärdatei im `.app`-Bündel
+  geprüft, soweit ohne Display möglich — `packaging/darwin/
+  Info.plist.tmpl` (neu, ersetzt das von `fyne package` erzeugte
+  Manifest) setzt `LSUIElement=true`: das Programm hat keine eigene
+  Cocoa-Ereignisschleife mehr (reiner HTTP-Server-Prozess), ohne
+  `LSUIElement` bekäme es trotzdem ein Dock-Symbol, das macOS
+  möglicherweise als „reagiert nicht" markiert. **Nicht in einer echten
+  grafischen Sitzung verifiziert** (kein Display in dieser
+  Entwicklungsumgebung) — im Info.plist-Kommentar ausdrücklich als
+  offener Prüfpunkt vor einem echten Release vermerkt (tatsächlicher
+  Doppelklick-Start, Dock-Verhalten von Hand beobachten).
+- [x] Taskfile: `package:*` und `fyne`-Installation entfernt, `run` öffnet
+  den Browser — `task setup` ohne `fyne`-CLI-Installation mehr;
+  `package:darwin`/`package:windows`/`package:linux`/altes `release`
+  durch die neuen `release:*`-Tasks ersetzt; `task run`-Beschreibung
+  ergänzt („öffnet sich der Standardbrowser").
+- [x] CI: Cross-Compile-Schritt ergänzt — `.github/workflows/ci.yml`
+  existierte bereits seit dem allerersten Commit (`check`-Job: `task
+  fmt`-Drift-Prüfung, `lint`, `test`, `build`, als Matrix über
+  `ubuntu-latest`/`macos-latest`/`windows-latest`, mit gepinnten
+  Versionen für Go/Task/golangci-lint). Ergänzt um einen neuen Job
+  `release` (nur bei einem `v*`-Tag, nach erfolgreichem `check`):
+  `task release` (Cross-Compile aller Zielplattformen) plus
+  GitHub-Release mit Binärdateien/Checksummen via
+  `softprops/action-gh-release`, auf `macos-latest` (`task release`
+  ruft `zip`/`shasum` direkt auf — auf macOS ohne Zusatzinstallation
+  vorhanden, auf dem Ubuntu-Runner nicht garantiert). **Korrektur
+  während dieser Sitzung:** eine erste Fassung hatte die bestehende
+  `ci.yml` versehentlich komplett überschrieben (fälschliche Annahme,
+  es gäbe noch keine CI) — der bestehende `check`-Job wurde daraufhin
+  unverändert wiederhergestellt und nur der neue `release`-Job ergänzt.
+- [x] Dokumentation nach Abschnitt 12 angepasst — `FEATURES.md`
+  (Fyne-Vorgabe ersetzt), `IMPLEMENTIERUNG.md` Abschnitte 3/5/8.2/10/12/13
+  (plus die Architektur-Diagramme in 4.1, die sonst der eigenen
+  Aktualisierung in 5 widersprochen hätten), `UMSETZUNGSPLAN.md`
+  (Verweis vor AP 7, AP-7-Punkte angepasst: Browser- statt
+  Desktop-Benachrichtigung, Packaging als in M5 bereits erledigt markiert),
+  `docs/DEPENDENCIES.md` (Fyne/go-chart als „Entfernt" dokumentiert,
+  htmx/Chart.js/Plugins waren schon vorher erfasst), zwei neue ADRs
+  (`docs/adr/0001-web-oberflaeche-statt-fyne.md`,
+  `docs/adr/0002-chartjs-statt-chartrenderer-port.md`), `AGENTS.md`
+  (alle sechs reinen Fyne-Fallstricke entfernt, Diagrammfarben-Abschnitt
+  auf `app.css`/`charts.js` umgeschrieben), `README.md` (komplett
+  überarbeitet: tatsächlicher Funktionsstand statt „AP 0", Start/
+  Browserverhalten/Beenden/`--kein-browser`/Sicherheitsmodell/
+  Installation über GitHub-Releases), `CHANGELOG.md` (Geändert-/
+  Entfernt-/Behoben-Einträge für die gesamte Migration M0–M5 ergänzt,
+  vorher stand dort nur der Fyne-Stand bis AP 6).
 
 **Fertig wenn:** `go list -deps ./... | grep fyne` ist leer, `task check` ist grün,
 und die Release-Binärdateien für alle Plattformen entstehen auf einem Rechner.
+**Erreicht** — siehe die einzelnen Punkte oben für Details und die
+verbleibenden, nur mit echter Windows-Maschine bzw. echtem Display
+prüfbaren Lücken (Windows-Konsolenverhalten, macOS-Dock-Verhalten).
 
 ### M6 — Feinschliff (S–M)
 

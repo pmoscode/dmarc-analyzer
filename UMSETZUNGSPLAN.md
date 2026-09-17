@@ -593,13 +593,37 @@ Dovecot, `.` bei Courier) blind erraten.
 
 ### AP 7 — Feinschliff und Release 1.0.0
 
+> **Vor diesem AP eingeschoben:** `MIGRATIONSPLAN.md` (Umstieg von der
+> ursprünglichen Fyne-Desktop-Oberfläche auf eine im Programm eingebettete
+> Web-Oberfläche, Meilensteine M0–M6). Stand hier: M0–M5 umgesetzt, siehe
+> dort Abschnitt 10. Die Punkte unten sind entsprechend angepasst
+> (Desktop-Benachrichtigung → Browser-Benachrichtigung, Packaging ohne
+> `fyne package`) bzw. bereits durch M5 ganz oder teilweise erledigt.
+
 - [ ] Aufbewahrungsrichtlinie, Standard 24 Monate (Vorschlag 11.11)
-- [ ] Hintergrund-Sync nach Zeitplan + Desktop-Benachrichtigung
+- [ ] Hintergrund-Sync nach Zeitplan + **Browser-Benachrichtigung bei
+  offenem Tab** (statt der ursprünglich vorgesehenen
+  `fyne.App.SendNotification`-Desktop-Benachrichtigung — es gibt seit dem
+  Umstieg auf die Web-Oberfläche kein Desktop-App-Fenster mehr, das eine
+  systemeigene Benachrichtigung auslösen könnte; die Benachrichtigung
+  müsste über die Browser-Notifications-API laufen und setzt daher einen
+  geöffneten Tab voraus)
 - [ ] Backup/Restore per `VACUUM INTO` (Vorschlag 11.12)
-- [ ] Barrierefreiheits-Durchgang nach den Kriterien aus 3.1
+- [ ] Barrierefreiheits-Durchgang nach den Kriterien aus 3.1 (siehe auch
+  `MIGRATIONSPLAN.md` M6)
 - [ ] Lasttest mit mehreren Jahren Reportdaten
-- [ ] Packaging macOS/Windows/Linux, `task release` mit Checksummen
-- [ ] README final mit Screenshots und Datenschutzhinweis, ADRs in `docs/`
+- [x] ~~Packaging macOS/Windows/Linux, `task release` mit Checksummen~~ —
+  **in M5 umgesetzt** (`Taskfile.yml`: `release:darwin`/`release:windows`/
+  `release:linux`/`release`, reine `CGO_ENABLED=0`-Cross-Compiles ohne
+  `fyne package`, siehe `MIGRATIONSPLAN.md`). Offen bleibt für ein
+  echtes 1.0.0-Release: macOS-Signierung/Notarisierung (aktuell
+  unsigniert, siehe README „Installation"), ggf. zusätzliche
+  Distributionswege (Homebrew, winget, …) — bewusst nicht Teil von M5.
+- [ ] README final mit Screenshots und Datenschutzhinweis — Text-Teile
+  bereits in M5 aktualisiert (Start/Browserverhalten/Beenden/
+  `--kein-browser`/Sicherheitsmodell), **Screenshots fehlen noch**. ADRs
+  in `docs/adr/` bereits in M5 angelegt (0001 Web-Oberfläche statt Fyne,
+  0002 Chart.js statt `ChartRenderer`-Port).
 - [ ] CHANGELOG-Eintrag `1.0.0`, Tag setzen
 
 ---

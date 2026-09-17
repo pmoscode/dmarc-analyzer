@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+	Minimales Info.plist für das dmarc-analyzer.app-Bündel (Taskfile.yml,
+	Task "release:darwin") — ersetzt seit M5 (MIGRATIONSPLAN.md) das
+	bisher von "fyne package" generierte Info.plist, weil das gesamte
+	Fyne-Toolkit (und damit auch dessen Paketierer) entfallen ist.
+
+	Die Versions-Platzhalter in den CFBundleVersion-/
+	CFBundleShortVersionString-Feldern unten werden von der Taskfile.yml
+	per sed durch die tatsächliche Version ersetzt (git describe, siehe
+	VERSION-Variable dort). Absichtlich nicht wörtlich in diesem Kommentar
+	wiederholt: sed ersetzt jedes Vorkommen in der gesamten Datei, auch in
+	Kommentaren — ein hier ausgeschriebener Platzhalter würde sich also
+	selbst mit ersetzen.
+
+	LSUIElement ist bewusst auf true gesetzt: dmarc-analyzer ist seit dem
+	Umstieg auf die Web-Oberfläche (MIGRATIONSPLAN.md) kein Cocoa-Programm
+	mehr mit eigenem Fenster/Menüleiste, sondern ein reiner
+	Server-Prozess, der beim Start automatisch den Standardbrowser öffnet
+	(kein Auto-Ende, siehe Entscheidung E-3 im Migrationsplan). Ohne
+	LSUIElement würde macOS ein Dock-Symbol für ein Programm anzeigen, das
+	nie eine eigene Ereignisschleife (NSApplication-Run-Loop) verarbeitet
+	— das kann je nach macOS-Version dazu führen, dass das Symbol
+	dauerhaft als "reagiert nicht" markiert wird, obwohl der
+	HTTP-Server im Hintergrund einwandfrei läuft. Mit LSUIElement=true
+	erscheint gar kein Dock-Symbol, wie es für einen reinen
+	Hintergrunddienst passend ist.
+
+	Nicht in einer echten grafischen Sitzung verifiziert (die
+	Entwicklungsumgebung, in der dieses Bündel entstanden ist, hatte
+	keinen Zugriff auf ein Display) — vor einem Release bitte einmal
+	tatsächlich per Doppelklick im Finder starten und Dock-/
+	"Reagiert nicht"-Verhalten von Hand prüfen (siehe MIGRATIONSPLAN.md M5).
+-->
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key>
+	<string>dmarc-analyzer</string>
+	<key>CFBundleDisplayName</key>
+	<string>DMARC Analyzer</string>
+	<key>CFBundleIdentifier</key>
+	<string>io.github.pmoscode.dmarc-analyzer</string>
+	<key>CFBundleVersion</key>
+	<string>__VERSION__</string>
+	<key>CFBundleShortVersionString</key>
+	<string>__VERSION__</string>
+	<key>CFBundleExecutable</key>
+	<string>dmarc-analyzer</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>11.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+</dict>
+</plist>

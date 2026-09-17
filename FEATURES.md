@@ -12,7 +12,10 @@
 
 ## Non features
 
-- It is an golang binary build with https://fyne.io/ as a UI framework
+- It is an golang binary with an embedded web UI (runs a local HTTP server,
+  opens the system's default browser — see MIGRATIONSPLAN.md; previously
+  built with https://fyne.io/ as a UI framework, replaced in migration
+  milestone M5, see docs/adr/0001-web-oberflaeche-statt-fyne.md)
 - Is stored the mail account credentials securely
 - generate a Taskfile with the common tasks for the project
 - write tests
@@ -22,5 +25,4 @@
 - Follow DDD
 - Follow the Clean Architecture principles
 - Follow the Clean Code principles
-- Follow the Fyne framework best practices
 - Benutzerfreundliche Oberfläche für einfache Navigation und Bedienung
