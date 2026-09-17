@@ -310,3 +310,37 @@ schließen": `w.Canvas().Overlays().Top()` liefert den obersten Dialog als
 `fyne.CanvasObject`, darin per `uitest.FindButton` den Dismiss-Knopf
 suchen, `test.Tap(...)`, danach `w.Canvas().Overlays().Top()` muss `nil`
 sein — siehe `reports/list_test.go:TestView_ShowDetail_DialogCanBeClosed`.
+
+## Chart.js `responsive: true` + `maintainAspectRatio: false`: Canvas braucht einen Elternknoten mit fester Höhe
+
+Chart.js beobachtet im responsiven Modus per `ResizeObserver` den
+**direkten Elternknoten** des `<canvas>`, um dessen Höhe/Breite
+anzupassen. Hat dieser Elternknoten selbst keine explizite, vom Canvas
+unabhängige Höhe (z. B. weil er wie eine gewöhnliche `.chart-card` nur
+`padding`/`border` setzt und seine Höhe sonst "auto", also vom Inhalt
+abgeleitet ist), entsteht eine Rückkopplungsschleife: das Canvas wächst
+→ der Elternknoten wächst mit, weil seine Höhe vom Canvas-Inhalt abhängt
+→ der ResizeObserver sieht die neue (größere) Elternhöhe und vergrößert
+das Canvas erneut → unendliches Wachstum nach unten, in der Praxis als
+"ein Diagramm expandiert beim Laden der Seite endlos" sichtbar (gefunden
+auf dem Dashboard beim `chart-verlauf`-Diagramm, das direktes Kind von
+`.chart-card` war).
+
+Ein direktes `canvas.style.height = "…px"` in JavaScript **behebt das
+nicht** — im Gegenteil, es kollidiert mit Chart.js' eigener Verwaltung
+von Canvas-Breite/-Höhe und kann die Schleife sogar erst auslösen. Die
+Höhe gehört stattdessen auf einen eigenen Wrapper-`<div>` als direkten
+Elternknoten des Canvas (`position: relative` plus feste oder dynamisch
+per JS gesetzte Höhe), niemals auf das Canvas selbst. Siehe
+`internal/web/static/app.css` (`.chart-canvas-wrap`, mit ausführlichem
+Kommentar) und `internal/web/templates/pages/dashboard.html` — jedes der
+vier Dashboard-Diagramme hat seinen eigenen `<div class="chart-canvas-
+wrap" id="chart-<name>-wrap">` um das `<canvas>`. Bei fester Höhe (hier:
+Nachrichtenvolumen, Disposition) reicht CSS; bei datenabhängiger Höhe
+(hier: Top-Sendequellen, Heatmap — mehr Zeilen/Spalten brauchen mehr
+Platz) setzt `internal/web/static/charts.js` die Höhe zur Laufzeit per
+`document.getElementById("chart-<name>-wrap").style.height = …` auf den
+Wrapper, nicht auf das Canvas. Bei jedem neuen Chart.js-Diagramm mit
+`maintainAspectRatio: false` dieses Muster übernehmen, sonst tritt der
+Bug erneut auf.
+

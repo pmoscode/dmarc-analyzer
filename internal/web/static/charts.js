@@ -133,7 +133,6 @@
           },
         });
 
-        canvas.style.height = "320px";
         renderDailyVolumeTable(days);
         registerExport("verlauf", chart, function () {
           return {
@@ -194,8 +193,17 @@
 
         var cellWidth = 36;
         var cellHeight = 28;
-        canvas.style.minWidth = Math.max(300, dayLabels.length * cellWidth + 140) + "px";
-        canvas.style.height = sourceLabels.length * cellHeight + 60 + "px";
+        // Breite/Höhe hängen von der Anzahl Tage/Sendequellen ab. Müssen auf
+        // dem Eltern-Wrapper gesetzt werden, nicht auf dem Canvas selbst —
+        // sonst entsteht die in app.css bei .chart-canvas-wrap dokumentierte
+        // Größen-Rückkopplungsschleife. Die Mindestbreite sorgt dafür, dass
+        // die umgebende .chart-scroll bei vielen Tagen tatsächlich einen
+        // horizontalen Scrollbalken zeigt.
+        var wrap = document.getElementById("chart-heatmap-wrap");
+        if (wrap) {
+          wrap.style.minWidth = Math.max(300, dayLabels.length * cellWidth + 140) + "px";
+          wrap.style.height = sourceLabels.length * cellHeight + 60 + "px";
+        }
 
         var chart = new Chart(canvas, {
           type: "matrix",
@@ -384,7 +392,14 @@
         var colors = sources.map(function (s) { return passRateColor(s.passRate); });
         var urls = sources.map(function (s) { return s.url; });
 
-        canvas.style.height = Math.max(120, sources.length * 28 + 60) + "px";
+        // Höhe hängt von der Anzahl Sendequellen ab (mehr Quellen -> mehr
+        // Balkenreihen). Muss auf dem Eltern-Wrapper gesetzt werden, nicht
+        // auf dem Canvas selbst — sonst entsteht die in app.css bei
+        // .chart-canvas-wrap dokumentierte Größen-Rückkopplungsschleife.
+        var wrap = document.getElementById("chart-quellen-wrap");
+        if (wrap) {
+          wrap.style.height = Math.max(120, sources.length * 28 + 60) + "px";
+        }
 
         var chart = new Chart(canvas, {
           type: "bar",
@@ -487,8 +502,6 @@
         var totals = slices.map(function (s) { return s.total; });
         var colors = slices.map(function (s) { return dispositionColor(s.disposition); });
         var urls = slices.map(function (s) { return s.url; });
-
-        canvas.style.height = "260px";
 
         var chart = new Chart(canvas, {
           type: "doughnut",

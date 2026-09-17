@@ -538,6 +538,36 @@ a {
   overflow-x: auto;
 }
 
+/* chart-canvas-wrap ist der direkte Elternknoten jedes <canvas> mit
+   Chart.js im "responsive: true, maintainAspectRatio: false"-Modus.
+   Chart.js beobachtet per ResizeObserver genau dieses Elternelement, um
+   die Canvas-Größe fortlaufend anzupassen — hat DIESES Element (statt
+   einer festen Höhe per CSS/JS) selbst nur eine vom Inhalt abgeleitete
+   Höhe ("Höhe: auto", wie es .chart-card ohne diesen Wrapper hätte),
+   entsteht eine Rückkopplungsschleife: das Canvas wächst → der
+   Elternknoten wächst mit (seine Höhe hängt ja vom Canvas ab) → Chart.js
+   beobachtet die neue Elternhöhe und vergrößert das Canvas erneut →
+   unendliches Wachstum nach unten. Deshalb bekommt genau dieser Wrapper
+   (nicht das Canvas selbst!) eine explizite, vom Canvas UNABHÄNGIGE Höhe
+   (fest per CSS für Nachrichtenvolumen/Disposition, dynamisch per JS
+   für Top-Sendequellen/Heatmap, siehe charts.js) sowie position:relative
+   (von Chart.js für die responsive Größenberechnung vorausgesetzt).
+   Canvas.style.height wird bewusst NICHT mehr gesetzt — das widerspräche
+   sich mit Chart.js' eigener Verwaltung von Canvas-Breite/-Höhe. */
+.chart-canvas-wrap {
+  position: relative;
+  width: 100%;
+  min-height: 120px;
+}
+
+#chart-verlauf-wrap {
+  height: 320px;
+}
+
+#chart-disposition-wrap {
+  height: 260px;
+}
+
 .chart-actions {
   display: flex;
   gap: 8px;
