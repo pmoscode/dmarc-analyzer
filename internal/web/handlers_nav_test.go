@@ -12,7 +12,7 @@ func TestNav_AppearsOnEveryRealPage(t *testing.T) {
 	srv, _ := newTestServerWithAccounts(t, mustAccount(t, "Konto 1"))
 	client := authenticatedClient(t, srv)
 
-	for _, path := range []string{"/", "/berichte", "/quellen", "/glossar", "/einstellungen"} {
+	for _, path := range []string{"/", "/berichte", "/quellen", "/domains", "/einstellungen"} {
 		resp := httpGet(t, client, "http://"+srv.Addr()+path)
 		require.Equal(t, http.StatusOK, resp.StatusCode, path)
 
@@ -24,7 +24,7 @@ func TestNav_AppearsOnEveryRealPage(t *testing.T) {
 		require.Contains(t, html, `href="/"`, path)
 		require.Contains(t, html, `href="/berichte"`, path)
 		require.Contains(t, html, `href="/quellen"`, path)
-		require.Contains(t, html, `href="/glossar"`, path)
+		require.Contains(t, html, `href="/domains"`, path)
 		require.Contains(t, html, `href="/einstellungen"`, path)
 	}
 }
@@ -53,7 +53,7 @@ func TestRealPages_RequireSession(t *testing.T) {
 	// testRedirectURL-Dokumentation in server_test.go.
 	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 
-	for _, path := range []string{"/berichte", "/quellen", "/glossar", "/einstellungen"} {
+	for _, path := range []string{"/berichte", "/quellen", "/domains", "/einstellungen"} {
 		resp := httpGet(t, client, "http://"+srv.Addr()+path)
 		require.Equal(t, http.StatusSeeOther, resp.StatusCode, path)
 		require.Equal(t, "/anmelden", resp.Header.Get("Location"), path)

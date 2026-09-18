@@ -17,19 +17,19 @@
     <span class="tile-value">{{.TotalMessages}}</span>
   </div>
   <div class="tile">
-    <span class="tile-label">DMARC-Pass-Rate <a href="{{glossarLink "DMARC-Pass-Rate"}}" class="glossary-hint" title="Begriff erklären">?</a></span>
+    <span class="tile-label">DMARC-Pass-Rate <button type="button" class="glossary-hint" data-tip="{{glossaryDef "DMARC-Pass-Rate"}}" aria-label="Begriff erklären: DMARC-Pass-Rate">?</button></span>
     <span class="tile-value">{{.PassRatePercent}}</span>
   </div>
   <div class="tile">
-    <span class="tile-label">DKIM-Alignment-Rate <a href="{{glossarLink "Alignment"}}" class="glossary-hint" title="Begriff erklären">?</a></span>
+    <span class="tile-label">DKIM-Alignment-Rate <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Alignment"}}" aria-label="Begriff erklären: Alignment">?</button></span>
     <span class="tile-value">{{.DKIMAlignmentPercent}}</span>
   </div>
   <div class="tile">
-    <span class="tile-label">SPF-Alignment-Rate <a href="{{glossarLink "Alignment"}}" class="glossary-hint" title="Begriff erklären">?</a></span>
+    <span class="tile-label">SPF-Alignment-Rate <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Alignment"}}" aria-label="Begriff erklären: Alignment">?</button></span>
     <span class="tile-value">{{.SPFAlignmentPercent}}</span>
   </div>
   <div class="tile">
-    <span class="tile-label">Unterschiedliche Quellen <a href="{{glossarLink "Quell-IP"}}" class="glossary-hint" title="Begriff erklären">?</a></span>
+    <span class="tile-label">Unterschiedliche Quellen <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Quell-IP"}}" aria-label="Begriff erklären: Quell-IP">?</button></span>
     <span class="tile-value">{{.DistinctSources}}</span>
   </div>
 </section>
@@ -49,7 +49,7 @@
 <section class="charts">
   <div class="charts-row charts-row-2">
     <div class="chart-card">
-      <h2>Nachrichtenvolumen pro Tag <a href="{{glossarLink "Nachrichtenvolumen pro Tag"}}" class="glossary-hint" title="Begriff erklären">?</a></h2>
+      <h2>Nachrichtenvolumen pro Tag <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Nachrichtenvolumen pro Tag"}}" aria-label="Begriff erklären: Nachrichtenvolumen pro Tag">?</button></h2>
       <p class="chart-hint">Mausrad zum Zoomen, Ziehen zum Verschieben. Klick auf einen Tag zeigt die Berichte dieses Tages.</p>
       <div class="chart-canvas-wrap" id="chart-verlauf-wrap">
         <canvas id="chart-verlauf" aria-label="Gestapeltes Balkendiagramm: Nachrichtenvolumen pro Tag, aufgeteilt nach bestanden und fehlgeschlagen" role="img"></canvas>
@@ -65,7 +65,7 @@
     </div>
 
     <div class="chart-card">
-      <h2>Verteilung nach Disposition <a href="{{glossarLink "Verteilung nach Disposition"}}" class="glossary-hint" title="Begriff erklären">?</a></h2>
+      <h2>Verteilung nach Disposition <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Verteilung nach Disposition"}}" aria-label="Begriff erklären: Verteilung nach Disposition">?</button></h2>
       <p class="chart-hint">Klick auf ein Segment zeigt die Berichte mit dieser Disposition.</p>
       <div class="chart-canvas-wrap" id="chart-disposition-wrap">
         <canvas id="chart-disposition" aria-label="Donut-Diagramm: Verteilung der Nachrichten nach Disposition" role="img"></canvas>
@@ -82,7 +82,7 @@
   </div>
 
   <div class="chart-card">
-    <h2>Top-Sendequellen <a href="{{glossarLink "Top-Sendequellen"}}" class="glossary-hint" title="Begriff erklären">?</a></h2>
+    <h2>Top-Sendequellen <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Top-Sendequellen"}}" aria-label="Begriff erklären: Top-Sendequellen">?</button></h2>
     <p class="chart-hint">Klick auf einen Balken zeigt die Berichte dieser Quelle.</p>
     <div class="chart-scroll">
       <div class="chart-canvas-wrap" id="chart-quellen-wrap">
@@ -100,7 +100,7 @@
   </div>
 
   <div class="chart-card">
-    <h2>Sendequelle × Tag (Pass-Rate) <a href="{{glossarLink "Sendequelle × Tag (Pass-Rate)"}}" class="glossary-hint" title="Begriff erklären">?</a></h2>
+    <h2>Sendequelle × Tag (Pass-Rate) <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Sendequelle × Tag (Pass-Rate)"}}" aria-label="Begriff erklären: Sendequelle × Tag (Pass-Rate)">?</button></h2>
     <p class="chart-hint">Klick auf eine Zelle zeigt die Berichte dieser Quelle an diesem Tag.</p>
     <div class="chart-scroll">
       <div class="chart-canvas-wrap" id="chart-heatmap-wrap">

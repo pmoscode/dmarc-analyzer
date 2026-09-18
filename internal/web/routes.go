@@ -36,7 +36,6 @@ func (s *Server) routes() http.Handler {
 	protected.HandleFunc("GET /quellen/seite", s.handleSourcesPage)
 	protected.HandleFunc("GET /domains", s.handleDomains)
 	protected.HandleFunc("GET /domains/seite", s.handleDomainsPage)
-	protected.HandleFunc("GET /glossar", s.handleGlossary)
 	protected.HandleFunc("GET /einstellungen", s.handleSettings)
 	protected.HandleFunc("POST /konten/{id}/test", s.handleAccountTest)
 	protected.HandleFunc("POST /abgleich", s.handleSyncStart)

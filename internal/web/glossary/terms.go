@@ -3,8 +3,6 @@
 // Meilenstein M2: "Glossarseite und Begriffs-Tooltips").
 package glossary
 
-import "strings"
-
 // Term ist ein Glossareintrag: Begriff und Erklärung.
 //
 // Inhalt unverändert aus internal/ui/glossary/terms.go übernommen (bis
@@ -90,28 +88,4 @@ func ByName(name string) (Term, bool) {
 		}
 	}
 	return Term{}, false
-}
-
-// Slug wandelt einen Begriffsnamen in einen URL-Anker (#slug) um — für
-// Begriffs-Tooltip-Links von der Übersicht auf /glossar#<slug>
-// (MIGRATIONSPLAN.md Meilenstein M2: "Glossarseite und Begriffs-
-// Tooltips"). Nicht alphanumerische Zeichen werden zu "-", mehrfache "-"
-// zusammengefasst — ausreichend für die feste, kleine Begriffsliste
-// oben, kein allgemeiner Unicode-Normalisierer.
-func Slug(name string) string {
-	var b strings.Builder
-	lastDash := false
-	for _, r := range strings.ToLower(name) {
-		switch {
-		case r >= 'a' && r <= 'z' || r >= '0' && r <= '9':
-			b.WriteRune(r)
-			lastDash = false
-		default:
-			if !lastDash && b.Len() > 0 {
-				b.WriteByte('-')
-				lastDash = true
-			}
-		}
-	}
-	return strings.TrimSuffix(b.String(), "-")
 }

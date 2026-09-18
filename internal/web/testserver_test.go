@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/pmoscode/dmarc-analyzer/internal/app/domainoverview"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/manageaccount"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/queryreports"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/retention"
@@ -46,6 +47,7 @@ func newTestServerWithAccounts(t *testing.T, accounts ...account.MailAccount) (*
 		Statistics:          &statistics.UseCase{Repository: &fakeRepository{}},
 		Reports:             &queryreports.UseCase{Reports: &fakeReportRepository{}},
 		Sources:             &sourcestats.UseCase{Sources: &fakeSourcesRepository{}, Enricher: &fakeEnricher{}},
+		Domains:             &domainoverview.UseCase{Domains: &fakeDomainsRepository{}},
 		Accounts:            accountsUC,
 		SyncJob:             syncjob.NewRunner(context.Background(), fd.accounts, fd.syncer),
 		Retention:           &retention.UseCase{RetentionMonths: 24, Reports: &fakePruner{}},

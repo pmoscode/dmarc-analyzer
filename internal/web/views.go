@@ -18,17 +18,23 @@ import (
 // (z. B. `task run`).
 const devTemplatesDir = "internal/web/templates"
 
-// templateFuncs stellt Vorlagen-Hilfsfunktionen bereit: "glossarLink"
-// wandelt einen Glossar-Begriffsnamen in einen Link auf die passende
-// Erklärung auf /glossar um, "csrfToken" liefert das CSRF-Token DIESER
-// Anfrage (jede Sitzung hat seit dem Umstieg auf OIDC-Mehrbenutzer-Logins
-// ihr eigenes Token, siehe auth.go) — als Platzhalter-Funktion registriert,
-// die render()/renderNamed() vor jeder Ausführung per Template.Funcs() auf
-// den tatsächlichen Wert dieser Anfrage umbiegen (siehe render unten).
+// templateFuncs stellt Vorlagen-Hilfsfunktionen bereit: "glossaryDef"
+// liefert die Erklärung eines Glossar-Begriffs direkt als Text — für die
+// "?"-Hinweise, die die Erklärung inline (als Tooltip/Popover) statt über
+// einen Link auf eine eigene Glossarseite anzeigen (es gibt keine
+// Glossarseite mehr, siehe ehemals handlers_glossary.go). "csrfToken"
+// liefert das CSRF-Token DIESER Anfrage (jede Sitzung hat seit dem
+// Umstieg auf OIDC-Mehrbenutzer-Logins ihr eigenes Token, siehe auth.go)
+// — als Platzhalter-Funktion registriert, die render()/renderNamed() vor
+// jeder Ausführung per Template.Funcs() auf den tatsächlichen Wert dieser
+// Anfrage umbiegen (siehe render unten).
 func newTemplateFuncs() template.FuncMap {
 	return template.FuncMap{
-		"glossarLink": func(term string) string { return "/glossar#" + glossary.Slug(term) },
-		"csrfToken":   func() string { return "" },
+		"glossaryDef": func(term string) string {
+			t, _ := glossary.ByName(term)
+			return t.Definition
+		},
+		"csrfToken": func() string { return "" },
 	}
 }
 

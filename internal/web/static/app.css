@@ -13,10 +13,18 @@
 
   --page-bg: #f7f7f5;
   --surface: #ffffff;
+  --surface-raised: #ffffff;
   --ink: #0b0b0b;
   --ink-secondary: #52514e;
   --ink-muted: #89878f;
   --gridline: #e1e0d9;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --shadow-sm: 0 1px 2px rgba(20, 20, 15, 0.05), 0 1px 1px rgba(20, 20, 15, 0.04);
+  --shadow-md: 0 8px 24px rgba(20, 20, 15, 0.1), 0 2px 6px rgba(20, 20, 15, 0.06);
+  --header-bg: rgba(247, 247, 245, 0.82);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -26,10 +34,15 @@
     --primary: #3987e5;
     --page-bg: #141414;
     --surface: #1f1f1e;
+    --surface-raised: #232322;
     --ink: #f5f5f3;
     --ink-secondary: #c3c2b7;
     --ink-muted: #8f8d87;
     --gridline: #333331;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 1px 1px rgba(0, 0, 0, 0.24);
+    --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
+    --header-bg: rgba(20, 20, 20, 0.72);
   }
 }
 
@@ -39,20 +52,34 @@
 
 body {
   margin: 0;
-  padding: 0 16px 32px;
+  padding: 0 16px 48px;
   background: var(--page-bg);
   color: var(--ink);
-  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  font: 15px/1.55 -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 a {
   color: var(--primary);
 }
 
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
 .app-header {
-  padding: 16px 0;
-  border-bottom: 1px solid var(--gridline);
-  margin-bottom: 24px;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  padding: 14px 0;
+  margin: 0 -16px 28px;
+  padding-inline: 16px;
+  background: var(--header-bg);
+  backdrop-filter: blur(10px) saturate(1.4);
+  -webkit-backdrop-filter: blur(10px) saturate(1.4);
+  box-shadow: 0 1px 0 var(--gridline);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -61,32 +88,37 @@ a {
 
 .app-header h1 {
   margin: 0;
-  font-size: 20px;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .app-nav ul {
   list-style: none;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 2px;
   margin: 0;
   padding: 0;
 }
 
 .app-nav a {
   display: inline-block;
-  padding: 6px 10px;
-  border-radius: 8px;
+  padding: 6px 12px;
+  border-radius: 999px;
   color: var(--ink-secondary);
   text-decoration: none;
   font-size: 14px;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 .app-nav a:hover {
   background: var(--gridline);
+  color: var(--ink);
 }
 
 .app-nav a.active {
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
   color: var(--primary);
   font-weight: 600;
 }
@@ -105,16 +137,24 @@ a {
 .sync-form button {
   padding: 6px 12px;
   border: 1px solid var(--primary);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--primary);
   color: #fff;
   font: inherit;
   font-size: 13px;
   cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: filter 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
 }
 
 .sync-form button:hover {
   filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.sync-form button:active {
+  transform: translateY(0);
 }
 
 .logout-form {
@@ -124,12 +164,17 @@ a {
 .logout-form button {
   padding: 6px 12px;
   border: 1px solid var(--gridline);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--ink);
   font: inherit;
   font-size: 13px;
   cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.logout-form button:hover {
+  background: var(--gridline);
 }
 
 #sync-cancel-form button {
@@ -147,31 +192,10 @@ a {
 .placeholder {
   background: var(--surface);
   border: 1px solid var(--gridline);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
   padding: 24px;
   color: var(--ink-secondary);
-}
-
-.glossary-entry {
-  background: var(--surface);
-  border: 1px solid var(--gridline);
-  border-radius: 12px;
-  padding: 14px 18px;
-  margin-bottom: 12px;
-}
-
-.glossary-entry dt {
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-
-.glossary-entry dd {
-  margin: 0;
-  color: var(--ink-secondary);
-}
-
-.glossary-entry:target {
-  border-color: var(--primary);
 }
 
 .data-table {
@@ -179,15 +203,21 @@ a {
   border-collapse: collapse;
   background: var(--surface);
   border: 1px solid var(--gridline);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
   overflow: hidden;
 }
 
 .data-table th,
 .data-table td {
   text-align: left;
-  padding: 8px 12px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--gridline);
+}
+
+.data-table th {
+  background: color-mix(in srgb, var(--ink) 3%, var(--surface));
+  font-size: 13px;
 }
 
 .data-table th a {
@@ -200,6 +230,14 @@ a {
   color: var(--primary);
 }
 
+.data-table tbody tr {
+  transition: background 0.1s ease;
+}
+
+.data-table tbody tr:hover {
+  background: color-mix(in srgb, var(--primary) 4%, var(--surface));
+}
+
 .data-table tbody tr:last-child td {
   border-bottom: none;
 }
@@ -207,11 +245,12 @@ a {
 .load-more {
   padding: 6px 12px;
   border: 1px solid var(--gridline);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--primary);
   font: inherit;
   cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .load-more:hover {
@@ -224,13 +263,15 @@ a {
   color: var(--ink-muted);
   background: var(--surface);
   border: 1px solid var(--gridline);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
 }
 
 .detail-card {
   background: var(--surface);
   border: 1px solid var(--gridline);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
   padding: 16px 20px;
   margin-bottom: 16px;
 }
@@ -295,12 +336,21 @@ a {
 .stacked-form input[type="text"],
 .stacked-form input[type="password"],
 .stacked-form input[type="number"] {
-  padding: 7px 10px;
+  padding: 8px 11px;
   border: 1px solid var(--gridline);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--ink);
   font: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.stacked-form input[type="text"]:focus,
+.stacked-form input[type="password"]:focus,
+.stacked-form input[type="number"]:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 20%, transparent);
 }
 
 .stacked-form .checkbox-row {
@@ -313,16 +363,26 @@ a {
   align-self: flex-start;
   padding: 8px 16px;
   border: 1px solid var(--primary);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--primary);
   color: #fff;
   font: inherit;
   cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: filter 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+}
+
+.stacked-form button:hover,
+.stacked-form input[type="submit"]:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
 }
 
 .stacked-form button.secondary {
   background: var(--surface);
   color: var(--primary);
+  box-shadow: none;
 }
 
 .stacked-form .button-row {
@@ -357,12 +417,13 @@ a {
   align-self: flex-start;
   padding: 8px 16px;
   border: 1px solid var(--gridline);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   color: var(--ink);
   text-decoration: none;
   font-size: 14px;
   display: inline-flex;
   align-items: center;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .button-link:hover {
@@ -381,12 +442,17 @@ a {
 .row-actions button {
   padding: 5px 10px;
   border: 1px solid var(--gridline);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--ink);
   font: inherit;
   font-size: 13px;
   cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.row-actions button:hover {
+  background: var(--gridline);
 }
 
 .row-actions button.danger {
@@ -402,10 +468,11 @@ a {
   min-height: 120px;
   padding: 20px;
   border: 2px dashed var(--gridline);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   color: var(--ink-secondary);
   cursor: pointer;
   font-size: 14px;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
 }
 
 .dropzone:hover,
@@ -451,26 +518,38 @@ a {
 
 .filter-bar select,
 .filter-bar input[type="text"] {
-  padding: 6px 8px;
+  padding: 7px 10px;
   border: 1px solid var(--gridline);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--ink);
   font: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.filter-bar select:focus,
+.filter-bar input[type="text"]:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 20%, transparent);
 }
 
 .filter-bar button {
-  padding: 7px 14px;
+  padding: 8px 16px;
   border: 1px solid var(--primary);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--primary);
   color: #fff;
   font: inherit;
   cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: filter 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
 }
 
 .filter-bar button:hover {
   filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
 }
 
 .tiles {
@@ -483,11 +562,18 @@ a {
 .tile {
   background: var(--surface);
   border: 1px solid var(--gridline);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
   padding: 14px 16px;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.tile:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
 }
 
 .tile-label {
@@ -535,35 +621,98 @@ a {
   }
 }
 
+/* .glossary-hint ist ein <button> (kein Link mehr — es gibt keine
+   Glossarseite, auf die er verweisen könnte): die Erklärung steckt direkt
+   in data-tip und erscheint als schwebendes Tooltip bei Hover/Fokus, kein
+   Seitenwechsel nötig. Reines CSS, kein JavaScript — .glossary-hint[data-tip]
+   erzeugt das Tooltip per ::after, positioniert per ::before als kleinen
+   Pfeil, beide zunächst unsichtbar (opacity 0 + kein pointer-events) und
+   erst bei :hover/:focus-visible eingeblendet. */
 .glossary-hint {
-  display: inline-block;
-  min-width: 16px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
   height: 16px;
-  line-height: 16px;
-  text-align: center;
+  padding: 0;
   border-radius: 50%;
   border: 1px solid var(--ink-muted);
+  background: none;
   color: var(--ink-muted);
+  font: inherit;
   font-size: 11px;
-  text-decoration: none;
+  line-height: 1;
+  cursor: help;
   vertical-align: middle;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
 }
 
-.glossary-hint:hover {
-  color: var(--primary);
+.glossary-hint:hover,
+.glossary-hint:focus-visible {
+  color: #fff;
+  background: var(--primary);
   border-color: var(--primary);
+}
+
+.glossary-hint[data-tip]::after,
+.glossary-hint[data-tip]::before {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  transform: translate(-50%, 4px);
+}
+
+.glossary-hint[data-tip]::after {
+  content: attr(data-tip);
+  width: max-content;
+  max-width: 280px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--ink);
+  color: var(--page-bg);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+  box-shadow: var(--shadow-md);
+  z-index: 20;
+}
+
+.glossary-hint[data-tip]::before {
+  content: "";
+  bottom: calc(100% + 4px);
+  width: 8px;
+  height: 8px;
+  background: var(--ink);
+  transform: translate(-50%, 4px) rotate(45deg);
+  z-index: 20;
+}
+
+.glossary-hint[data-tip]:hover::after,
+.glossary-hint[data-tip]:hover::before,
+.glossary-hint[data-tip]:focus-visible::after,
+.glossary-hint[data-tip]:focus-visible::before {
+  opacity: 1;
+  transform: translate(-50%, 0);
 }
 
 .chart-card {
   background: var(--surface);
   border: 1px solid var(--gridline);
-  border-radius: 12px;
-  padding: 16px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 18px;
 }
 
 .chart-card h2 {
   margin: 0 0 4px;
   font-size: 16px;
+  font-weight: 600;
 }
 
 .chart-hint {
@@ -574,6 +723,25 @@ a {
 
 .chart-scroll {
   overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--gridline) transparent;
+}
+
+.chart-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+
+.chart-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chart-scroll::-webkit-scrollbar-thumb {
+  background: var(--gridline);
+  border-radius: 999px;
+}
+
+.chart-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-muted);
 }
 
 /* chart-canvas-wrap ist der direkte Elternknoten jedes <canvas> mit
@@ -615,12 +783,13 @@ a {
 .chart-export {
   padding: 5px 10px;
   border: 1px solid var(--gridline);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--ink-secondary);
   font: inherit;
   font-size: 12px;
   cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
 }
 
 .chart-export:hover {
