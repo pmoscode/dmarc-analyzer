@@ -1,0 +1,55 @@
+{{define "content"}}
+<form class="filter-bar" method="get" action="/domains" aria-label="Filter">
+  <label>Zeitraum
+    <select name="zeitraum">
+      {{range .PeriodOptions}}<option value="{{.Days}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
+    </select>
+  </label>
+  <label>Domain
+    <input type="text" name="domain" value="{{.Domain}}" placeholder="Alle" autocomplete="off">
+  </label>
+  <button type="submit">Filter anwenden</button>
+</form>
+
+<p class="export-link"><a href="{{.ExportURL}}">CSV exportieren (gesamter gefilterter Bestand)</a></p>
+
+<table class="data-table" aria-label="Domains">
+  <thead>
+    <tr>
+      <th><a href="{{.SortDomainURL}}">Domain</a></th>
+      <th><a href="{{.SortVolumeURL}}">Nachrichten</a></th>
+      <th>Pass-Rate</th>
+      <th>Berichte</th>
+      <th>Unterschiedliche Quellen</th>
+    </tr>
+  </thead>
+  <tbody id="domains-rows">
+    {{template "rows" .Rows}}
+  </tbody>
+</table>
+{{if not .Rows.Rows}}
+<p class="empty-state">Keine Domains für diesen Filter gefunden.</p>
+{{end}}
+{{end}}
+
+{{define "rows"}}
+{{range .Rows}}
+<tr>
+  <td><a href="{{.ReportsURL}}">{{.Domain}}</a></td>
+  <td>{{.Total}}</td>
+  <td>{{.PassRate}}</td>
+  <td>{{.ReportCount}}</td>
+  <td>{{.DistinctSources}}</td>
+</tr>
+{{end}}
+{{if .HasMore}}
+<tr id="domains-load-more-row">
+  <td colspan="5">
+    <button type="button" class="load-more"
+      hx-get="{{.NextPageURL}}"
+      hx-target="#domains-load-more-row"
+      hx-swap="outerHTML">Weitere laden</button>
+  </td>
+</tr>
+{{end}}
+{{end}}

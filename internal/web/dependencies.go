@@ -1,6 +1,7 @@
 package web
 
 import (
+	"github.com/pmoscode/dmarc-analyzer/internal/app/domainoverview"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/importfiles"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/manageaccount"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/queryreports"
@@ -15,6 +16,7 @@ type Dependencies struct {
 	Statistics *statistics.UseCase
 	Reports    *queryreports.UseCase
 	Sources    *sourcestats.UseCase
+	Domains    *domainoverview.UseCase
 	Accounts   *manageaccount.UseCase
 	SyncJob    *syncjob.Runner
 	// Importer braucht keine Zugangsdaten — Import aus hochgeladenen

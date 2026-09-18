@@ -12,6 +12,7 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/app/syncreports"
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/account"
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/analysis"
+	"github.com/pmoscode/dmarc-analyzer/internal/domain/domainstats"
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/report"
 	domainsources "github.com/pmoscode/dmarc-analyzer/internal/domain/sources"
 	domainsync "github.com/pmoscode/dmarc-analyzer/internal/domain/sync"
@@ -165,6 +166,31 @@ func (f *fakeSourcesRepository) Query(_ context.Context, q domainsources.Query) 
 		return domainsources.Page{}, f.queryErr
 	}
 	return f.page, nil
+}
+
+// fakeDomainsRepository implementiert domainstats.Repository mit fest
+// verdrahteten Rückgabewerten — für Tests von /domains und /domains/seite.
+type fakeDomainsRepository struct {
+	page     domainstats.Page
+	queryErr error
+
+	lastQuery domainstats.Query
+}
+
+func (f *fakeDomainsRepository) Query(_ context.Context, q domainstats.Query) (domainstats.Page, error) {
+	f.lastQuery = q
+	if f.queryErr != nil {
+		return domainstats.Page{}, f.queryErr
+	}
+	return f.page, nil
+}
+
+func mustDomainName(s string) report.DomainName {
+	d, err := report.NewDomainName(s)
+	if err != nil {
+		panic(err)
+	}
+	return d
 }
 
 // fakeEnricher liefert für jede Quell-IP dieselbe fest verdrahtete

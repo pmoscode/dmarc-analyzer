@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/pmoscode/dmarc-analyzer/internal/app/domainoverview"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/importfiles"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/manageaccount"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/queryreports"
@@ -42,6 +43,7 @@ type app struct {
 	importer    *importfiles.UseCase
 	stats       *statistics.UseCase
 	sourceStats *sourcestats.UseCase
+	domainStats *domainoverview.UseCase
 	retention   *retention.UseCase
 }
 
@@ -69,6 +71,7 @@ func newApp(ctx context.Context) (*app, error) {
 	failedRepo := sqlite.NewFailedImportRepository(db)
 	statsRepo := sqlite.NewStatisticsRepository(db)
 	sourceStatsRepo := sqlite.NewSourceStatsRepository(db)
+	domainStatsRepo := sqlite.NewDomainStatsRepository(db)
 
 	acc, err := account.NewMailAccount(
 		primaryAccountID, "", cfg.IMAPHost, cfg.IMAPPort, cfg.IMAPUser, cfg.IMAPMailbox, cfg.IMAPTLS, time.Now(),
@@ -104,6 +107,9 @@ func newApp(ctx context.Context) (*app, error) {
 		sourceStats: &sourcestats.UseCase{
 			Sources:  sourceStatsRepo,
 			Enricher: enricher,
+		},
+		domainStats: &domainoverview.UseCase{
+			Domains: domainStatsRepo,
 		},
 		retention: &retention.UseCase{
 			RetentionMonths: cfg.RetentionMonths,

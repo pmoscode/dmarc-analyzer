@@ -20,6 +20,7 @@ func navItems(currentPath string) []navItem {
 		{"Übersicht", "/"},
 		{"Berichte", "/berichte"},
 		{"Sendequellen", "/quellen"},
+		{"Domains", "/domains"},
 		{"Import", "/import"},
 		{"Glossar", "/glossar"},
 		{"Einstellungen", "/einstellungen"},

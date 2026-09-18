@@ -122,6 +122,57 @@ func (s *Server) handleExportSourcesCSV(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+// handleExportDomainsCSV: siehe handleExportReportsCSV, für die
+// Domains-Ansicht.
+func (s *Server) handleExportDomainsCSV(w http.ResponseWriter, r *http.Request) {
+	filter := parseDomainsFilter(r)
+
+	h := w.Header()
+	h.Set("Content-Type", "text/csv; charset=utf-8")
+	h.Set("Content-Disposition", `attachment; filename="domains.csv"`)
+	h.Set("X-Content-Type-Options", "nosniff")
+
+	cw := csv.NewWriter(w)
+	if err := exportdata.WriteDomainStatsCSVHeader(cw); err != nil {
+		s.logExportError(r, err)
+		return
+	}
+	flusher, _ := w.(http.Flusher)
+
+	cursor := ""
+	for {
+		q, err := filter.query(cursor, exportPageSize)
+		if err != nil {
+			s.logExportError(r, err)
+			return
+		}
+		page, err := s.deps.Domains.List(r.Context(), q)
+		if err != nil {
+			s.logExportError(r, err)
+			return
+		}
+		for _, stat := range page.Stats {
+			if err := exportdata.WriteDomainStatCSVRow(cw, stat); err != nil {
+				s.logExportError(r, err)
+				return
+			}
+		}
+		cw.Flush()
+		if err := cw.Error(); err != nil {
+			s.logExportError(r, err)
+			return
+		}
+		if flusher != nil {
+			flusher.Flush()
+		}
+
+		if page.NextCursor == "" {
+			return
+		}
+		cursor = page.NextCursor
+	}
+}
+
 // logExportError protokolliert einen Fehler, der mitten im Streamen
 // eines CSV-Downloads auftritt — anders als s.serverError kann hier kein
 // HTTP-Fehlerstatus mehr gesendet werden (der 200er-Status samt Kopfzeilen
