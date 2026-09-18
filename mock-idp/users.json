@@ -1,0 +1,12 @@
+[
+  {
+    "SubjectId": "1",
+    "Username": "admin",
+    "Password": "admin",
+    "Claims": [
+      { "Type": "email", "Value": "admin@example.com", "ValueType": "string" },
+      { "Type": "groups", "Value": "dmarc-admins", "ValueType": "string" },
+      { "Type": "groups", "Value": "everyone", "ValueType": "string" }
+    ]
+  }
+]

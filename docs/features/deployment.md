@@ -17,7 +17,9 @@ docker run -d \
 ```
 
 Eine vollständige Beispielkonfiguration inklusive aller Variablen liegt in
-[`docker-compose.yml`](../../docker-compose.yml) im Repository-Wurzelverzeichnis.
+[`.env.example`](../../.env.example) im Repository-Wurzelverzeichnis — nach
+`.env` kopieren und ausfüllen; [`docker-compose.yml`](../../docker-compose.yml)
+liest diese Datei per `env_file`.
 
 Lokal bauen statt das veröffentlichte Image zu benutzen: `task docker:build`
 (Taskfile.yml) bzw. direkt `docker build -t dmarc-analyzer .`.

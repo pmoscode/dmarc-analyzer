@@ -1,0 +1,15 @@
+# Lokales Test-Setup (siehe docker-compose.override.yml) — terminiert TLS
+# mit einem selbst erzeugten Zertifikat (caddy/local-ca/generate.sh),
+# kein echtes ACME/Let's Encrypt. Bewusst nicht "tls internal": dessen
+# automatisch generierte CA vertraut dmarc-analyzer (Go-Binary im
+# distroless-Image) nicht, nur der Browser nach Bestätigung der Warnung.
+
+dmarc.localtest.me {
+	tls /certs/server.crt /certs/server.key
+	reverse_proxy dmarc-analyzer:8080
+}
+
+idp.localtest.me {
+	tls /certs/server.crt /certs/server.key
+	reverse_proxy mock-idp:80
+}

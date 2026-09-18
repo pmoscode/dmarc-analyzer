@@ -85,8 +85,7 @@ tasks:
   docker:run:
     desc: >-
       Lokal gebautes Image starten — erwartet eine .env-Datei mit den in
-      docker-compose.yml/docs/features/deployment.md dokumentierten
-      Variablen.
+      .env.example/docs/features/deployment.md dokumentierten Variablen.
     cmds:
       - docker run --rm -p 8080:8080 --env-file .env -v dmarc-data:/data {{.BIN_NAME}}:{{.VERSION}}
 

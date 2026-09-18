@@ -35,3 +35,8 @@ coverage.html
 
 # Checksumm-Cache von go-task (Grundlage für "sources"/"generates")
 .task/
+
+# Lokale Test-CA/Zertifikate für docker-compose.override.yml, von
+# caddy/local-ca/generate.sh erzeugt — enthält Private Keys, nie committen.
+caddy/local-ca/*
+!caddy/local-ca/generate.sh

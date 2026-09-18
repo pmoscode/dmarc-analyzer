@@ -50,9 +50,10 @@ docker run -d \
   ghcr.io/pmoscode/dmarc-analyzer:latest
 ```
 
-Vollständige Umgebungsvariablen-Referenz und ein Beispiel mit allen
-Werten: [`docs/features/deployment.md`](docs/features/deployment.md) bzw.
-[`docker-compose.yml`](docker-compose.yml).
+Vollständige Umgebungsvariablen-Referenz: [`docs/features/deployment.md`](docs/features/deployment.md);
+ein Beispiel mit allen Werten liegt in [`.env.example`](.env.example) (nach
+`.env` kopieren und ausfüllen — wird von [`docker-compose.yml`](docker-compose.yml)
+per `env_file` eingelesen).
 
 Voraussetzung ist ein bestehender Authentik-Identity-Provider — Setup-
 Anleitung in [`docs/features/auth.md`](docs/features/auth.md).
