@@ -8,8 +8,8 @@
 
 Vor der Web-Migration lieferte `internal/domain/analysis.ChartRenderer`
 einen Port, den `internal/infra/charts` gegen
-[`go-chart/v2`](https://github.com/wcharczuk/go-chart) implementierte
-(`IMPLEMENTIERUNG.md` Abschnitt 8.2: "ChartRenderer als Port", gedacht als
+[`go-chart/v2`](https://github.com/wcharczuk/go-chart) implementierte (`IMPLEMENTIERUNG.md` Abschnitt 8.2:
+"ChartRenderer als Port", gedacht als
 austauschbarer Adapter — z. B. später gegen native, interaktive
 Fyne-Widgets). In der Praxis:
 
@@ -37,8 +37,8 @@ ergänzt um die Plugins `chartjs-chart-matrix` (Heatmap-Diagrammtyp, den
 Chart.js selbst nicht mitbringt) und `chartjs-plugin-zoom` (Zoom/Verschieben
 in der Zeitreihe). Der Server liefert ausschließlich aufbereitete
 JSON-Daten über eigene Endpunkte (`/api/diagramme/*`); alle
-Aggregations-, Filter- und Drill-down-Entscheidungen fallen in Go
-(`internal/app/statistics`, `internal/domain/analysis`), `charts.js` bleibt
+Aggregations-, Filter- und Drill-down-Entscheidungen fallen in Go (`internal/app/statistics`,
+`internal/domain/analysis`), `charts.js` bleibt
 bewusst dünn (reine Darstellung, siehe `AGENTS.md`: "Diagrammlogik gehört
 nach Go").
 
@@ -67,8 +67,8 @@ Erwogene Alternative war [Apache ECharts](https://echarts.apache.org/):
 bringt Heatmap, Zoom und Bild-Export bereits eingebaut mit, ist aber mit
 ≈1 MB deutlich größer und hat ein eigenes Theme-System, das gegen die
 bestehende CSS-Variablen-Palette (`AGENTS.md`: "Diagrammfarben folgen der
-`dataviz`-Skill-Referenzpalette") hätte abgeglichen werden müssen
-(`MIGRATIONSPLAN.md` Entscheidung E-2). Chart.js + zwei kleine, gezielte
+`dataviz`-Skill-Referenzpalette") hätte abgeglichen werden müssen (`MIGRATIONSPLAN.md` Entscheidung E-2). Chart.js +
+zwei kleine, gezielte
 Plugins wurde als schlankere Lösung vorgezogen; ECharts bleibt die
 dokumentierte Rückfallebene, falls sich die Plugin-Kombination als nicht
 tragfähig erweist — betroffen wären dann nur `charts.js` und die
@@ -86,8 +86,8 @@ JSON-Form der Endpunkte, nicht die Go-Seite.
   Farben aus denselben CSS-Variablen wie die restliche Oberfläche, siehe
   `AGENTS.md`-Abschnitt zur Diagrammfarben-Palette) — kein fest weißer
   Hintergrund mehr.
-- Deutlich weniger Code und keine reinen Bibliotheks-Umgehungslösungen
-  (die gesamten go-chart-Workarounds sind mit dem Paket verschwunden).
+- Deutlich weniger Code und keine reinen Bibliotheks-Umgehungslösungen (die gesamten go-chart-Workarounds sind mit dem
+  Paket verschwunden).
 - Kleinerer, CGO-freier Server-Build (siehe ADR 0001) — die
   Diagramm-Bibliothek liegt jetzt als minifizierte JavaScript-Datei im
   Repository (`internal/web/static/vendor/`, siehe

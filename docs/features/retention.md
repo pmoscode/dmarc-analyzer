@@ -34,8 +34,7 @@ Containers.
 Löschen läuft über `report.Pruner.DeleteOlderThan` — ein schmaler,
 eigener Port (`internal/domain/report/repository.go`), getrennt von
 `report.Repository`, weil Löschen nach Alter eine reine
-Wartungsoperation ist. Die SQLite-Implementierung
-(`internal/infra/sqlite.ReportRepository.DeleteOlderThan`) löscht per
+Wartungsoperation ist. Die SQLite-Implementierung (`internal/infra/sqlite.ReportRepository.DeleteOlderThan`) löscht per
 einem einzelnen `DELETE FROM reports WHERE date_end < ?` — die zugehörigen
 Records, Auth-Ergebnisse, Reasons und der Rohbericht werden über
 bestehende `ON DELETE CASCADE`-Fremdschlüssel automatisch mitentfernt.

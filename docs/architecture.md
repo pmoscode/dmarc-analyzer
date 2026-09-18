@@ -11,12 +11,12 @@ cmd/dmarc-analyzer  →  internal/web  →  internal/app  →  internal/domain
 ## Schichten
 
 - **`internal/domain`** — reine Fachlogik: Aggregate (`report.AggregateReport`,
-  `account.MailAccount`), Wertobjekte, Validierung, Domänen-Ports
-  (Interfaces wie `report.Repository`, `sync.MessageSource`). Keine
+  `account.MailAccount`), Wertobjekte, Validierung, Domänen-Ports (Interfaces wie `report.Repository`,
+  `sync.MessageSource`). Keine
   Imports außerhalb der Standardbibliothek — kein `encoding/xml`, kein SQL,
   kein `net/http` hier.
-- **`internal/app`** — Use Cases, die eine fachliche Aufgabe orchestrieren
-  (`syncreports.UseCase.SyncAccount`, `retention.UseCase.ApplyNow`,
+- **`internal/app`** — Use Cases, die eine fachliche Aufgabe orchestrieren (`syncreports.UseCase.SyncAccount`,
+  `retention.UseCase.ApplyNow`,
   `manageaccount.UseCase.TestConnectionByID`). Hängen nur an
   Domänen-Ports, nie an einen konkreten Adapter.
 - **`internal/infra`** — Adapter, die Domänen-Ports gegen konkrete Technik
@@ -28,8 +28,8 @@ cmd/dmarc-analyzer  →  internal/web  →  internal/app  →  internal/domain
 - **`internal/web`** — die Ausliefer-Schicht: `net/http` + `html/template`
   (kein Bundler, kein Node-Werkzeug) für serverseitig gerenderte Seiten,
   Chart.js für Diagramme (`static/charts.js` bekommt fertig aufbereitete
-  JSON-Daten aus Go, bleibt selbst dünn), sowie der OIDC-Login-Flow
-  (`auth.go`/`oidc.go`, siehe `docs/features/auth.md`). Ruft
+  JSON-Daten aus Go, bleibt selbst dünn), sowie der OIDC-Login-Flow (`auth.go`/`oidc.go`, siehe
+  `docs/features/auth.md`). Ruft
   ausschließlich Use Cases aus `internal/app` auf, nie direkt einen
   Infra-Adapter.
 - **`cmd/dmarc-analyzer`** — die Composition Root: einziger Ort, an dem
@@ -83,8 +83,8 @@ Nachricht beim nächsten Lauf erneut anfasst (der `UNIQUE`-Index auf
 
 ## Hintergrund-Aufträge (`internal/app/syncjob`, `syncscheduler`, `retentionjob`)
 
-Drei unabhängige, langlebige Goroutinen laufen neben dem HTTP-Server
-(gestartet in `cmd/dmarc-analyzer/cmd_web.go`, beendet über denselben
+Drei unabhängige, langlebige Goroutinen laufen neben dem HTTP-Server (gestartet in `cmd/dmarc-analyzer/cmd_web.go`,
+beendet über denselben
 Kontext wie der Server):
 
 - `syncjob.Runner` — höchstens ein manuell (`POST /abgleich`) oder geplant

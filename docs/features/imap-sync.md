@@ -16,8 +16,7 @@ Details in [`../architecture.md`](../architecture.md#sync-pipeline-internalappsy
 
 Ausgelöst wird ein Sync-Lauf:
 
-- **manuell** über den Abgleich-Knopf in der Web-Oberfläche
-  (`POST /abgleich`), Fortschritt live per Server-Sent Events
+- **manuell** über den Abgleich-Knopf in der Web-Oberfläche (`POST /abgleich`), Fortschritt live per Server-Sent Events
   (`GET /ereignisse`);
 - **automatisch** alle `DMARC_SYNC_INTERVAL_MINUTES` Minuten im
   Hintergrund (`internal/app/syncscheduler`, siehe
@@ -54,11 +53,11 @@ einlesen lässt, ohne das Postfach erneut zu befragen.
 
 ## Datei-Import ohne IMAP
 
-Reports lassen sich zusätzlich direkt über die Web-Oberfläche importieren
-(`/import`, Drag & Drop oder Dateiauswahl) oder per
+Reports lassen sich zusätzlich direkt über die Web-Oberfläche importieren (`/import`, Drag & Drop oder Dateiauswahl)
+oder per
 `docker exec dmarc-analyzer import <pfad>...` — ohne IMAP-Zugangsdaten,
-für Offline-Betrieb oder die Migration von Altbeständen
-(`internal/app/importfiles`). Teilt sich MIME-Zerlegung und Parser mit dem
+für Offline-Betrieb oder die Migration von Altbeständen (`internal/app/importfiles`). Teilt sich MIME-Zerlegung und
+Parser mit dem
 IMAP-Sync, implementiert aber keine eigene `sync.MessageSource` — ein
 lokaler Dateiimport hat keine IMAP-Zugangsdaten, durch dieses Interface zu
 gehen wäre erzwungen statt natürlich.

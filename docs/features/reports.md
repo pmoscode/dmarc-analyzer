@@ -3,12 +3,12 @@
 ## Speicherung
 
 Jeder importierte DMARC-Aggregate-Report wird vollständig oder gar nicht
-gespeichert (`report.Repository.Save` läuft in einer Transaktion): Metadaten
-(Absender-Organisation, Berichtszeitraum, veröffentlichte Policy) plus
+gespeichert (`report.Repository.Save` läuft in einer Transaktion): Metadaten (Absender-Organisation, Berichtszeitraum,
+veröffentlichte Policy) plus
 alle enthaltenen Records (Quell-IP, Nachrichtenzahl, Disposition,
 DKIM-/SPF-Ergebnisse, Reasons) sowie der komplette Rohbericht (für spätere
-Nachvollziehbarkeit). Deduplizierung über einen `UNIQUE`-Index auf
-(`org_name`, `report_id`, `date_begin`) — derselbe Report von zwei
+Nachvollziehbarkeit). Deduplizierung über einen `UNIQUE`-Index auf (`org_name`, `report_id`, `date_begin`) — derselbe
+Report von zwei
 verschiedenen Wegen importiert (z. B. per IMAP und zusätzlich per
 Datei-Upload) wird nur einmal gespeichert.
 
@@ -35,6 +35,6 @@ nicht pro Record).
 ## CSV-Export
 
 `GET /export/berichte.csv` exportiert den **gesamten gefilterten
-Bestand** (nicht nur die aktuell angezeigte Seite) als CSV
-(`internal/app/exportdata`). Einzelne Dashboard-Diagramme lassen sich
+Bestand** (nicht nur die aktuell angezeigte Seite) als CSV (`internal/app/exportdata`). Einzelne Dashboard-Diagramme
+lassen sich
 zusätzlich direkt als PNG oder CSV exportieren.

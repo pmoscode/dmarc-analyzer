@@ -48,14 +48,14 @@ sein — jede Sitzung ist unabhängig (`internal/web/auth.go`).
 ## Netzwerk-Zugriffsschutz
 
 Der Server prüft zusätzlich den `Host`-Header jeder Anfrage gegen den aus
-`DMARC_OIDC_REDIRECT_URL` abgeleiteten öffentlichen Hostnamen
-(`requireHost`, `internal/web/middleware.go`) — ein Reverse-Proxy muss den
+`DMARC_OIDC_REDIRECT_URL` abgeleiteten öffentlichen Hostnamen (`requireHost`, `internal/web/middleware.go`) — ein
+Reverse-Proxy muss den
 externen Host-Header unverändert durchreichen, sonst antwortet der Server
 mit `421 Misdirected Request`.
 
 Cookies sind `Secure`+`HttpOnly`+`SameSite=Lax` gesetzt — der Server
-erwartet einen TLS-terminierenden Reverse-Proxy davor. Ohne TLS
-(z. B. reiner lokaler Test über `http://`) wird der Browser das
+erwartet einen TLS-terminierenden Reverse-Proxy davor. Ohne TLS (z. B. reiner lokaler Test über `http://`) wird der
+Browser das
 Sitzungs-Cookie nicht zurücksenden.
 
 ## Testen ohne echten Authentik-Server

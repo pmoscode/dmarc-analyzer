@@ -1,7 +1,7 @@
 # Übersicht (Dashboard)
 
-`/` zeigt die zentralen Kennzahlen für einen wählbaren Zeitraum
-(`internal/app/statistics.UseCase.Dashboard`), gefiltert nach Zeitraum und
+`/` zeigt die zentralen Kennzahlen für einen wählbaren Zeitraum (`internal/app/statistics.UseCase.Dashboard`), gefiltert
+nach Zeitraum und
 Domain (Filterleiste, Werte stehen in der URL).
 
 ## Kennzahlen

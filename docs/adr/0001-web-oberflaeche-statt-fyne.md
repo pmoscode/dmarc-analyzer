@@ -24,8 +24,8 @@ als verbindlich). In der Praxis zeigten sich mehrere Probleme:
 - Diagramme entstanden serverseitig als statische PNGs (`go-chart`,
   `internal/infra/charts`) — kein Tooltip, kein Zoom, kein Klick-Drilldown,
   fester weißer Hintergrund (`flattenOnWhite`) auch im dunklen Systemmodus.
-- `internal/ui` sammelte im Lauf der Zeit mehrere eigene Fyne-Fallstricke an
-  (dokumentiert und dann mit dem Paket wieder entfernt aus `AGENTS.md`:
+- `internal/ui` sammelte im Lauf der Zeit mehrere eigene Fyne-Fallstricke an (dokumentiert und dann mit dem Paket wieder
+  entfernt aus `AGENTS.md`:
   `TestMain`/`test.NewApp()`, `runBackground`-Injektion für Data-Race-freie
   Tests, `container.NewBorder`-Indexreihenfolge,
   `widget.Select.SetSelected()`-Callback-Timing,
@@ -36,8 +36,8 @@ als verbindlich). In der Praxis zeigten sich mehrere Probleme:
 ## Entscheidung
 
 Die gesamte Präsentationsschicht wird durch eine **im Programm eingebettete
-Web-Oberfläche** ersetzt: Beim Start läuft ein lokaler HTTP-Server
-(`internal/web`, `net/http` + `html/template` aus der Standardbibliothek,
+Web-Oberfläche** ersetzt: Beim Start läuft ein lokaler HTTP-Server (`internal/web`, `net/http` + `html/template` aus der
+Standardbibliothek,
 kein Bundler, kein Node-Werkzeug), der Standardbrowser öffnet automatisch
 die Hauptseite. Erwogene Alternative war eine SPA (Svelte/Vue/React) mit
 eigenem Vite-Build — verworfen, weil sie ein zweites Werkzeug-Ökosystem und
@@ -72,8 +72,8 @@ geschlossen wird" — bewusst in Kauf genommen).
   CSS-Variablen).
 - Filter stehen in der URL — Lesezeichen und Zurück-Knopf funktionieren.
 - Alle Fyne-spezifischen Testfallen (siehe oben) sind mit dem Paket
-  verschwunden; die Web-Schicht hat eigene, dafür allgemeinere Fallstricke
-  (dokumentiert in `AGENTS.md`, z. B. CSP/CSRF/Chart.js-Resize).
+  verschwunden; die Web-Schicht hat eigene, dafür allgemeinere Fallstricke (dokumentiert in `AGENTS.md`, z. B.
+  CSP/CSRF/Chart.js-Resize).
 
 **Nachteile / bewusst in Kauf genommen:**
 

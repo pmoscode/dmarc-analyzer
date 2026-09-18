@@ -27,8 +27,7 @@ Betriebsmodells gegenstandslos:
   container-üblich per Umgebungsvariable hereinreichen (12-factor).
 - Plattformkonforme Pfade (`os.UserConfigDir()` je OS), Browser-Auto-Open
   und die dateibasierte Einzelinstanz-Erkennung sind reine
-  Desktop-Konzepte — ein Container hat ein festes Datenverzeichnis
-  (Volume) und läuft ohnehin nur einmal pro Container.
+  Desktop-Konzepte — ein Container hat ein festes Datenverzeichnis (Volume) und läuft ohnehin nur einmal pro Container.
 - Ein zentral erreichbarer Dienst statt "läuft nur auf 127.0.0.1, ein
   Nutzer pro Rechner" braucht echten Mehrbenutzer-Zugriffsschutz. Der
   bisherige Einmal-Anmeldelink (an der Konsole ausgegeben) setzt voraus,
@@ -53,13 +52,13 @@ Betriebsmodells gegenstandslos:
    nicht mehr eine einzige globale Sitzung pro Prozess.
 3. **Der Server bindet nicht mehr ausschließlich auf Loopback-Adressen** —
    der Host-Header wird stattdessen gegen den aus
-   `DMARC_OIDC_REDIRECT_URL` abgeleiteten öffentlichen Hostnamen geprüft
-   (`requireHost`, `internal/web/middleware.go`), der Zugriffsschutz kommt
+   `DMARC_OIDC_REDIRECT_URL` abgeleiteten öffentlichen Hostnamen geprüft (`requireHost`, `internal/web/middleware.go`),
+   der Zugriffsschutz kommt
    von OIDC, nicht mehr von "nur vom selben Rechner aus erreichbar".
 4. **Auslieferung als Docker-Image** (`Dockerfile`, Multi-Stage,
    `CGO_ENABLED=0`, `gcr.io/distroless/static-debian12:nonroot` als
-   Laufzeit-Basis) statt plattformspezifischer Binärdateien
-   (`.app`-Bündel, `.exe`, `.tar.gz`) als GitHub-Release-Anhang. CI baut
+   Laufzeit-Basis) statt plattformspezifischer Binärdateien (`.app`-Bündel, `.exe`, `.tar.gz`) als
+   GitHub-Release-Anhang. CI baut
    nur noch auf `ubuntu-latest` (siehe `.github/workflows/ci.yml`) und
    veröffentlicht bei einem Versions-Tag ein Image nach GHCR statt
    Release-Binärdateien für drei Plattformen zu bauen.
