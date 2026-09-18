@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	domainsources "github.com/pmoscode/dmarc-analyzer/internal/domain/sources"
 )
@@ -82,14 +83,72 @@ type sourceRowView struct {
 	PassRate string
 	Hostname string
 	Service  string
+
+	// EinordnungLabel und EinordnungTon erklären, wie diese Quelle zu
+	// deuten ist (siehe classifySource) — dieselbe Erklärung, die sonst
+	// nur im Kopf des Betrachters stattfindet: DKIM ohne SPF ist meist
+	// eine harmlose Weiterleitung, DKIM-Fehlschlag dagegen ein Grund zum
+	// genaueren Hinsehen.
+	EinordnungLabel string
+	EinordnungTon   string
+	// GleicherHosterWieIMAP ist gesetzt, wenn der PTR-Hostname dieser
+	// Quelle denselben (groben) Betreiber-Domainteil trägt wie das
+	// konfigurierte IMAP-Konto (siehe registrableDomain) — ein weiteres
+	// Indiz für "eigene Infrastruktur", zusätzlich zur DKIM/SPF-Prüfung.
+	GleicherHosterWieIMAP bool
 }
 
 const sourcesUnknownValue = "—"
 
-func sourceRows(stats []domainsources.Stat) []sourceRowView {
+// classifySource ordnet eine Sendequelle anhand ihrer getrennten DKIM-/
+// SPF-Bestehensrate ein. Die Schwellenwerte (0.9/0.5) sind grobe
+// Faustregeln für "im Wesentlichen besteht/besteht nicht" über viele
+// Nachrichten hinweg, kein Versuch einer exakten statistischen Grenze.
+//
+//   - DKIM UND SPF bestehen weitgehend: eindeutig autorisiert.
+//   - DKIM besteht, SPF nicht: DMARC besteht trotzdem (dkim ODER spf
+//     reicht), das Muster ist aber typisch für Mail-Weiterleitung — die
+//     DKIM-Signatur übersteht die Weiterleitung, SPF bricht fast immer,
+//     weil die weiterleitende IP nicht im SPF-Record der ursprünglichen
+//     Domain steht.
+//   - DKIM besteht überwiegend NICHT: eine echte Fälschung könnte DKIM
+//     nicht bestehen (dafür fehlt der private Schlüssel der Domain) —
+//     das lohnt einen genaueren Blick.
+//   - alles dazwischen: uneindeutig, ebenfalls einen Blick wert.
+func classifySource(s domainsources.Stat) (label, tone string) {
+	switch {
+	case s.DKIMPassRate >= 0.9 && s.SPFPassRate >= 0.9:
+		return "Autorisiert (DKIM & SPF)", "good"
+	case s.DKIMPassRate >= 0.9:
+		return "Autorisiert (vermutlich Weiterleitung)", "good"
+	case s.DKIMPassRate < 0.5:
+		return "Nicht bestätigt — prüfen", "critical"
+	default:
+		return "Teilweise bestätigt — prüfen", "warning"
+	}
+}
+
+// registrableDomain liefert eine grobe Näherung des Betreiber-Domainteils
+// eines Hostnamens: die letzten beiden durch "." getrennten Bezeichner
+// (z. B. "kasserver.com" aus "dd33832.kasserver.com"). Kein allgemeiner
+// Public-Suffix-Parser (der bräuchte eine gepflegte Liste für
+// Mehrteil-TLDs wie ".co.uk") — für den hier gebrauchten groben Vergleich
+// "läuft das über denselben Hoster wie das IMAP-Konto?" reicht das.
+func registrableDomain(host string) string {
+	host = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(host)), ".")
+	parts := strings.Split(host, ".")
+	if len(parts) < 2 {
+		return host
+	}
+	return strings.Join(parts[len(parts)-2:], ".")
+}
+
+func sourceRows(stats []domainsources.Stat, imapHost string) []sourceRowView {
+	imapDomain := registrableDomain(imapHost)
 	rows := make([]sourceRowView, len(stats))
 	for i, s := range stats {
 		hostname := s.Enrichment.Hostname
+		sameHoster := hostname != "" && imapDomain != "" && registrableDomain(hostname) == imapDomain
 		if hostname == "" {
 			hostname = sourcesUnknownValue
 		}
@@ -97,12 +156,16 @@ func sourceRows(stats []domainsources.Stat) []sourceRowView {
 		if service == "" {
 			service = sourcesUnknownValue
 		}
+		label, tone := classifySource(s)
 		rows[i] = sourceRowView{
-			IP:       s.SourceIP.String(),
-			Total:    s.TotalCount,
-			PassRate: formatPercent(s.PassRate),
-			Hostname: hostname,
-			Service:  service,
+			IP:                    s.SourceIP.String(),
+			Total:                 s.TotalCount,
+			PassRate:              formatPercent(s.PassRate),
+			Hostname:              hostname,
+			Service:               service,
+			EinordnungLabel:       label,
+			EinordnungTon:         tone,
+			GleicherHosterWieIMAP: sameHoster,
 		}
 	}
 	return rows
@@ -131,7 +194,7 @@ type sourcesPageData struct {
 	Rows sourcesRowsData
 }
 
-func buildSourcesPageData(filter sourcesFilter, page domainsources.Page) sourcesPageData {
+func buildSourcesPageData(filter sourcesFilter, page domainsources.Page, imapHost string) sourcesPageData {
 	return sourcesPageData{
 		Title:         "Sendequellen",
 		Domain:        filter.Period.Domain,
@@ -141,7 +204,7 @@ func buildSourcesPageData(filter sourcesFilter, page domainsources.Page) sources
 		SortField:     string(filter.SortField),
 		ExportURL:     "/export/quellen.csv?" + filter.values().Encode(),
 		Rows: sourcesRowsData{
-			Rows:        sourceRows(page.Stats),
+			Rows:        sourceRows(page.Stats, imapHost),
 			HasMore:     page.NextCursor != "",
 			NextPageURL: sourcesPageURL(filter, page.NextCursor),
 		},
@@ -164,7 +227,7 @@ func (s *Server) handleSources(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := buildSourcesPageData(filter, page)
+	data := buildSourcesPageData(filter, page, s.deps.IMAPHost)
 	data.Nav = navItems(r.URL.Path)
 	if err := s.views.render(w, r, "sources.html", data); err != nil {
 		s.serverError(w, r, err)
@@ -186,7 +249,7 @@ func (s *Server) handleSourcesPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := sourcesRowsData{
-		Rows:        sourceRows(page.Stats),
+		Rows:        sourceRows(page.Stats, s.deps.IMAPHost),
 		HasMore:     page.NextCursor != "",
 		NextPageURL: sourcesPageURL(filter, page.NextCursor),
 	}

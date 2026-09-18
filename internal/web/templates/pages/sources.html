@@ -21,6 +21,7 @@
       <th>Pass-Rate</th>
       <th>Hostname (rDNS/PTR)</th>
       <th>Erkannter Dienst</th>
+      <th>Einordnung <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Einordnung (Sendequelle)"}}" aria-label="Begriff erklären: Einordnung (Sendequelle)">?</button></th>
     </tr>
   </thead>
   <tbody id="sources-rows">
@@ -38,13 +39,14 @@
   <td>{{.IP}}</td>
   <td>{{.Total}}</td>
   <td>{{.PassRate}}</td>
-  <td>{{.Hostname}}</td>
+  <td>{{.Hostname}}{{if .GleicherHosterWieIMAP}} <span class="badge badge-info" title="Gleicher Betreiber-Domainteil wie das konfigurierte IMAP-Konto">gleicher Hoster wie IMAP</span>{{end}}</td>
   <td>{{.Service}}</td>
+  <td><span class="badge badge-{{.EinordnungTon}}">{{.EinordnungLabel}}</span></td>
 </tr>
 {{end}}
 {{if .HasMore}}
 <tr id="sources-load-more-row">
-  <td colspan="5">
+  <td colspan="6">
     <button type="button" class="load-more"
       hx-get="{{.NextPageURL}}"
       hx-target="#sources-load-more-row"

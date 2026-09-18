@@ -61,10 +61,12 @@ func (r *SourceStatsRepository) Query(ctx context.Context, q sources.Query) (sou
 	args = append(args, limit+1)
 
 	query := fmt.Sprintf(`
-		SELECT source_ip, total, passed, first_seen, last_seen FROM (
+		SELECT source_ip, total, passed, dkim_passed, spf_passed, first_seen, last_seen FROM (
 			SELECT rec.source_ip AS source_ip,
 				SUM(rec.message_count) AS total,
 				COALESCE(SUM(CASE WHEN rec.dkim_result = 'pass' OR rec.spf_result = 'pass' THEN rec.message_count ELSE 0 END), 0) AS passed,
+				COALESCE(SUM(CASE WHEN rec.dkim_result = 'pass' THEN rec.message_count ELSE 0 END), 0) AS dkim_passed,
+				COALESCE(SUM(CASE WHEN rec.spf_result = 'pass' THEN rec.message_count ELSE 0 END), 0) AS spf_passed,
 				MIN(rep.date_begin) AS first_seen,
 				MAX(rep.date_end) AS last_seen
 			FROM records rec
@@ -85,8 +87,8 @@ func (r *SourceStatsRepository) Query(ctx context.Context, q sources.Query) (sou
 	var stats []sources.Stat
 	for rows.Next() {
 		var rawIP string
-		var total, passed, firstSeen, lastSeen int64
-		if err := rows.Scan(&rawIP, &total, &passed, &firstSeen, &lastSeen); err != nil {
+		var total, passed, dkimPassed, spfPassed, firstSeen, lastSeen int64
+		if err := rows.Scan(&rawIP, &total, &passed, &dkimPassed, &spfPassed, &firstSeen, &lastSeen); err != nil {
 			return sources.Page{}, fmt.Errorf("sendequellen-zeile konnte nicht gelesen werden: %w", err)
 		}
 		ip, err := report.NewSourceIP(rawIP)
@@ -94,11 +96,13 @@ func (r *SourceStatsRepository) Query(ctx context.Context, q sources.Query) (sou
 			return sources.Page{}, fmt.Errorf("gespeicherte quell-ip %q ist ungültig: %w", rawIP, err)
 		}
 		stats = append(stats, sources.Stat{
-			SourceIP:   ip,
-			TotalCount: int(total),
-			PassRate:   rate(passed, total),
-			FirstSeen:  time.Unix(firstSeen, 0).UTC(),
-			LastSeen:   time.Unix(lastSeen, 0).UTC(),
+			SourceIP:     ip,
+			TotalCount:   int(total),
+			PassRate:     rate(passed, total),
+			DKIMPassRate: rate(dkimPassed, total),
+			SPFPassRate:  rate(spfPassed, total),
+			FirstSeen:    time.Unix(firstSeen, 0).UTC(),
+			LastSeen:     time.Unix(lastSeen, 0).UTC(),
 		})
 	}
 	if err := rows.Err(); err != nil {

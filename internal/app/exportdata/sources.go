@@ -34,7 +34,7 @@ func WriteSourceStatsCSV(w io.Writer, stats []sources.Stat) error {
 // in csv.go für dieselbe Begründung (Streaming über mehrere Seiten
 // hinweg).
 func WriteSourceStatsCSVHeader(cw *csv.Writer) error {
-	header := []string{"SourceIP", "TotalCount", "PassRate", "Hostname", "Service", "FirstSeen", "LastSeen"}
+	header := []string{"SourceIP", "TotalCount", "PassRate", "DKIMPassRate", "SPFPassRate", "Hostname", "Service", "FirstSeen", "LastSeen"}
 	if err := cw.Write(header); err != nil {
 		return fmt.Errorf("csv-kopfzeile konnte nicht geschrieben werden: %w", err)
 	}
@@ -48,6 +48,8 @@ func WriteSourceStatCSVRow(cw *csv.Writer, s sources.Stat) error {
 		s.SourceIP.String(),
 		strconv.Itoa(s.TotalCount),
 		strconv.FormatFloat(s.PassRate, 'f', 4, 64),
+		strconv.FormatFloat(s.DKIMPassRate, 'f', 4, 64),
+		strconv.FormatFloat(s.SPFPassRate, 'f', 4, 64),
 		s.Enrichment.Hostname,
 		s.Enrichment.Service,
 		formatCSVTime(s.FirstSeen),

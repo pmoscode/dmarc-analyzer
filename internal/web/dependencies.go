@@ -30,4 +30,10 @@ type Dependencies struct {
 	// handlers_settings.go) — der tatsächliche geplante Abgleich läuft in
 	// internal/app/syncscheduler, das dieselbe ENV-Einstellung bekommt.
 	SyncIntervalMinutes int
+	// IMAPHost ist der Hostname des konfigurierten IMAP-Kontos (aus
+	// DMARC_IMAP_HOST) — rein informativ für die Sendequellen-Ansicht
+	// (siehe handlers_sources.go: hostet eine Sendequelle beim selben
+	// Anbieter wie das IMAP-Konto?). Kein Zugangsdatum, unbedenklich hier
+	// mitzuführen.
+	IMAPHost string
 }

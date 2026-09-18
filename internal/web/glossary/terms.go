@@ -62,6 +62,10 @@ var Terms = []Term{
 		Definition: "Reverse-DNS-Auflösung einer IP-Adresse zu einem Hostnamen — hilft, eine Quell-IP einem bekannten Diensteanbieter zuzuordnen.",
 	},
 	{
+		Name:       "Einordnung (Sendequelle)",
+		Definition: "Zeigt, ob DKIM und SPF getrennt betrachtet werden sollten: „Autorisiert“ bedeutet, beide bestehen. „Autorisiert (vermutlich Weiterleitung)“ bedeutet, nur DKIM besteht — DMARC besteht trotzdem, aber das Muster ist typisch für Mail-Weiterleitung, weil die DKIM-Signatur eine Weiterleitung übersteht, SPF dabei aber fast immer bricht (die weiterleitende IP steht nicht im SPF-Record der Domain). „Nicht bestätigt — prüfen“ bedeutet, DKIM besteht überwiegend nicht — eine echte Fälschung könnte DKIM nicht bestehen, weil ihr dafür der private Schlüssel der Domain fehlt, das lohnt also einen genaueren Blick.",
+	},
+	{
 		Name:       "Nachrichtenvolumen pro Tag",
 		Definition: "Ein Balken je Tag, gestapelt aus bestandenen (grün) und fehlgeschlagenen (rot) Nachrichten nach DMARC. Zeigt, ob es an einzelnen Tagen Ausreißer beim Volumen oder bei Fehlschlägen gab.",
 	},

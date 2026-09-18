@@ -47,6 +47,7 @@ func runWeb(ctx context.Context, a *app, _ []string) error {
 		Importer:            a.importer,
 		Retention:           a.retention,
 		SyncIntervalMinutes: a.config.SyncIntervalMinutes,
+		IMAPHost:            a.config.IMAPHost,
 	}, web.Options{
 		Addr: a.config.ListenAddr,
 		Dev:  a.config.DevMode,

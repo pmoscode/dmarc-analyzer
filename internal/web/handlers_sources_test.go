@@ -15,6 +15,11 @@ import (
 
 func newTestServerWithSources(t *testing.T, repo *fakeSourcesRepository, enricher *fakeEnricher) *Server {
 	t.Helper()
+	return newTestServerWithSourcesAndIMAPHost(t, repo, enricher, "")
+}
+
+func newTestServerWithSourcesAndIMAPHost(t *testing.T, repo *fakeSourcesRepository, enricher *fakeEnricher, imapHost string) *Server {
+	t.Helper()
 
 	if enricher == nil {
 		enricher = &fakeEnricher{}
@@ -23,6 +28,7 @@ func newTestServerWithSources(t *testing.T, repo *fakeSourcesRepository, enriche
 	deps := Dependencies{
 		Statistics: &statistics.UseCase{Repository: &fakeRepository{}},
 		Sources:    &sourcestats.UseCase{Sources: repo, Enricher: enricher},
+		IMAPHost:   imapHost,
 	}
 	provider := newFakeOIDCProvider(t)
 	srv, err := New(context.Background(), deps, testOIDCOptions(provider.issuer()))
@@ -149,4 +155,77 @@ func TestHandleSourcesPage_NoMorePages_OmitsLoadMoreButton(t *testing.T) {
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.NotContains(t, string(body), "Weitere laden")
+}
+
+func TestClassifySource(t *testing.T) {
+	cases := []struct {
+		name      string
+		dkim, spf float64
+		wantLabel string
+		wantTone  string
+	}{
+		{"dkim und spf bestehen", 1.0, 1.0, "Autorisiert (DKIM & SPF)", "good"},
+		{"nur dkim besteht: weiterleitung", 1.0, 0.0, "Autorisiert (vermutlich Weiterleitung)", "good"},
+		{"dkim knapp über schwelle, spf mittelmäßig", 0.95, 0.6, "Autorisiert (vermutlich Weiterleitung)", "good"},
+		{"dkim besteht überwiegend nicht", 0.2, 0.0, "Nicht bestätigt — prüfen", "critical"},
+		{"uneindeutig dazwischen", 0.7, 0.3, "Teilweise bestätigt — prüfen", "warning"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			label, tone := classifySource(domainsources.Stat{DKIMPassRate: tc.dkim, SPFPassRate: tc.spf})
+			require.Equal(t, tc.wantLabel, label)
+			require.Equal(t, tc.wantTone, tone)
+		})
+	}
+}
+
+func TestRegistrableDomain(t *testing.T) {
+	cases := map[string]string{
+		"dd33832.kasserver.com":    "kasserver.com",
+		"w0119144.kasserver.com":   "kasserver.com",
+		"mail-sor-f41.google.com.": "google.com",
+		"localhost":                "localhost",
+		"":                         "",
+	}
+	for in, want := range cases {
+		require.Equal(t, want, registrableDomain(in), in)
+	}
+}
+
+func TestHandleSources_SameHosterAsIMAP_ShowsBadge(t *testing.T) {
+	repo := &fakeSourcesRepository{page: domainsources.Page{Stats: []domainsources.Stat{
+		{SourceIP: mustSourceIP("203.0.113.1"), TotalCount: 10, PassRate: 1, DKIMPassRate: 1, SPFPassRate: 1},
+	}}}
+	enricher := &fakeEnricher{enrichment: domainsources.Enrichment{Hostname: "dd33832.kasserver.com"}}
+	srv := newTestServerWithSourcesAndIMAPHost(t, repo, enricher, "w0119144.kasserver.com")
+	client := authenticatedClient(t, srv)
+
+	resp := httpGet(t, client, "http://"+srv.Addr()+"/quellen")
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	html := string(body)
+
+	require.Contains(t, html, "gleicher Hoster wie IMAP")
+	require.Contains(t, html, "Autorisiert (DKIM &amp; SPF)")
+}
+
+func TestHandleSources_DifferentHosterThanIMAP_NoBadge(t *testing.T) {
+	repo := &fakeSourcesRepository{page: domainsources.Page{Stats: []domainsources.Stat{
+		{SourceIP: mustSourceIP("203.0.113.1"), TotalCount: 10, PassRate: 1, DKIMPassRate: 1, SPFPassRate: 0},
+	}}}
+	enricher := &fakeEnricher{enrichment: domainsources.Enrichment{Hostname: "fritz.lanhost.de"}}
+	srv := newTestServerWithSourcesAndIMAPHost(t, repo, enricher, "w0119144.kasserver.com")
+	client := authenticatedClient(t, srv)
+
+	resp := httpGet(t, client, "http://"+srv.Addr()+"/quellen")
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	html := string(body)
+
+	require.NotContains(t, html, "gleicher Hoster wie IMAP")
+	require.Contains(t, html, "Autorisiert (vermutlich Weiterleitung)")
 }

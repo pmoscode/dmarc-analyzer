@@ -38,7 +38,39 @@ func TestSourceStatsRepository_Query_AggregatesAcrossReports(t *testing.T) {
 	require.Equal(t, "203.0.113.1", got.SourceIP.String())
 	require.Equal(t, 15, got.TotalCount)
 	require.InDelta(t, 10.0/15.0, got.PassRate, 0.0001)
+	require.InDelta(t, 10.0/15.0, got.DKIMPassRate, 0.0001, "nur src-1 (count 10) hat dkim=pass")
+	require.InDelta(t, 10.0/15.0, got.SPFPassRate, 0.0001, "nur src-1 (count 10) hat spf=pass")
 	require.Empty(t, page.NextCursor)
+}
+
+func TestSourceStatsRepository_Query_SeparatesDKIMAndSPFPassRate(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	db := newTestDB(t)
+	reports := sqlite.NewReportRepository(db)
+	stats := sqlite.NewSourceStatsRepository(db)
+
+	begin := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	// Typisches Weiterleitungs-Muster: DKIM übersteht die Weiterleitung
+	// (besteht), SPF bricht (die weiterleitende IP steht nicht im
+	// SPF-Record der ursprünglichen Domain) — DMARC besteht trotzdem
+	// (PassRate zählt dkim ODER spf), DKIMPassRate und SPFPassRate
+	// müssen das aber unterscheidbar machen.
+	saveReportWithRecords(t, reports, "forward-1", begin, []recordSpec{
+		{count: 20, disposition: report.DispositionNone, dkim: report.AuthResultPass, spf: report.AuthResultFail, sourceIP: "203.0.113.7"},
+	})
+
+	period, err := report.NewDateRange(begin.Add(-time.Hour), begin.Add(2*time.Hour))
+	require.NoError(t, err)
+
+	page, err := stats.Query(ctx, sources.Query{Period: &period})
+	require.NoError(t, err)
+	require.Len(t, page.Stats, 1)
+
+	got := page.Stats[0]
+	require.InDelta(t, 1.0, got.PassRate, 0.0001, "dkim=pass reicht für DMARC")
+	require.InDelta(t, 1.0, got.DKIMPassRate, 0.0001)
+	require.InDelta(t, 0.0, got.SPFPassRate, 0.0001)
 }
 
 func TestSourceStatsRepository_Query_SortByVolume_PaginatesWithCursor(t *testing.T) {

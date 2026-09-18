@@ -242,6 +242,41 @@ a {
   border-bottom: none;
 }
 
+/* .badge zeigt eine kurze Einordnung inline in einer Tabellenzelle (z. B.
+   "Autorisiert" / "Nicht bestätigt — prüfen" für Sendequellen, siehe
+   classifySource in handlers_sources.go) — Ton per Modifier-Klasse, aus
+   denselben Statusfarben wie Trend/Formularmeldungen. */
+.badge {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge-good {
+  background: color-mix(in srgb, var(--status-good) 16%, var(--surface));
+  color: var(--status-good);
+}
+
+.badge-warning {
+  background: color-mix(in srgb, var(--status-warning) 18%, var(--surface));
+  color: color-mix(in srgb, var(--status-warning) 70%, var(--ink));
+}
+
+.badge-critical {
+  background: color-mix(in srgb, var(--status-critical) 14%, var(--surface));
+  color: var(--status-critical);
+}
+
+.badge-info {
+  background: color-mix(in srgb, var(--primary) 14%, var(--surface));
+  color: var(--primary);
+  font-weight: 500;
+  margin-left: 4px;
+}
+
 .load-more {
   padding: 6px 12px;
   border: 1px solid var(--gridline);
@@ -699,6 +734,26 @@ a {
 .glossary-hint[data-tip]:focus-visible::before {
   opacity: 1;
   transform: translate(-50%, 0);
+}
+
+/* In einer Tabellenkopfzeile sitzt der Hinweis dicht unter dem Sticky-
+   Header (.app-header) — ein wie sonst nach OBEN aufklappendes Tooltip
+   würde dort über den sichtbaren Bereich hinaus abgeschnitten. Für
+   Vorkommen innerhalb von th deshalb nach UNTEN öffnen (nur Position und
+   Ruhezustand-Transform ändern sich, der eingeblendete Zustand bleibt
+   dieselbe Regel oben). */
+.data-table th .glossary-hint[data-tip]::after,
+.data-table th .glossary-hint[data-tip]::before {
+  bottom: auto;
+  transform: translate(-50%, -4px);
+}
+
+.data-table th .glossary-hint[data-tip]::after {
+  top: calc(100% + 8px);
+}
+
+.data-table th .glossary-hint[data-tip]::before {
+  top: calc(100% + 4px);
 }
 
 .chart-card {

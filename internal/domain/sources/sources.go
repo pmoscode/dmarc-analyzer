@@ -16,9 +16,22 @@ import (
 type Stat struct {
 	SourceIP   report.SourceIP
 	TotalCount int
-	PassRate   float64
-	FirstSeen  time.Time
-	LastSeen   time.Time
+	// PassRate ist der DMARC-Gesamtanteil (dkim=pass ODER spf=pass) —
+	// dieselbe Definition wie Statistics.PassRate, hier je Quelle statt
+	// global.
+	PassRate float64
+	// DKIMPassRate und SPFPassRate sind getrennt ausgewiesen (anders als
+	// PassRate, das beide ODER-verknüpft): eine Quelle mit hoher
+	// DKIMPassRate aber niedriger SPFPassRate besteht DMARC zwar
+	// trotzdem (SPF ist dafür nicht nötig), das Muster ist aber
+	// typisch für Mail-Weiterleitung (DKIM-Signatur übersteht die
+	// Weiterleitung, SPF bricht fast immer, weil die weiterleitende IP
+	// nicht im SPF-Record der ursprünglichen Domain steht) — Grundlage
+	// für die Einordnung in internal/web/handlers_sources.go.
+	DKIMPassRate float64
+	SPFPassRate  float64
+	FirstSeen    time.Time
+	LastSeen     time.Time
 	// Enrichment ist zunächst leer — Enricher.Enrich() füllt es ein,
 	// erst in der Anwendungsschicht (internal/app/sourcestats), nicht in
 	// diesem Repository: SQL-Aggregation und Netzwerk-Anreicherung sind
