@@ -130,8 +130,17 @@ func requireCSRF(a *auth, next http.Handler) http.Handler {
 // Fehlen beide Header, wird sicherheitshalber abgelehnt — jeder Browser,
 // der neu genug für fetch()/htmx ist, sendet mindestens einen der beiden
 // bei einer POST-Anfrage.
+//
+// Origin "null" zählt dabei wie ein fehlender Header: Browser senden
+// diesen wörtlichen Wert statt echter Origin für normale (nicht per
+// fetch/htmx ausgelöste) Formular-POSTs auf Seiten mit
+// Referrer-Policy: no-referrer (siehe securityHeaders) — reproduzierbar
+// beim "Abgleich starten"-Formular. Sec-Fetch-Site bleibt in dem Fall
+// zuverlässig, weil der Browser es unabhängig von der Referrer-Policy
+// aus dem tatsächlichen Navigationskontext setzt, nicht aus einem von
+// der Seite beeinflussbaren Wert.
 func sameOrigin(r *http.Request) bool {
-	if origin := r.Header.Get("Origin"); origin != "" {
+	if origin := r.Header.Get("Origin"); origin != "" && origin != "null" {
 		u, err := url.Parse(origin)
 		return err == nil && u.Host == r.Host
 	}

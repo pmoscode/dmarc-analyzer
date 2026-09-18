@@ -235,3 +235,39 @@ func TestRequireCSRF_PostWithValidTokenAndSecFetchSiteSameOrigin_PassesThrough(t
 
 	require.Equal(t, http.StatusOK, rec.Code)
 }
+
+func TestRequireCSRF_PostWithNullOriginAndSecFetchSiteSameOrigin_PassesThrough(t *testing.T) {
+	a := newAuth()
+	handler := requireCSRF(a, okHandler())
+
+	// Origin: null (wörtlich) statt eines fehlenden Headers — das
+	// schicken Browser für gewöhnliche (nicht per fetch/htmx ausgelöste)
+	// Formular-POSTs auf Seiten mit Referrer-Policy: no-referrer, auch
+	// wenn die Anfrage tatsächlich same-origin ist (reproduziert beim
+	// "Abgleich starten"-Formular). Sec-Fetch-Site bleibt zuverlässig und
+	// muss weiterhin als Fallback greifen statt an "null" zu scheitern.
+	r, token := newAuthenticatedRequest(t, a)
+	r.Header.Set("Origin", "null")
+	r.Header.Set("Sec-Fetch-Site", "same-origin")
+	r.Header.Set(csrfTokenHeader, token)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, r)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestRequireCSRF_PostWithNullOriginNoSecFetchSite_Returns403(t *testing.T) {
+	a := newAuth()
+	handler := requireCSRF(a, okHandler())
+
+	// Origin: null ohne Sec-Fetch-Site-Fallback muss weiterhin abgelehnt
+	// werden — genau dieser Fall tritt bei einer echten fremden
+	// Sandbox-iframe-Anfrage auf (siehe sameOrigin-Kommentar).
+	r, token := newAuthenticatedRequest(t, a)
+	r.Header.Set("Origin", "null")
+	r.Header.Set(csrfTokenHeader, token)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, r)
+
+	require.Equal(t, http.StatusForbidden, rec.Code)
+}
