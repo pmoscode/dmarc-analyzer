@@ -59,16 +59,17 @@ func (s *Server) handleLoginCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !claims.isAdmin(s.oidc.adminGroup) {
-		slog.Warn("oidc-anmeldung ohne admin-gruppe abgelehnt", "subject", claims.Subject, "email", claims.Email)
-		http.Error(w, "Zugriff verweigert — dieses Konto ist nicht Mitglied der berechtigten Gruppe.", http.StatusForbidden)
-		return
-	}
-
 	username := claims.Email
 	if username == "" {
 		username = claims.Subject
 	}
+
+	if !claims.isAdmin(s.oidc.adminGroup) {
+		slog.Warn("oidc-anmeldung ohne admin-gruppe abgelehnt", "subject", claims.Subject, "email", claims.Email)
+		s.renderAccessDenied(w, r, username)
+		return
+	}
+
 	cookieValue, _, err := s.auth.createSession(username)
 	if err != nil {
 		s.serverError(w, r, err)
@@ -78,6 +79,31 @@ func (s *Server) handleLoginCallback(w http.ResponseWriter, r *http.Request) {
 	setSessionCookie(w, cookieValue)
 	slog.Info("admin angemeldet", "email", claims.Email)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
+
+// accessDeniedData sind die Werte für access_denied.html — eine
+// eigenständige Seite ohne app-Layout (siehe dortiger Kommentar), da an
+// dieser Stelle keine Sitzung existiert.
+type accessDeniedData struct {
+	// Account ist die E-Mail-Adresse oder, falls das ID-Token keine
+	// enthält, das OIDC-Subject — derselbe Fallback wie beim
+	// Sitzungs-Benutzernamen (siehe Aufrufer).
+	Account string
+}
+
+// renderAccessDenied zeigt eine erklärende Fehlerseite statt eines nackten
+// "403 Forbidden"-Klartexts (den bisherigen Zustand, bevor jemand ohne
+// Admin-Gruppe erstmals versucht hat, sich anzumelden — reproduziert
+// 2026-09-19: außer dem einen Satz war die Seite komplett leer). Rendert
+// mit http.StatusForbidden trotzdem korrekt: Content-Type wird VOR
+// WriteHeader gesetzt, views.renderNamed setzt ihn zwar erneut, das ist
+// nach WriteHeader aber wirkungslos (bereits korrekt gesetzter Wert).
+func (s *Server) renderAccessDenied(w http.ResponseWriter, r *http.Request, account string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusForbidden)
+	if err := s.views.renderNamed(w, r, "access_denied.html", "fullpage", accessDeniedData{Account: account}); err != nil {
+		slog.Error("access-denied-seite konnte nicht gerendert werden", "error", err)
+	}
 }
 
 // handleLogout beendet die Sitzung und leitet — falls Authentik einen

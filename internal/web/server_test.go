@@ -225,6 +225,15 @@ func TestServer_LoginFlow_WithoutAdminGroup_Returns403AndNoSession(t *testing.T)
 
 	jar, _ := client.Jar.(*testCookieJar)
 	require.Empty(t, jar.cookiesNamed(sessionCookieName), "ohne admin-gruppe darf keine sitzung entstehen")
+
+	// Erklärende HTML-Seite statt nacktem Klartext (verifiziert
+	// 2026-09-19: vorher stand dort außer dem einen Satz nichts).
+	require.Contains(t, resp.Header.Get("Content-Type"), "text/html")
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Contains(t, string(body), "Zugriff verweigert")
+	require.Contains(t, string(body), "normal@example.com")
+	require.Contains(t, string(body), `href="/anmelden"`)
 }
 
 func TestServer_Login_InvalidState_Returns400(t *testing.T) {

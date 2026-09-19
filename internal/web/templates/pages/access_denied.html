@@ -1,0 +1,29 @@
+{{/* Eigenständige Seite, NICHT über layout.html eingebunden (siehe
+     views.go:renderNamed) — an dieser Stelle existiert keine Sitzung, das
+     app-Layout (Nav, Abgleich-Knopf, Abmelden-Formular) würde einen
+     angemeldeten Zustand vortäuschen, den es nicht gibt. */}}
+{{define "fullpage"}}
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zugriff verweigert — DMARC Analyzer</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="standalone-body">
+  <main class="standalone-card">
+    <h1>Zugriff verweigert</h1>
+    <p>
+      Das Konto <strong>{{.Account}}</strong> ist nicht Mitglied der
+      berechtigten Gruppe und hat deshalb keinen Zugriff auf DMARC Analyzer.
+    </p>
+    <p class="standalone-hint">
+      Wende dich an eine Administratorin oder einen Administrator, wenn du
+      Zugriff benötigst.
+    </p>
+    <a class="button-link" href="/anmelden">Erneut versuchen</a>
+  </main>
+</body>
+</html>
+{{end}}

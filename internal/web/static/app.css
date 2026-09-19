@@ -889,3 +889,43 @@ a {
 .chart-table a:hover {
   text-decoration: underline;
 }
+
+/* Eigenständige Seiten ohne app-Layout (z. B. access_denied.html) — es
+   existiert an dieser Stelle keine Sitzung, .app-header/.app-main passen
+   hier nicht (siehe views.go:renderNamed, Block "fullpage"). */
+.standalone-body {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.standalone-card {
+  max-width: 420px;
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--gridline);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 32px;
+  text-align: center;
+}
+
+.standalone-card h1 {
+  margin: 0 0 12px;
+  font-size: 20px;
+}
+
+.standalone-card p {
+  margin: 0 0 16px;
+}
+
+.standalone-hint {
+  color: var(--ink-secondary);
+  font-size: 14px;
+}
+
+.standalone-card .button-link {
+  align-self: center;
+}

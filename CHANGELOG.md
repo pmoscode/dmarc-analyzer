@@ -252,6 +252,12 @@ die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
 ### Behoben
 
+- Zugriffsverweigerung bei fehlender Admin-Gruppenmitgliedschaft zeigte nur
+  einen nackten Klartext-Satz (`http.Error`, kein HTML, kein Styling) statt
+  einer nachvollziehbaren Fehlerseite. Neue eigenständige Seite
+  `access_denied.html` (ohne app-Layout, da an dieser Stelle keine Sitzung
+  existiert) nennt das betroffene Konto, erklärt die Ursache und bietet
+  einen Link zum erneuten Anmeldeversuch.
 - `/abmelden` (Logout) wirkte wirkungslos: der Redirect zu Authentiks
   `end_session_endpoint` (RP-Initiated Logout) ist zwangsläufig eine andere
   Origin, wurde vom eigenen CSP-Header (`form-action 'self'`) aber vom
