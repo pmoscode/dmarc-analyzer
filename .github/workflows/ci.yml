@@ -53,12 +53,13 @@ jobs:
   # docker baut und veröffentlicht das Container-Image nach GHCR — ersetzt
   # den früheren "release"-Job (macOS/Windows/Linux-Binärdateien als
   # GitHub-Release-Anhang), der mit dem Umstieg auf "rein Docker nativ"
-  # entfallen ist. Läuft nur bei einem Versions-Tag, erst nachdem "check"
-  # grün war.
+  # entfallen ist. Läuft erst nachdem "check" grün war, und nur für zwei
+  # Fälle: ein Versions-Tag (konkrete Version + "latest") oder ein Push
+  # auf main (bewegliches "dev"-Tag für den jeweils neuesten Stand).
   docker:
     name: Docker-Image bauen und veröffentlichen
     needs: check
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -73,6 +74,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # type=semver läuft ohnehin nur bei einem Tag-Push an, der sich als
+      # Semver parsen lässt (kein enable nötig) — "latest" und "dev"
+      # dagegen würden ohne enable bei JEDEM Lauf dieses Jobs entstehen,
+      # deshalb hier explizit auf genau den einen Auslöser eingeschränkt,
+      # für den sie gedacht sind.
       - name: Metadaten (Tags/Labels) ermitteln
         id: meta
         uses: docker/metadata-action@v5
@@ -80,7 +86,8 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=semver,pattern={{version}}
-            type=raw,value=latest
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=dev,enable=${{ github.ref == 'refs/heads/main' }}
 
       - name: Image bauen und pushen
         uses: docker/build-push-action@v6
@@ -88,6 +95,6 @@ jobs:
           context: .
           push: true
           build-args: |
-            VERSION=${{ github.ref_name }}
+            VERSION=${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'dev' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
