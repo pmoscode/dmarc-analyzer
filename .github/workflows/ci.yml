@@ -81,7 +81,7 @@ jobs:
       # für den sie gedacht sind.
       - name: Metadaten (Tags/Labels) ermitteln
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
