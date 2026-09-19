@@ -178,6 +178,12 @@ die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
   zugrunde liegende `widget.ModalPopUp` nicht durch Antippen außerhalb,
   der Dialog blieb also dauerhaft offen. Jetzt `dialog.NewCustom(...)`
   mit einem "Schließen"-Knopf.
+- `DMARC_OIDC_INSECURE_SKIP_VERIFY` (optional, Vorgabe `false`): schaltet
+  die TLS-Zertifikatsprüfung für alle Calls gegen den OIDC-Issuer
+  (Discovery, JWKS, Token-Exchange) ab — ausschließlich für
+  Entwicklungsumgebungen mit selbstsigniertem Zertifikat gedacht (z. B.
+  Caddys `tls internal`), niemals für Produktion. Siehe
+  `docs/features/deployment.md`.
 
 ### Geändert
 

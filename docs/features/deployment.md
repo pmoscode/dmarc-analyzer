@@ -61,6 +61,7 @@ Authentik-Setup.
 | `DMARC_OIDC_CLIENT_SECRET` | ja      | Client-Secret der Authentik-Anwendung                                                                  |
 | `DMARC_OIDC_REDIRECT_URL`  | ja      | Vollständige, öffentlich erreichbare Callback-URL, z. B. `https://dmarc.example.com/anmelden/callback` |
 | `DMARC_OIDC_ADMIN_GROUP`   | ja      | Authentik-Gruppenname, der Zugriff gewährt (geprüft gegen den `groups`-Claim)                          |
+| `DMARC_OIDC_INSECURE_SKIP_VERIFY` | nein | Deaktiviert die TLS-Zertifikatsprüfung für alle Calls gegen den Issuer (Discovery, JWKS, Token-Exchange), Vorgabe `false`. **Nur für Entwicklungsumgebungen mit selbstsigniertem Zertifikat** (z. B. Caddys `tls internal`) — niemals in Produktion setzen, sonst sind Token-Austausch und ID-Token-Validierung gegen einen Man-in-the-Middle ungeschützt. |
 
 ### Betrieb
 

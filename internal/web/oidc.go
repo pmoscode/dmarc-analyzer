@@ -2,7 +2,9 @@ package web
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"net/http"
 	"net/url"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -21,6 +23,11 @@ type OIDCConfig struct {
 	// AdminGroup ist der Authentik-Gruppenname, den der "groups"-Claim des
 	// ID-Tokens enthalten muss.
 	AdminGroup string
+	// InsecureSkipVerify deaktiviert die TLS-Zertifikatsprüfung für alle
+	// HTTP-Calls gegen den Issuer (Discovery, JWKS, Token-Exchange). Nur
+	// für Entwicklungsumgebungen mit selbstsigniertem Zertifikat gedacht —
+	// niemals in Produktion setzen.
+	InsecureSkipVerify bool
 }
 
 // oidcAuthenticator kapselt die Discovery gegen Authentik sowie den
@@ -31,6 +38,22 @@ type oidcAuthenticator struct {
 	verifier   *oidc.IDTokenVerifier
 	oauth2Cfg  oauth2.Config
 	adminGroup string
+	// httpClient wird, falls gesetzt, per oidc.ClientContext in jeden
+	// Discovery-/JWKS-/Token-Call gereicht (siehe insecureContext) —
+	// nil bedeutet "Standard-http.Client mit System-Truststore".
+	httpClient *http.Client
+}
+
+// insecureContext hängt o.httpClient (falls gesetzt) über
+// oidc.ClientContext an ctx — sowohl coreos/go-oidc als auch
+// golang.org/x/oauth2 lesen den HTTP-Client aus demselben Context-Key
+// (oidc.ClientContext ist ein direkter Wrapper um oauth2.NewClient) und
+// verwenden ihn für JWKS-Abruf bzw. Token-Exchange.
+func (o *oidcAuthenticator) insecureContext(ctx context.Context) context.Context {
+	if o.httpClient == nil {
+		return ctx
+	}
+	return oidc.ClientContext(ctx, o.httpClient)
 }
 
 // newOIDCAuthenticator lädt das Discovery-Dokument von cfg.IssuerURL —
@@ -38,7 +61,24 @@ type oidcAuthenticator struct {
 // meldet der Aufrufer das als klaren Startfehler statt eines defekten
 // Logins zur Laufzeit.
 func newOIDCAuthenticator(ctx context.Context, cfg OIDCConfig) (*oidcAuthenticator, error) {
-	provider, err := oidc.NewProvider(ctx, cfg.IssuerURL)
+	var httpClient *http.Client
+	if cfg.InsecureSkipVerify {
+		httpClient = &http.Client{
+			Transport: &http.Transport{
+				//nolint:gosec // G402: bewusst per DMARC_OIDC_INSECURE_SKIP_VERIFY
+				// opt-in, nur fuer DEV-Umgebungen mit selbstsigniertem Caddy-
+				// Zertifikat gedacht (siehe Kommentar an OIDCConfig.InsecureSkipVerify).
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			},
+		}
+	}
+
+	discoveryCtx := ctx
+	if httpClient != nil {
+		discoveryCtx = oidc.ClientContext(ctx, httpClient)
+	}
+
+	provider, err := oidc.NewProvider(discoveryCtx, cfg.IssuerURL)
 	if err != nil {
 		return nil, fmt.Errorf("oidc-provider %q konnte nicht ermittelt werden: %w", cfg.IssuerURL, err)
 	}
@@ -54,6 +94,7 @@ func newOIDCAuthenticator(ctx context.Context, cfg OIDCConfig) (*oidcAuthenticat
 			Scopes:       []string{oidc.ScopeOpenID, "profile", "email", "groups"},
 		},
 		adminGroup: cfg.AdminGroup,
+		httpClient: httpClient,
 	}, nil
 }
 
@@ -87,6 +128,8 @@ func (c oidcClaims) isAdmin(adminGroup string) bool {
 // exchange tauscht code gegen Tokens, validiert das ID-Token (Issuer,
 // Audience, Signatur, Ablauf, Nonce) und liest die Claims.
 func (o *oidcAuthenticator) exchange(ctx context.Context, code, pkceVerifier, nonce string) (oidcClaims, error) {
+	ctx = o.insecureContext(ctx)
+
 	token, err := o.oauth2Cfg.Exchange(ctx, code, oauth2.VerifierOption(pkceVerifier))
 	if err != nil {
 		return oidcClaims{}, fmt.Errorf("code konnte nicht gegen tokens getauscht werden: %w", err)

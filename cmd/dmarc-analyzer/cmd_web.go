@@ -52,11 +52,12 @@ func runWeb(ctx context.Context, a *app, _ []string) error {
 		Addr: a.config.ListenAddr,
 		Dev:  a.config.DevMode,
 		OIDC: web.OIDCConfig{
-			IssuerURL:    a.config.OIDC.IssuerURL,
-			ClientID:     a.config.OIDC.ClientID,
-			ClientSecret: a.config.OIDC.ClientSecret,
-			RedirectURL:  a.config.OIDC.RedirectURL,
-			AdminGroup:   a.config.OIDC.AdminGroup,
+			IssuerURL:          a.config.OIDC.IssuerURL,
+			ClientID:           a.config.OIDC.ClientID,
+			ClientSecret:       a.config.OIDC.ClientSecret,
+			RedirectURL:        a.config.OIDC.RedirectURL,
+			AdminGroup:         a.config.OIDC.AdminGroup,
+			InsecureSkipVerify: a.config.OIDC.InsecureSkipVerify,
 		},
 	})
 	if err != nil {

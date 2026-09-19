@@ -46,6 +46,13 @@ type OIDC struct {
 	// AdminGroup ist der Authentik-Gruppenname, den der "groups"-Claim des
 	// ID-Tokens enthalten muss — fehlt er, wird der Zugriff verweigert.
 	AdminGroup string
+	// InsecureSkipVerify deaktiviert die TLS-Zertifikatsprüfung für alle
+	// HTTP-Calls gegen den OIDC-Issuer (Discovery, JWKS, Token-Exchange).
+	// Nur für Entwicklungsumgebungen mit selbstsigniertem Zertifikat
+	// gedacht (z. B. Caddys "tls internal" im FS-BS-VPS-Setup) — niemals
+	// in Produktion setzen, sonst sind Token-Austausch und
+	// ID-Token-Validierung gegen einen Man-in-the-Middle ungeschützt.
+	InsecureSkipVerify bool
 }
 
 // Load liest und validiert alle Umgebungsvariablen. Bei fehlenden
@@ -108,11 +115,12 @@ func Load() (Config, error) {
 		DevMode:    optBool("DMARC_DEV_MODE", false),
 
 		OIDC: OIDC{
-			IssuerURL:    req("DMARC_OIDC_ISSUER_URL"),
-			ClientID:     req("DMARC_OIDC_CLIENT_ID"),
-			ClientSecret: req("DMARC_OIDC_CLIENT_SECRET"),
-			RedirectURL:  req("DMARC_OIDC_REDIRECT_URL"),
-			AdminGroup:   req("DMARC_OIDC_ADMIN_GROUP"),
+			IssuerURL:          req("DMARC_OIDC_ISSUER_URL"),
+			ClientID:           req("DMARC_OIDC_CLIENT_ID"),
+			ClientSecret:       req("DMARC_OIDC_CLIENT_SECRET"),
+			RedirectURL:        req("DMARC_OIDC_REDIRECT_URL"),
+			AdminGroup:         req("DMARC_OIDC_ADMIN_GROUP"),
+			InsecureSkipVerify: optBool("DMARC_OIDC_INSECURE_SKIP_VERIFY", false),
 		},
 	}
 

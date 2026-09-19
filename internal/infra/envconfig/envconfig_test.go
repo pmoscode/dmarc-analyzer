@@ -39,6 +39,17 @@ func TestLoad_ValidEnv_AppliesDefaults(t *testing.T) {
 	require.Equal(t, ":8080", cfg.ListenAddr)
 	require.False(t, cfg.DevMode)
 	require.Equal(t, "dmarc-admins", cfg.OIDC.AdminGroup)
+	require.False(t, cfg.OIDC.InsecureSkipVerify)
+}
+
+func TestLoad_InsecureSkipVerify_Enabled(t *testing.T) {
+	setValidEnv(t)
+	t.Setenv("DMARC_OIDC_INSECURE_SKIP_VERIFY", "true")
+
+	cfg, err := envconfig.Load()
+
+	require.NoError(t, err)
+	require.True(t, cfg.OIDC.InsecureSkipVerify)
 }
 
 func TestLoad_OverridesDefaults(t *testing.T) {
