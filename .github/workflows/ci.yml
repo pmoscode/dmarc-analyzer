@@ -90,7 +90,7 @@ jobs:
             type=raw,value=dev,enable=${{ github.ref == 'refs/heads/main' }}
 
       - name: Image bauen und pushen
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true
