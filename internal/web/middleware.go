@@ -26,12 +26,31 @@ func requireHost(allowedHost string, next http.Handler) http.Handler {
 // Antwort (MIGRATIONSPLAN.md Abschnitt 5). Kein Inline-JavaScript, keine
 // externen Quellen — alles (htmx, Chart.js, eigenes JS) kommt aus
 // /static/, eingebettet in die Binärdatei.
-const contentSecurityPolicy = "default-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'none'"
+//
+// form-action erlaubt neben 'self' zusätzlich die Origin des OIDC-Issuers
+// (s.oidcIssuerOrigin): /abmelden sendet die Formular-Antwort per 303 zu
+// Authentiks end_session_endpoint weiter (RP-Initiated Logout,
+// internal/web/oidc.go:endSessionURL) — das ist zwangsläufig eine andere
+// Origin. Ohne diese Erweiterung blockiert der Browser genau diesen
+// Redirect ("violates ... form-action 'self'"), die lokale Sitzung ist
+// dann zwar beendet, aber Authentik bekommt den Logout nie mitgeteilt und
+// die nächste Anfrage (GET /anmelden leitet ohne Zwischenschritt sofort zu
+// Authentik weiter, siehe handlers_login.go) meldet über die weiterhin
+// aktive Authentik-Session sofort wieder an — Abmelden wirkt dadurch
+// komplett wirkungslos (verifiziert 2026-09-19, Chrome-DevTools-Konsole).
+func buildContentSecurityPolicy(oidcIssuerOrigin string) string {
+	formAction := "form-action 'self'"
+	if oidcIssuerOrigin != "" {
+		formAction += " " + oidcIssuerOrigin
+	}
+	return "default-src 'self'; frame-ancestors 'none'; " + formAction + "; base-uri 'none'"
+}
 
-func securityHeaders(next http.Handler) http.Handler {
+func (s *Server) securityHeaders(next http.Handler) http.Handler {
+	csp := buildContentSecurityPolicy(s.oidcIssuerOrigin)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
-		h.Set("Content-Security-Policy", contentSecurityPolicy)
+		h.Set("Content-Security-Policy", csp)
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("Referrer-Policy", "no-referrer")
 		h.Set("X-Frame-Options", "DENY")

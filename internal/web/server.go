@@ -49,6 +49,11 @@ type Server struct {
 	// middleware.go) — ersetzt die frühere, aus der gebundenen
 	// Loopback-Adresse berechnete Zulassungsliste.
 	allowedHost string
+	// oidcIssuerOrigin ist die Origin (scheme://host) des OIDC-Issuers —
+	// wird der CSP-Direktive form-action hinzugefügt, damit der
+	// RP-Initiated-Logout-Redirect zu Authentiks end_session_endpoint nicht
+	// vom Browser blockiert wird (siehe middleware.go:securityHeaders).
+	oidcIssuerOrigin string
 
 	staticFS fs.FS
 
@@ -71,6 +76,11 @@ func New(ctx context.Context, deps Dependencies, opts Options) (*Server, error) 
 		return nil, fmt.Errorf("DMARC_OIDC_REDIRECT_URL ist keine vollständige URL: %q", opts.OIDC.RedirectURL)
 	}
 
+	issuerURL, err := url.Parse(opts.OIDC.IssuerURL)
+	if err != nil || issuerURL.Host == "" {
+		return nil, fmt.Errorf("DMARC_OIDC_ISSUER_URL ist keine vollständige URL: %q", opts.OIDC.IssuerURL)
+	}
+
 	authenticator, err := newOIDCAuthenticator(ctx, opts.OIDC)
 	if err != nil {
 		return nil, err
@@ -89,14 +99,15 @@ func New(ctx context.Context, deps Dependencies, opts Options) (*Server, error) 
 	}
 
 	s := &Server{
-		deps:        deps,
-		logger:      logger,
-		auth:        a,
-		oidc:        authenticator,
-		views:       v,
-		devMode:     opts.Dev,
-		allowedHost: redirectURL.Host,
-		staticFS:    sfs,
+		deps:             deps,
+		logger:           logger,
+		auth:             a,
+		oidc:             authenticator,
+		views:            v,
+		devMode:          opts.Dev,
+		allowedHost:      redirectURL.Host,
+		oidcIssuerOrigin: issuerURL.Scheme + "://" + issuerURL.Host,
+		staticFS:         sfs,
 	}
 	s.httpServer = &http.Server{
 		Handler:           s.routes(),

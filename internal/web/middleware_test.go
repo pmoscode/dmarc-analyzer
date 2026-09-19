@@ -55,15 +55,52 @@ func TestRequireHost_DNSRebindingAttempt_Rejected(t *testing.T) {
 	require.Equal(t, http.StatusMisdirectedRequest, rec.Code)
 }
 
-func TestSecurityHeaders_SetsCSPAndRelatedHeaders(t *testing.T) {
-	handler := securityHeaders(okHandler())
+func TestBuildContentSecurityPolicy_TableDriven(t *testing.T) {
+	tests := []struct {
+		name             string
+		oidcIssuerOrigin string
+		wantFormAction   string
+	}{
+		{
+			name:             "ohne issuer-origin nur 'self'",
+			oidcIssuerOrigin: "",
+			wantFormAction:   "form-action 'self'",
+		},
+		{
+			name:             "mit issuer-origin zusaetzlich erlaubt",
+			oidcIssuerOrigin: "https://auth.example.com",
+			// form-action muss die Issuer-Origin enthalten, sonst blockiert der
+			// Browser den RP-Initiated-Logout-Redirect zu end_session_endpoint
+			// (siehe securityHeaders-Kommentar) — genau der Bug, der hier
+			// verhindert werden soll.
+			wantFormAction: "form-action 'self' https://auth.example.com",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			csp := buildContentSecurityPolicy(tt.oidcIssuerOrigin)
+
+			require.Contains(t, csp, tt.wantFormAction)
+			require.Contains(t, csp, "default-src 'self'")
+			require.Contains(t, csp, "frame-ancestors 'none'")
+			require.Contains(t, csp, "base-uri 'none'")
+			require.NotContains(t, csp, "unsafe-inline")
+		})
+	}
+}
+
+func TestServerSecurityHeaders_SetsCSPAndRelatedHeaders(t *testing.T) {
+	s := &Server{oidcIssuerOrigin: "https://auth.example.com"}
+	handler := s.securityHeaders(okHandler())
 
 	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, r)
 
-	require.Equal(t, contentSecurityPolicy, rec.Header().Get("Content-Security-Policy"))
-	require.NotContains(t, rec.Header().Get("Content-Security-Policy"), "unsafe-inline")
+	csp := rec.Header().Get("Content-Security-Policy")
+	require.Contains(t, csp, "form-action 'self' https://auth.example.com")
+	require.NotContains(t, csp, "unsafe-inline")
 	require.Equal(t, "nosniff", rec.Header().Get("X-Content-Type-Options"))
 	require.Equal(t, "DENY", rec.Header().Get("X-Frame-Options"))
 }

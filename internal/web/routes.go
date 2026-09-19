@@ -59,5 +59,5 @@ func (s *Server) routes() http.Handler {
 
 	mux.Handle("/", requireHost(s.allowedHost, hostChecked))
 
-	return recoverPanic(s.logger, securityHeaders(mux))
+	return recoverPanic(s.logger, s.securityHeaders(mux))
 }

@@ -26,7 +26,11 @@ Einmal-Anmeldelinks wie in der früheren Desktop-Version):
    gültig) und auf die Übersicht weitergeleitet.
 5. `POST /abmelden` beendet die Sitzung und leitet — falls Authentiks
    Discovery-Dokument einen `end_session_endpoint` bekanntgibt — dorthin
-   weiter (RP-initiated Logout), sonst auf `/anmelden`.
+   weiter (RP-initiated Logout), sonst auf `/anmelden`. Die Content-Security-Policy
+   (`internal/web/middleware.go`) erlaubt dafür in `form-action` neben `'self'`
+   zusätzlich die Origin von `DMARC_OIDC_ISSUER_URL` — ohne das würde der
+   Browser den Redirect zu einer anderen Origin blocken, die lokale Sitzung
+   wäre zwar beendet, Authentik bekäme den Logout aber nie mitgeteilt.
 
 Mehrere Admins können gleichzeitig von verschiedenen Browsern angemeldet
 sein — jede Sitzung ist unabhängig (`internal/web/auth.go`).

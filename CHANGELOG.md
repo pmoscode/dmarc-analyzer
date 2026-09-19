@@ -252,6 +252,15 @@ die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
 
 ### Behoben
 
+- `/abmelden` (Logout) wirkte wirkungslos: der Redirect zu Authentiks
+  `end_session_endpoint` (RP-Initiated Logout) ist zwangsläufig eine andere
+  Origin, wurde vom eigenen CSP-Header (`form-action 'self'`) aber vom
+  Browser blockiert. Lokale Sitzung war zwar beendet, Authentik bekam den
+  Logout nie mitgeteilt — die nächste Anfrage (`GET /anmelden` leitet ohne
+  Zwischenschritt sofort zu Authentik weiter) meldete über die weiterhin
+  aktive Authentik-Session sofort wieder an, ohne dass etwas sichtbar
+  passierte. `form-action` erlaubt jetzt zusätzlich die Origin des
+  konfigurierten OIDC-Issuers (`internal/web/middleware.go:buildContentSecurityPolicy`).
 - `.zip`-Anhänge mit mehreren enthaltenen DMARC-Reports wurden sowohl
   beim Datei-Import als auch beim IMAP-Sync nur zu einem Report
   importiert (`ReportParser.Parse()` statt `ParseAll()`) — behoben über
