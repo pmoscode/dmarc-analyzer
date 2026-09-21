@@ -100,3 +100,10 @@ tasks:
       - task: fmt
       - task: lint
       - task: test
+
+  upgrade:
+    desc: "Updates all dependencies to the latest versions"
+    cmds:
+      - go get -u ./...
+      - go get -u go@latest
+      - go mod tidy
