@@ -34,9 +34,14 @@ func testDeps() Dependencies {
 	}
 }
 
+// testBuild ist die Build-Information aller Testserver — siehe
+// TestLayout_FooterShowsVersionAndCommit.
+var testBuild = BuildInfo{Version: "v9.9.9-test", Commit: "0123456789abcdef0123456789abcdef01234567"}
+
 func testOIDCOptions(issuer string) Options {
 	return Options{
-		Addr: "127.0.0.1:0",
+		Addr:  "127.0.0.1:0",
+		Build: testBuild,
 		OIDC: OIDCConfig{
 			IssuerURL:    issuer,
 			ClientID:     testOIDCClientID,

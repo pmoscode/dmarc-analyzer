@@ -12,9 +12,12 @@ RUN go mod download
 
 COPY . .
 
+# COMMIT muss als Build-Arg kommen: .git ist per .dockerignore
+# ausgeschlossen, "go build" kann die Revision hier nicht selbst einbetten.
 ARG VERSION=dev
+ARG COMMIT=""
 RUN CGO_ENABLED=0 go build \
-    -ldflags "-X main.version=${VERSION}" \
+    -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT}" \
     -o /out/dmarc-analyzer \
     ./cmd/dmarc-analyzer
 

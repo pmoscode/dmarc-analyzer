@@ -49,8 +49,9 @@ func runWeb(ctx context.Context, a *app, _ []string) error {
 		SyncIntervalMinutes: a.config.SyncIntervalMinutes,
 		IMAPHost:            a.config.IMAPHost,
 	}, web.Options{
-		Addr: a.config.ListenAddr,
-		Dev:  a.config.DevMode,
+		Addr:  a.config.ListenAddr,
+		Dev:   a.config.DevMode,
+		Build: web.BuildInfo{Version: version, Commit: resolvedCommit()},
 		OIDC: web.OIDCConfig{
 			IssuerURL:          a.config.OIDC.IssuerURL,
 			ClientID:           a.config.OIDC.ClientID,

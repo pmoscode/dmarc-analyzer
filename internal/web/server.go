@@ -33,6 +33,9 @@ type Options struct {
 	Logger *slog.Logger
 	// OIDC sind die Parameter für die Authentik-Anmeldung.
 	OIDC OIDCConfig
+	// Build sind Version und Git-Commit des laufenden Builds, angezeigt in
+	// der Fußzeile jeder Seite (layout.html).
+	Build BuildInfo
 }
 
 // Server ist die eingebettete Web-Oberfläche.
@@ -88,7 +91,7 @@ func New(ctx context.Context, deps Dependencies, opts Options) (*Server, error) 
 
 	a := newAuth()
 
-	v, err := newViews(opts.Dev, a.csrfTokenForRequest)
+	v, err := newViews(opts.Dev, opts.Build, a.csrfTokenForRequest)
 	if err != nil {
 		return nil, fmt.Errorf("vorlagen konnten nicht geladen werden: %w", err)
 	}

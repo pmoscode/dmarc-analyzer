@@ -27,14 +27,18 @@ const devTemplatesDir = "internal/web/templates"
 // Umstieg auf OIDC-Mehrbenutzer-Logins ihr eigenes Token, siehe auth.go)
 // — als Platzhalter-Funktion registriert, die render()/renderNamed() vor
 // jeder Ausführung per Template.Funcs() auf den tatsächlichen Wert dieser
-// Anfrage umbiegen (siehe render unten).
-func newTemplateFuncs() template.FuncMap {
+// Anfrage umbiegen (siehe render unten). "buildInfo" liefert Version und
+// Git-Commit des laufenden Builds für die Fußzeile (layout.html) — fest
+// für die gesamte Laufzeit, deshalb anders als "csrfToken" direkt hier
+// registriert.
+func newTemplateFuncs(build BuildInfo) template.FuncMap {
 	return template.FuncMap{
 		"glossaryDef": func(term string) string {
 			t, _ := glossary.ByName(term)
 			return t.Definition
 		},
 		"csrfToken": func() string { return "" },
+		"buildInfo": func() BuildInfo { return build },
 	}
 }
 
@@ -57,8 +61,8 @@ type views struct {
 	pages map[string]*template.Template
 }
 
-func newViews(dev bool, csrfToken func(*http.Request) string) (*views, error) {
-	v := &views{dev: dev, funcs: newTemplateFuncs(), csrfToken: csrfToken}
+func newViews(dev bool, build BuildInfo, csrfToken func(*http.Request) string) (*views, error) {
+	v := &views{dev: dev, funcs: newTemplateFuncs(build), csrfToken: csrfToken}
 	if err := v.load(); err != nil {
 		return nil, err
 	}

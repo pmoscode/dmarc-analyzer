@@ -33,6 +33,9 @@
   <main class="app-main">
     {{template "content" .}}
   </main>
+  {{with buildInfo}}<footer class="app-footer">
+    DMARC Analyzer <span class="app-version">{{.Version}}</span>{{if .Commit}} · Commit <code class="app-commit" title="{{.Commit}}">{{.ShortCommit}}</code>{{end}}
+  </footer>{{end}}
 
   <script src="/static/vendor/chart.umd.min.js"></script>
   <script src="/static/vendor/chartjs-chart-matrix.min.js"></script>

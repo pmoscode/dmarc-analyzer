@@ -535,6 +535,16 @@ a {
   margin: 0 auto;
 }
 
+/* Fußzeile mit Version und Git-Commit (layout.html) — bewusst
+   zurückhaltend, reine Diagnoseinformation. */
+.app-footer {
+  max-width: 1100px;
+  margin: 40px auto 16px;
+  font-size: 12px;
+  color: var(--ink-muted);
+  text-align: center;
+}
+
 .filter-bar {
   display: flex;
   flex-wrap: wrap;

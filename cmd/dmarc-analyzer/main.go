@@ -11,9 +11,14 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/platform/logging"
 )
 
-// version wird beim Release-Build per -ldflags gesetzt (siehe Taskfile.yml,
-// Task "build"). Für lokale Entwicklungsbuilds bleibt "dev".
-var version = "dev"
+// version und commit werden beim Build per -ldflags gesetzt (siehe
+// Taskfile.yml Task "build", Dockerfile, .github/workflows/ci.yml). Für
+// lokale Entwicklungsbuilds bleibt version "dev"; ein leerer commit wird
+// zur Laufzeit aus den Go-Build-Informationen ergänzt (siehe version.go).
+var (
+	version = "dev"
+	commit  = ""
+)
 
 const usage = `dmarc-analyzer ` + `%s` + `
 
@@ -71,7 +76,7 @@ func run(ctx context.Context, args []string) error {
 	}
 
 	logger := logging.New()
-	logger.Info("dmarc-analyzer gestartet", "version", version)
+	logger.Info("dmarc-analyzer gestartet", "version", version, "commit", resolvedCommit())
 
 	handler, ok := subcommands[cmd]
 	if !ok {
