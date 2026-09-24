@@ -6,10 +6,21 @@ vars:
   BIN_DIR: bin
   BIN_NAME: dmarc-analyzer
   COVER_FILE: coverage.out
+  # VERSION: letzter Tag plus Abstand/Hash, z. B. "v0.1.0-2-g9a79aa6-dirty".
   VERSION:
     sh: git describe --tags --always --dirty 2>/dev/null || echo dev
+  # COMMIT: voller Hash, bei uncommitteten Änderungen mit "-dirty" — das
+  # --match auf ein nie existierendes Tag erzwingt die reine Hash-Ausgabe.
   COMMIT:
-    sh: git rev-parse HEAD 2>/dev/null || true
+    sh: git describe --always --dirty --abbrev=40 --match='NeVeRmAtCh' 2>/dev/null || true
+  IMAGE: '{{.BIN_NAME}}'
+  CONTAINER: '{{.BIN_NAME}}'
+
+# VERSION/COMMIT auch als Umgebungsvariablen — docker-compose.yml reicht
+# sie als Build-Args an das Dockerfile durch (siehe compose:*-Tasks).
+env:
+  VERSION: '{{.VERSION}}'
+  COMMIT: '{{.COMMIT}}'
 
 tasks:
   default:
@@ -80,16 +91,56 @@ tasks:
       - go run golang.org/x/tools/cmd/deadcode@latest ./cmd/dmarc-analyzer || true
 
   docker:build:
-    desc: Docker-Image lokal bauen (getaggt mit VERSION, siehe vars).
+    desc: Docker-Image lokal bauen, mit Version und Git-Commit (getaggt als VERSION und latest).
     cmds:
-      - docker build --build-arg VERSION={{.VERSION}} --build-arg COMMIT={{.COMMIT}} -t {{.BIN_NAME}}:{{.VERSION}} -t {{.BIN_NAME}}:latest .
+      - >-
+        docker build
+        --build-arg VERSION={{.VERSION}}
+        --build-arg COMMIT={{.COMMIT}}
+        -t {{.IMAGE}}:{{.VERSION}}
+        -t {{.IMAGE}}:latest
+        .
 
   docker:run:
     desc: >-
-      Lokal gebautes Image starten — erwartet eine .env-Datei mit den in
-      .env.example/docs/features/deployment.md dokumentierten Variablen.
+      Lokal gebautes Image im Vordergrund starten (baut vorher, falls nötig) —
+      erwartet eine .env-Datei mit den in .env.example/docs/features/deployment.md
+      dokumentierten Variablen.
+    deps: [docker:build]
     cmds:
-      - docker run --rm -p 8080:8080 --env-file .env -v dmarc-data:/data {{.BIN_NAME}}:{{.VERSION}}
+      - >-
+        docker run --rm --name {{.CONTAINER}}
+        -p 8080:8080
+        --env-file .env
+        -v dmarc-data:/data
+        {{.IMAGE}}:{{.VERSION}} {{.CLI_ARGS}}
+
+  docker:version:
+    desc: Version und Git-Commit des lokal gebauten Images anzeigen (aus den OCI-Labels).
+    cmds:
+      - >-
+        docker image inspect {{.IMAGE}}:latest
+        --format 'Version: {{"{{"}}index .Config.Labels "org.opencontainers.image.version"{{"}}"}}{{"{{"}}println{{"}}"}}Commit:  {{"{{"}}index .Config.Labels "org.opencontainers.image.revision"{{"}}"}}'
+
+  compose:build:
+    desc: Images per docker compose bauen, mit Version und Git-Commit.
+    cmds:
+      - docker compose build {{.CLI_ARGS}}
+
+  compose:up:
+    desc: docker compose im Hintergrund starten (baut vorher mit Version und Git-Commit neu).
+    cmds:
+      - docker compose up -d --build {{.CLI_ARGS}}
+
+  compose:down:
+    desc: docker compose stoppen und Container entfernen (Volumes bleiben erhalten).
+    cmds:
+      - docker compose down {{.CLI_ARGS}}
+
+  compose:logs:
+    desc: Logs von dmarc-analyzer per docker compose verfolgen.
+    cmds:
+      - docker compose logs -f dmarc-analyzer
 
   clean:
     desc: Build-Artefakte entfernen.

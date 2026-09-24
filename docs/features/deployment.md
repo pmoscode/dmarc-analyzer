@@ -22,7 +22,13 @@ Eine vollständige Beispielkonfiguration inklusive aller Variablen liegt in
 liest diese Datei per `env_file`.
 
 Lokal bauen statt das veröffentlichte Image zu benutzen: `task docker:build`
-(Taskfile.yml) bzw. direkt `docker build -t dmarc-analyzer .`.
+bzw. mit Compose `task compose:build`/`task compose:up` (Taskfile.yml). Die
+Tasks übergeben Version (`git describe`) und Git-Commit als Build-Args
+`VERSION`/`COMMIT`; beides erscheint in der Oberfläche unter dem
+Schriftzug, im Startlog und als OCI-Labels im Image (`task docker:version`).
+Ein direktes `docker build -t dmarc-analyzer .` bzw. `docker compose build`
+funktioniert ebenso, zeigt dann aber nur `dev` ohne Commit — außer
+`VERSION`/`COMMIT` werden selbst gesetzt (`--build-arg` bzw. exportiert).
 
 ## Umgebungsvariablen
 
