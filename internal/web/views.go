@@ -28,7 +28,7 @@ const devTemplatesDir = "internal/web/templates"
 // — als Platzhalter-Funktion registriert, die render()/renderNamed() vor
 // jeder Ausführung per Template.Funcs() auf den tatsächlichen Wert dieser
 // Anfrage umbiegen (siehe render unten). "buildInfo" liefert Version und
-// Git-Commit des laufenden Builds für die Fußzeile (layout.html) — fest
+// Git-Commit des laufenden Builds für die Kopfzeile (layout.html) — fest
 // für die gesamte Laufzeit, deshalb anders als "csrfToken" direkt hier
 // registriert.
 func newTemplateFuncs(build BuildInfo) template.FuncMap {

@@ -61,14 +61,15 @@ Anleitung in [`docs/features/auth.md`](docs/features/auth.md).
 ## Entwicklungs-Setup
 
 Voraussetzungen: Go 1.27+, [Task](https://taskfile.dev/), Docker (für
-`task docker:build`/`docker:run`).
+`task docker:*`/`compose:*`).
 
 ```sh
 task setup         # Werkzeuge installieren, Abhängigkeiten laden
 task check         # fmt + lint + test — vor jedem Commit, das auch die CI ausführt
 task run           # Programm im Entwicklungsmodus starten (Web-Oberfläche)
 task build         # Binärdatei nach bin/ bauen
-task docker:build  # Docker-Image lokal bauen
+task docker:build  # Docker-Image lokal bauen (mit Version und Git-Commit)
+task compose:up    # per docker compose bauen und im Hintergrund starten
 ```
 
 Alle verfügbaren Tasks: `task --list`.

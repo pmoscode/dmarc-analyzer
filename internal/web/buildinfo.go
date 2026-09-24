@@ -5,7 +5,7 @@ package web
 const shortCommitLen = 7
 
 // BuildInfo beschreibt den laufenden Build (Version und Git-Commit) für
-// die Anzeige in der Fußzeile (layout.html). Ermittelt wird beides in der
+// die Anzeige unter dem Schriftzug in der Kopfzeile (layout.html). Ermittelt wird beides in der
 // Composition Root (cmd/dmarc-analyzer/version.go), das Web-Paket zeigt es
 // nur an.
 type BuildInfo struct {

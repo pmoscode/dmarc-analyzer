@@ -91,6 +91,21 @@ a {
   font-size: 19px;
   font-weight: 700;
   letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+
+/* Version und Git-Commit direkt unter dem Schriftzug (layout.html) —
+   deutlich kleiner und gedämpft, reine Diagnoseinformation. Der volle
+   Commit-Hash steht im title des gekürzten. */
+.app-build {
+  margin: 2px 0 0;
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--ink-muted);
+}
+
+.app-commit {
+  cursor: help;
 }
 
 .app-nav ul {
@@ -533,16 +548,6 @@ a {
 .app-main {
   max-width: 1100px;
   margin: 0 auto;
-}
-
-/* Fußzeile mit Version und Git-Commit (layout.html) — bewusst
-   zurückhaltend, reine Diagnoseinformation. */
-.app-footer {
-  max-width: 1100px;
-  margin: 40px auto 16px;
-  font-size: 12px;
-  color: var(--ink-muted);
-  text-align: center;
 }
 
 .filter-bar {

@@ -30,7 +30,7 @@ func TestBuildInfo_ShortCommit(t *testing.T) {
 	}
 }
 
-func TestLayout_FooterShowsVersionAndCommit(t *testing.T) {
+func TestLayout_HeaderShowsVersionAndCommit(t *testing.T) {
 	t.Parallel()
 
 	srv, _ := newTestServerWithAccounts(t, mustAccount(t, "Konto 1"))
@@ -46,6 +46,6 @@ func TestLayout_FooterShowsVersionAndCommit(t *testing.T) {
 
 		page := string(body)
 		require.Contains(t, page, `<span class="app-version">`+testBuild.Version+`</span>`, path)
-		require.Contains(t, page, `<code class="app-commit" title="`+testBuild.Commit+`">`+testBuild.ShortCommit()+`</code>`, path)
+		require.Contains(t, page, `</span> · <span class="app-commit" title="Commit `+testBuild.Commit+`">`+testBuild.ShortCommit()+`</span>`, path)
 	}
 }

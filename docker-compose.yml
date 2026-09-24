@@ -9,7 +9,15 @@
 # ist in .gitignore und wird nie committet).
 services:
   dmarc-analyzer:
-    build: .
+    # VERSION/COMMIT landen per -ldflags im Binary und als OCI-Labels im
+    # Image (siehe Dockerfile). "task compose:build"/"task compose:up"
+    # setzen beide aus Git; bei einem direkten "docker compose build"
+    # bleiben sie leer bzw. "dev", sofern nicht selbst exportiert.
+    build:
+      context: .
+      args:
+        VERSION: ${VERSION:-dev}
+        COMMIT: ${COMMIT:-}
     # image: ghcr.io/pmoscode/dmarc-analyzer:latest
     ports:
       - "8080:8080"

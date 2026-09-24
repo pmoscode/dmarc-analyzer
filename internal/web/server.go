@@ -34,7 +34,7 @@ type Options struct {
 	// OIDC sind die Parameter für die Authentik-Anmeldung.
 	OIDC OIDCConfig
 	// Build sind Version und Git-Commit des laufenden Builds, angezeigt in
-	// der Fußzeile jeder Seite (layout.html).
+	// der Kopfzeile unter dem Schriftzug jeder Seite (layout.html).
 	Build BuildInfo
 }
 

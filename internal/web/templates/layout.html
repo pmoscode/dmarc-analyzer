@@ -8,7 +8,10 @@
 </head>
 <body>
   <header class="app-header">
-    <h1>DMARC Analyzer</h1>
+    <div class="app-brand">
+      <h1>DMARC Analyzer</h1>
+      {{with buildInfo}}<p class="app-build"><span class="app-version">{{.Version}}</span>{{if .Commit}} · <span class="app-commit" title="Commit {{.Commit}}">{{.ShortCommit}}</span>{{end}}</p>{{end}}
+    </div>
     <nav class="app-nav" aria-label="Hauptnavigation">
       <ul>
         {{range .Nav}}<li><a href="{{.Href}}"{{if .Active}} class="active" aria-current="page"{{end}}>{{.Label}}</a></li>{{end}}
@@ -33,9 +36,6 @@
   <main class="app-main">
     {{template "content" .}}
   </main>
-  {{with buildInfo}}<footer class="app-footer">
-    DMARC Analyzer <span class="app-version">{{.Version}}</span>{{if .Commit}} · Commit <code class="app-commit" title="{{.Commit}}">{{.ShortCommit}}</code>{{end}}
-  </footer>{{end}}
 
   <script src="/static/vendor/chart.umd.min.js"></script>
   <script src="/static/vendor/chartjs-chart-matrix.min.js"></script>

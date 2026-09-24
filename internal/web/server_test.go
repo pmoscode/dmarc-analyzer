@@ -35,7 +35,7 @@ func testDeps() Dependencies {
 }
 
 // testBuild ist die Build-Information aller Testserver — siehe
-// TestLayout_FooterShowsVersionAndCommit.
+// TestLayout_HeaderShowsVersionAndCommit.
 var testBuild = BuildInfo{Version: "v9.9.9-test", Commit: "0123456789abcdef0123456789abcdef01234567"}
 
 func testOIDCOptions(issuer string) Options {

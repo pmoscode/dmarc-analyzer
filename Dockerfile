@@ -32,6 +32,16 @@ RUN mkdir -p /data-empty
 # Netzwerk erreichbar ist (siehe docs/features/auth.md).
 FROM gcr.io/distroless/static-debian12:nonroot
 
+# Version/Commit zusätzlich als OCI-Labels, damit sie sich per
+# "docker image inspect" (bzw. "task docker:version") auch ohne
+# laufenden Container ablesen lassen. In der CI überschreibt
+# docker/metadata-action diese Labels mit denselben Werten.
+ARG VERSION=dev
+ARG COMMIT=""
+LABEL org.opencontainers.image.title="dmarc-analyzer" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${COMMIT}"
+
 COPY --from=build /out/dmarc-analyzer /dmarc-analyzer
 
 # DMARC_DATA_DIR (siehe internal/infra/envconfig) — Datenbank liegt hier,
