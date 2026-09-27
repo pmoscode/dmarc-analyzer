@@ -1,8 +1,7 @@
 {{define "content"}}
 <form class="filter-bar" method="get" action="/berichte" aria-label="Filter">
   {{if .UsesAbsolutePeriod}}
-  <p class="chart-hint">Zeitraum aus einem Diagramm-Klick: {{.PeriodFromLabel}} – {{.PeriodToLabel}}.
-    <a href="/berichte">Filter zurücksetzen</a></p>
+  <p class="chart-hint">Zeitraum aus einem Diagramm-Klick: {{.PeriodFromLabel}} – {{.PeriodToLabel}}.</p>
   {{else}}
   <label>Zeitraum
     <select name="zeitraum">
@@ -27,6 +26,7 @@
     </select>
   </label>
   <button type="submit">Filter anwenden</button>
+  <a href="/berichte" class="filter-reset">Filter zurücksetzen</a>
 </form>
 
 <p class="export-link"><a href="{{.ExportURL}}">CSV exportieren (gesamter gefilterter Bestand)</a></p>

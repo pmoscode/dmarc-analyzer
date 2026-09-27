@@ -28,6 +28,20 @@ func TestHandleDashboard_RendersFilterBarWithSelectedValues(t *testing.T) {
 	require.Contains(t, html, `value="example.com"`)
 }
 
+func TestHandleDashboard_RendersFilterResetLink(t *testing.T) {
+	repo := &fakeRepository{}
+	srv := newTestServerWithRepo(t, repo)
+	client := authenticatedClient(t, srv)
+
+	resp := httpGet(t, client, "http://"+srv.Addr()+"/?zeitraum=90&domain=example.com")
+	defer func() { _ = resp.Body.Close() }()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Contains(t, string(body), `<a href="/" class="filter-reset">Filter zurücksetzen</a>`)
+}
+
 func TestHandleDashboard_FilterParams_ReachRepository(t *testing.T) {
 	repo := &fakeRepository{}
 	srv := newTestServerWithRepo(t, repo)

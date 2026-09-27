@@ -209,3 +209,51 @@ document.addEventListener("submit", function (event) {
   fileInput.addEventListener("change", updateLabel);
 })();
 
+// Filter je Ansicht merken (Dashboard, Berichte, Domains, Quellen haben
+// jeweils ihr eigenes filter-bar-Formular, siehe internal/web/filter.go —
+// "Filter stehen in der URL"). Ohne dieses Skript vergisst jede Ansicht
+// ihren Filter beim Wechseln, weil ein Klick in der Hauptnavigation immer
+// auf die reine Seiten-URL ohne Query-Parameter führt. Absendens des
+// Filterformulars merkt die dabei entstehende Query-String je Seitenpfad
+// in localStorage; ein späterer Aufruf derselben Ansicht ohne
+// Query-Parameter stellt sie wieder her. Der "Filter zurücksetzen"-Link
+// löscht den gemerkten Zustand, bevor er auf die parameterlose URL
+// zurückführt. Bewusst kein serverseitiger Zustand (keine
+// Zustandsänderung im Sinne von AGENTS.md) — reine Anzeige-Bequemlichkeit
+// pro Browser, kein POST/CSRF nötig.
+(function () {
+  "use strict";
+
+  if (!document.querySelector("form.filter-bar")) {
+    return;
+  }
+
+  var storageKey = "dmarc-analyzer:filter:" + window.location.pathname;
+
+  try {
+    if (window.location.search) {
+      window.localStorage.setItem(storageKey, window.location.search);
+    } else {
+      var saved = window.localStorage.getItem(storageKey);
+      if (saved) {
+        window.location.search = saved;
+      }
+    }
+  } catch (err) {
+    // localStorage kann in privaten Modi oder durch Browser-Einstellungen
+    // fehlschlagen — Filter funktionieren dann einfach wie zuvor, ohne
+    // sich den Zustand zu merken.
+  }
+
+  document.addEventListener("click", function (event) {
+    if (!event.target.closest(".filter-reset")) {
+      return;
+    }
+    try {
+      window.localStorage.removeItem(storageKey);
+    } catch (err) {
+      // s.o.
+    }
+  });
+})();
+

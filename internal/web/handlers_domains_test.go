@@ -53,6 +53,19 @@ func TestHandleDomains_RendersRows(t *testing.T) {
 	require.Contains(t, html, "domain=example.com")
 }
 
+func TestHandleDomains_RendersFilterResetLink(t *testing.T) {
+	srv := newTestServerWithDomains(t, &fakeDomainsRepository{})
+	client := authenticatedClient(t, srv)
+
+	resp := httpGet(t, client, "http://"+srv.Addr()+"/domains?zeitraum=7&domain=example.com")
+	defer func() { _ = resp.Body.Close() }()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Contains(t, string(body), `<a href="/domains" class="filter-reset">Filter zurücksetzen</a>`)
+}
+
 func TestHandleDomains_EmptyResult_ShowsEmptyState(t *testing.T) {
 	srv := newTestServerWithDomains(t, &fakeDomainsRepository{})
 	client := authenticatedClient(t, srv)

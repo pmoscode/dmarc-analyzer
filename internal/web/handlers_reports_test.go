@@ -132,6 +132,21 @@ func TestHandleReports_DrilldownVonBis_UsesAbsolutePeriod(t *testing.T) {
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.Contains(t, string(body), "2026-09-01")
+	require.Contains(t, string(body), `<a href="/berichte" class="filter-reset">Filter zurücksetzen</a>`)
+}
+
+func TestHandleReports_RendersFilterResetLink(t *testing.T) {
+	repo := &fakeReportRepository{}
+	srv := newTestServerWithReports(t, repo)
+	client := authenticatedClient(t, srv)
+
+	resp := httpGet(t, client, "http://"+srv.Addr()+"/berichte?zeitraum=7&domain=example.com")
+	defer func() { _ = resp.Body.Close() }()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Contains(t, string(body), `<a href="/berichte" class="filter-reset">Filter zurücksetzen</a>`)
 }
 
 func TestHandleReports_QueryError_Returns500(t *testing.T) {

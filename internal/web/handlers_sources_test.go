@@ -62,6 +62,19 @@ func TestHandleSources_RendersRowsWithEnrichment(t *testing.T) {
 	require.Contains(t, html, "Google Workspace")
 }
 
+func TestHandleSources_RendersFilterResetLink(t *testing.T) {
+	srv := newTestServerWithSources(t, &fakeSourcesRepository{}, nil)
+	client := authenticatedClient(t, srv)
+
+	resp := httpGet(t, client, "http://"+srv.Addr()+"/quellen?zeitraum=7&domain=example.com")
+	defer func() { _ = resp.Body.Close() }()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Contains(t, string(body), `<a href="/quellen" class="filter-reset">Filter zurücksetzen</a>`)
+}
+
 func TestHandleSources_NoEnrichment_ShowsPlaceholderValue(t *testing.T) {
 	repo := &fakeSourcesRepository{page: domainsources.Page{Stats: []domainsources.Stat{
 		{SourceIP: mustSourceIP("203.0.113.9"), TotalCount: 1, PassRate: 0},

@@ -602,6 +602,16 @@ a {
   box-shadow: var(--shadow-md);
 }
 
+.filter-bar .filter-reset {
+  align-self: center;
+  font-size: 13px;
+  color: var(--ink-secondary);
+}
+
+.filter-bar .filter-reset:hover {
+  color: var(--primary);
+}
+
 .tiles {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
