@@ -1,27 +1,28 @@
-# Sendequellen
+# Sending sources
 
-`/quellen` aggregiert alle importierten Records nach Quell-IP (`internal/domain/sources`, `internal/app/sourcestats`) —
-Volumen,
-Pass-Rate, zeitliche Ein-/Ausgrenzung, plus Anreicherung.
+`/quellen` aggregates all imported records by source IP
+(`internal/domain/sources`, `internal/app/sourcestats`) — volume, pass
+rate, time-range filtering, plus enrichment.
 
 ## Aggregation
 
-Filterbar nach Zeitraum und Domain, sortierbar nach Volumen (Vorgabe,
-größte Quelle zuerst) oder nach Quell-IP. Wie bei der Berichtstabelle:
-Keyset-Pagination statt Offset, Filter stehen in der URL.
+Filterable by time range and domain, sortable by volume (default,
+largest source first) or by source IP. Like the report table: keyset
+pagination instead of offset, filters live in the URL.
 
-## Anreicherung
+## Enrichment
 
-Zusätzlich zu den reinen Report-Daten wird jede Quell-IP angereichert (`internal/infra/sourceinfo.Enricher`,
-PTR-/rDNS-Auflösung plus Erkennung
-bekannter Versanddienste, z. B. "Google Workspace"). Eine nicht auflösbare
-PTR oder ein nicht erkannter Dienst sind normale, erwartete Ausgänge (die
-Oberfläche zeigt dann "—" bzw. die reine IP-Adresse), keine Fehlerbedingung.
-Ergebnisse werden intern gecacht — PTR-Auflösung ist Netzwerk-I/O und
-ändert sich selten, ein wiederholter Lookup derselben IP lohnt sich nicht.
-Dieselbe Anreicherung fließt zusätzlich in die Top-Sendequellen- und
-Heatmap-Diagramme des Dashboards ein (dieselben erkannten Labels).
+In addition to the plain report data, every source IP is enriched
+(`internal/infra/sourceinfo.Enricher`, PTR/rDNS resolution plus
+detection of known sending services, e.g. "Google Workspace"). An
+unresolvable PTR or an unrecognized service are normal, expected
+outcomes (the UI then shows "—" or the plain IP address), not an error
+condition. Results are cached internally — PTR resolution is network
+I/O and rarely changes, so a repeated lookup of the same IP isn't worth
+it. The same enrichment also feeds into the dashboard's top sending
+sources and heatmap charts (the same detected labels).
 
-## CSV-Export
+## CSV export
 
-`GET /export/quellen.csv` exportiert den gesamten gefilterten Bestand (nicht nur die aktuell angezeigte Seite).
+`GET /export/quellen.csv` exports the entire filtered dataset (not just
+the currently displayed page).

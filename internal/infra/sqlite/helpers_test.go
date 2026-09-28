@@ -14,10 +14,10 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/infra/sqlite"
 )
 
-// newTestDB öffnet eine Datei-DB in einem temporären Verzeichnis — bewusst
-// keine ":memory:"-DB, damit WAL und Transaktionen realistisch getestet
-// werden (IMPLEMENTIERUNG.md Abschnitt 12.2). Wird am Ende des Tests
-// automatisch geschlossen.
+// newTestDB opens a file-backed DB in a temporary directory — deliberately
+// not an ":memory:" DB, so WAL and transactions are tested realistically
+// (IMPLEMENTIERUNG.md section 12.2). Closed automatically at the end of the
+// test.
 func newTestDB(t testing.TB) *sql.DB {
 	t.Helper()
 
@@ -29,7 +29,8 @@ func newTestDB(t testing.TB) *sql.DB {
 	return db
 }
 
-// reportOpts steuert newTestReport, wo vom Standardfall abgewichen werden soll.
+// reportOpts controls newTestReport where a test needs to deviate from the
+// default case.
 type reportOpts struct {
 	orgName     string
 	domain      string
@@ -38,18 +39,18 @@ type reportOpts struct {
 	end         time.Time
 	sourceIP    string
 	disposition report.Disposition
-	// dkim/spf überschreiben die sonst immer bestehenden (aligned)
-	// Auth-Ergebnisse des erzeugten Records — für Tests, die gezielt
-	// fehlgeschlagene Records brauchen (z. B. failedrecordsrepo_test.go).
-	// Leer bedeutet: wie bisher AuthResultPass.
+	// dkim/spf override the otherwise always-passing (aligned) auth
+	// results of the generated record — for tests that specifically need
+	// failed records (e.g. failedrecordsrepo_test.go). Empty means:
+	// AuthResultPass as before.
 	dkim report.AuthResultValue
 	spf  report.AuthResultValue
 }
 
-// newTestReport baut einen fachlich gültigen AggregateReport mit genau
-// einem vollständigen Record (inkl. Reason und je einem DKIM-/SPF-Ergebnis)
-// — für Tests, die nicht den XML-Parser aus internal/infra/dmarcxml
-// benutzen wollen, um von dessen Details unabhängig zu bleiben.
+// newTestReport builds a domain-valid AggregateReport with exactly one
+// complete record (including a reason and one DKIM/SPF result each) — for
+// tests that don't want to use the XML parser from internal/infra/dmarcxml,
+// to stay independent of its details.
 func newTestReport(t testing.TB, opts reportOpts) *report.AggregateReport {
 	t.Helper()
 
@@ -111,7 +112,7 @@ func newTestReport(t testing.TB, opts reportOpts) *report.AggregateReport {
 			DKIM:        opts.dkim,
 			SPF:         opts.spf,
 			Reasons: []report.PolicyOverrideReason{
-				{Type: "local_policy", Comment: "test-kommentar"},
+				{Type: "local_policy", Comment: "test-comment"},
 			},
 		},
 		report.Identifiers{HeaderFrom: headerFrom, EnvelopeFrom: "bounce." + opts.domain},

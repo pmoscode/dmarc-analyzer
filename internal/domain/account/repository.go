@@ -4,13 +4,13 @@ import (
 	"context"
 )
 
-// Repository ist der Port zur Persistenz der MailAccount-Metadaten.
-// Implementiert gegen SQLite (internal/infra/sqlite). Es gibt zur Laufzeit
-// genau ein Konto, aus ENV geladen und beim Start upgeserted (siehe
-// internal/infra/envconfig, cmd/dmarc-analyzer/wire.go) — Repository bleibt
-// trotzdem generisch (FindAll statt eines Einzelwerts), damit
-// sync_state/reports/failed_imports ihre bestehenden Fremdschlüssel auf
-// accounts(id) unverändert behalten.
+// Repository is the port for persisting MailAccount metadata. Implemented
+// against SQLite (internal/infra/sqlite). At runtime there is exactly one
+// account, loaded from ENV and upserted at startup (see
+// internal/infra/envconfig, cmd/dmarc-analyzer/wire.go) — Repository stays
+// generic nonetheless (FindAll instead of a single value) so that
+// sync_state/reports/failed_imports keep their existing foreign keys to
+// accounts(id) unchanged.
 type Repository interface {
 	Save(ctx context.Context, a *MailAccount) error
 	FindByID(ctx context.Context, id AccountID) (*MailAccount, error)

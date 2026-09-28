@@ -14,9 +14,9 @@ import (
 	domainsync "github.com/pmoscode/dmarc-analyzer/internal/domain/sync"
 )
 
-// fakeStateRepository und fakeMessageSource sind minimal, nur für den
-// CLI-Dispatch-Test nötig — die eigentliche Sync-Logik ist bereits in
-// internal/app/syncreports ausführlich getestet.
+// fakeStateRepository and fakeMessageSource are minimal, only needed for
+// the CLI dispatch test — the actual sync logic is already thoroughly
+// tested in internal/app/syncreports.
 type fakeStateRepository struct{}
 
 func (fakeStateRepository) Load(_ context.Context, id account.AccountID, mailbox string) (domainsync.State, error) {

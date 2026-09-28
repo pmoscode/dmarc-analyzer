@@ -45,7 +45,7 @@ func TestOpen_AppliesMigrations(t *testing.T) {
 	var name string
 	err = db.QueryRowContext(ctx,
 		`SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'reports'`).Scan(&name)
-	require.NoError(t, err, "tabelle 'reports' muss nach dem öffnen existieren")
+	require.NoError(t, err, "table 'reports' must exist after opening")
 	require.Equal(t, "reports", name)
 }
 
@@ -58,11 +58,10 @@ func TestMigrate_IsIdempotent(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
 
-	// Migrate erneut aufrufen darf nicht scheitern und keine Tabellen
-	// doppelt anlegen.
+	// Calling Migrate again must not fail or create tables twice.
 	require.NoError(t, sqlite.Migrate(ctx, db))
 
 	var count int
 	require.NoError(t, db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations").Scan(&count))
-	require.Equal(t, 1, count, "jede migration darf nur einmal vermerkt sein")
+	require.Equal(t, 1, count, "each migration must be recorded only once")
 }

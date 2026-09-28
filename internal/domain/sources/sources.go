@@ -1,7 +1,7 @@
-// Package sources enthält die nach Quell-IP aggregierte Sicht auf
-// Sendequellen (IMPLEMENTIERUNG.md Abschnitt 10.1: "Sendequellen —
-// Aggregiert nach Quell-IP: Volumen, Pass-Rate, PTR/rDNS, erkannter
-// Dienst") sowie die Ports dafür.
+// Package sources contains the view of sending sources aggregated by
+// source IP (IMPLEMENTIERUNG.md section 10.1: "sending sources —
+// aggregated by source IP: volume, pass rate, PTR/rDNS, recognized
+// service") and the ports for it.
 package sources
 
 import (
@@ -11,94 +11,92 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/report"
 )
 
-// Stat ist die über alle Reports im gewählten Zeitraum aggregierte Sicht
-// auf eine einzelne Quell-IP.
+// Stat is the view of a single source IP, aggregated across all reports
+// in the selected period.
 type Stat struct {
 	SourceIP   report.SourceIP
 	TotalCount int
-	// PassRate ist der DMARC-Gesamtanteil (dkim=pass ODER spf=pass) —
-	// dieselbe Definition wie Statistics.PassRate, hier je Quelle statt
+	// PassRate is the overall DMARC share (dkim=pass OR spf=pass) — the
+	// same definition as Statistics.PassRate, here per source instead of
 	// global.
 	PassRate float64
-	// DKIMPassRate und SPFPassRate sind getrennt ausgewiesen (anders als
-	// PassRate, das beide ODER-verknüpft): eine Quelle mit hoher
-	// DKIMPassRate aber niedriger SPFPassRate besteht DMARC zwar
-	// trotzdem (SPF ist dafür nicht nötig), das Muster ist aber
-	// typisch für Mail-Weiterleitung (DKIM-Signatur übersteht die
-	// Weiterleitung, SPF bricht fast immer, weil die weiterleitende IP
-	// nicht im SPF-Record der ursprünglichen Domain steht) — Grundlage
-	// für die Einordnung in internal/web/handlers_sources.go.
+	// DKIMPassRate and SPFPassRate are reported separately (unlike
+	// PassRate, which OR-combines both): a source with a high
+	// DKIMPassRate but a low SPFPassRate still passes DMARC overall (SPF
+	// isn't required for that), but the pattern is typical for mail
+	// forwarding (the DKIM signature survives forwarding, SPF almost
+	// always breaks because the forwarding IP isn't in the original
+	// domain's SPF record) — the basis for the classification in
+	// internal/web/handlers_sources.go.
 	DKIMPassRate float64
 	SPFPassRate  float64
 	FirstSeen    time.Time
 	LastSeen     time.Time
-	// Enrichment ist zunächst leer — Enricher.Enrich() füllt es ein,
-	// erst in der Anwendungsschicht (internal/app/sourcestats), nicht in
-	// diesem Repository: SQL-Aggregation und Netzwerk-Anreicherung sind
-	// zwei unterschiedliche I/O-Arten, die nicht in einem Adapter
-	// vermischt werden sollen.
+	// Enrichment starts out empty — Enricher.Enrich() fills it in, only
+	// in the application layer (internal/app/sourcestats), not in this
+	// repository: SQL aggregation and network enrichment are two
+	// different kinds of I/O that shouldn't be mixed into one adapter.
 	Enrichment Enrichment
 }
 
-// SortField ist ein Sortierschlüssel für Query.
+// SortField is a sort key for Query.
 type SortField string
 
-// Sortierschlüssel für Query.SortField.
+// Sort keys for Query.SortField.
 const (
 	SortByVolume SortField = "volume"
 	SortByIP     SortField = "source_ip"
 )
 
-// Query grenzt die Sendequellen-Aggregation ein und paginiert per
-// Keyset-Cursor — dieselbe Umsetzung wie report.Query (siehe
-// UMSETZUNGSPLAN.md Abschnitt 3.3).
+// Query narrows down the sending-sources aggregation and paginates via a
+// keyset cursor — the same implementation as report.Query (see
+// UMSETZUNGSPLAN.md section 3.3).
 type Query struct {
 	Period *report.DateRange
 	Domain string
-	// SortField ist standardmäßig SortByVolume (größte Quelle zuerst) —
-	// das ist die fachlich interessanteste Reihenfolge für diese Ansicht.
+	// SortField defaults to SortByVolume (largest source first) — the
+	// most useful order for this view from a business perspective.
 	SortField SortField
-	// Limit begrenzt die Seitengröße. 0 bedeutet: Standardgröße des
-	// Adapters.
+	// Limit caps the page size. 0 means: the adapter's default size.
 	Limit int
-	// Cursor ist ein opaker Keyset-Cursor aus Page.NextCursor, leer für
-	// die erste Seite.
+	// Cursor is an opaque keyset cursor from Page.NextCursor, empty for
+	// the first page.
 	Cursor string
 }
 
-// Page ist eine Seite aggregierter Sendequellen.
+// Page is a page of aggregated sending sources.
 type Page struct {
 	Stats []Stat
-	// NextCursor ist leer, wenn keine weitere Seite existiert.
+	// NextCursor is empty when no further page exists.
 	NextCursor string
 }
 
-// Repository ist der Port zur Aggregation von Records nach Quell-IP.
-// Implementiert gegen SQLite (internal/infra/sqlite.SourceStatsRepository)
-// per SQL-Aggregation, analog zu analysis.Repository.
+// Repository is the port for aggregating records by source IP.
+// Implemented against SQLite (internal/infra/sqlite.SourceStatsRepository)
+// via SQL aggregation, analogous to analysis.Repository.
 type Repository interface {
 	Query(ctx context.Context, q Query) (Page, error)
 }
 
-// Enrichment ist zusätzliches, nicht aus den Reports selbst stammendes
-// Wissen über eine Quell-IP (FEATURES.md Vorschläge 11.2 "rDNS-/
-// PTR-Auflösung" und 11.3 "Erkennung bekannter Dienste").
+// Enrichment is additional knowledge about a source IP that doesn't come
+// from the reports themselves (FEATURES.md proposals 11.2 "rDNS/PTR
+// resolution" and 11.3 "known service recognition").
 type Enrichment struct {
-	// Hostname ist das Ergebnis der PTR-Auflösung, leer wenn keine
-	// erfolgreich war.
+	// Hostname is the result of the PTR resolution, empty if none
+	// succeeded.
 	Hostname string
-	// Service ist der Name eines erkannten bekannten Dienstes (z. B.
-	// "Google Workspace"), leer wenn keiner erkannt wurde.
+	// Service is the name of a recognized known service (e.g. "Google
+	// Workspace"), empty if none was recognized.
 	Service string
 }
 
-// Enricher reichert eine Quell-IP mit Hostname und erkanntem Dienst an.
-// Kein Fehlerrückgabewert: eine nicht auflösbare PTR oder ein nicht
-// erkannter Dienst sind normale, erwartete Ausgänge (leeres Enrichment),
-// keine Fehlerbedingung — der Aufrufer zeigt dann einfach "—" an, statt
-// bei jedem Aufruf Fehlerbehandlung betreiben zu müssen. Implementierungen
-// cachen intern, da PTR-Auflösung netzwerkgebunden ist und sich selten
-// ändert (siehe internal/infra/sourceinfo).
+// Enricher enriches a source IP with a hostname and recognized service.
+// No error return value: an unresolvable PTR or an unrecognized service
+// are normal, expected outcomes (empty Enrichment), not an error
+// condition — the caller then simply shows "—" instead of having to
+// handle an error on every call. Implementations cache internally, since
+// PTR resolution is network-bound and rarely changes (see
+// internal/infra/sourceinfo).
 type Enricher interface {
 	Enrich(ctx context.Context, ip report.SourceIP) Enrichment
 }

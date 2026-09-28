@@ -6,38 +6,38 @@ import (
 	"net/url"
 )
 
-// requireHost lehnt Anfragen ab, deren Host-Header nicht exakt dem
-// öffentlichen Hostnamen entspricht (aus DMARC_OIDC_REDIRECT_URL, siehe
-// server.go Server.allowedHost) — Schutz gegen Host-Header-Fälschung
-// (z. B. wenn der Container versehentlich auf mehreren Netzwerken lauscht).
-// Der Reverse-Proxy vor dem Container reicht den externen Host-Header
-// üblicherweise unverändert durch.
+// requireHost rejects requests whose Host header doesn't exactly match
+// the public hostname (from DMARC_OIDC_REDIRECT_URL, see server.go
+// Server.allowedHost) — protection against Host header spoofing (e.g. if
+// the container accidentally listens on multiple networks). The reverse
+// proxy in front of the container usually passes the external Host
+// header through unchanged.
 func requireHost(allowedHost string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Host != allowedHost {
-			http.Error(w, "ungültiger Host", http.StatusMisdirectedRequest)
+			http.Error(w, "invalid host", http.StatusMisdirectedRequest)
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
 }
 
-// securityHeaders setzt CSP und weitere Sicherheits-Header auf jede
-// Antwort (MIGRATIONSPLAN.md Abschnitt 5). Kein Inline-JavaScript, keine
-// externen Quellen — alles (htmx, Chart.js, eigenes JS) kommt aus
-// /static/, eingebettet in die Binärdatei.
+// securityHeaders sets CSP and other security headers on every response
+// (MIGRATIONSPLAN.md section 5). No inline JavaScript, no external
+// sources — everything (htmx, Chart.js, our own JS) comes from /static/,
+// embedded in the binary.
 //
-// form-action erlaubt neben 'self' zusätzlich die Origin des OIDC-Issuers
-// (s.oidcIssuerOrigin): /abmelden sendet die Formular-Antwort per 303 zu
-// Authentiks end_session_endpoint weiter (RP-Initiated Logout,
-// internal/web/oidc.go:endSessionURL) — das ist zwangsläufig eine andere
-// Origin. Ohne diese Erweiterung blockiert der Browser genau diesen
-// Redirect ("violates ... form-action 'self'"), die lokale Sitzung ist
-// dann zwar beendet, aber Authentik bekommt den Logout nie mitgeteilt und
-// die nächste Anfrage (GET /anmelden leitet ohne Zwischenschritt sofort zu
-// Authentik weiter, siehe handlers_login.go) meldet über die weiterhin
-// aktive Authentik-Session sofort wieder an — Abmelden wirkt dadurch
-// komplett wirkungslos (verifiziert 2026-09-19, Chrome-DevTools-Konsole).
+// form-action allows the OIDC issuer's origin (s.oidcIssuerOrigin) in
+// addition to 'self': /abmelden forwards the form response via 303 to
+// Authentik's end_session_endpoint (RP-initiated logout,
+// internal/web/oidc.go:endSessionURL) — that's necessarily a different
+// origin. Without this extension the browser blocks exactly that
+// redirect ("violates ... form-action 'self'"); the local session is then
+// ended, but Authentik never learns about the logout, and the next
+// request (GET /anmelden immediately redirects to Authentik without an
+// intermediate step, see handlers_login.go) logs back in right away via
+// the still-active Authentik session — logout ends up having no effect
+// at all (verified 2026-09-19, Chrome DevTools console).
 func buildContentSecurityPolicy(oidcIssuerOrigin string) string {
 	formAction := "form-action 'self'"
 	if oidcIssuerOrigin != "" {
@@ -58,10 +58,10 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 	})
 }
 
-// requireSession leitet Anfragen ohne gültiges Sitzungs-Cookie auf
-// /anmelden um — die Ausnahmen (/anmelden, /anmelden/callback, /gesund)
-// werden in routes.go bewusst außerhalb dieser Middleware verdrahtet,
-// nicht durch eine Sonderregel hier drin.
+// requireSession redirects requests without a valid session cookie to
+// /anmelden — the exceptions (/anmelden, /anmelden/callback, /gesund) are
+// deliberately wired up in routes.go outside this middleware, not via a
+// special case in here.
 func requireSession(a *auth, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !a.validSession(r) {
@@ -72,54 +72,53 @@ func requireSession(a *auth, next http.Handler) http.Handler {
 	})
 }
 
-// recoverPanic fängt Panics in Handlern ab, damit ein einzelner defekter
-// Request nicht den ganzen Serverprozess beendet.
+// recoverPanic catches panics in handlers so a single broken request
+// doesn't take down the entire server process.
 func recoverPanic(logger *slog.Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if rec := recover(); rec != nil {
-				logger.Error("panic im handler", "error", rec, "path", r.URL.Path)
-				http.Error(w, "interner Fehler", http.StatusInternalServerError)
+				logger.Error("panic in handler", "error", rec, "path", r.URL.Path)
+				http.Error(w, "internal error", http.StatusInternalServerError)
 			}
 		}()
 		next.ServeHTTP(w, r)
 	})
 }
 
-// csrfTokenHeader und csrfTokenField sind die zwei Stellen, an denen ein
-// zustandsänderndes Formular sein CSRF-Token mitgeben kann — Header für
-// htmx-Anfragen (per hx-headers), Formularfeld für ein gewöhnliches
-// <form method="post"> (MIGRATIONSPLAN.md Abschnitt 5: "CSRF-Token
-// (Formularfeld bzw. hx-headers)").
+// csrfTokenHeader and csrfTokenField are the two places a state-changing
+// form can carry its CSRF token — header for htmx requests (via
+// hx-headers), form field for an ordinary <form method="post">
+// (MIGRATIONSPLAN.md section 5: "CSRF token (form field or hx-headers)").
 const (
-	//nolint:gosec // G101: kein Geheimnis, nur der Header-/Feldname, in
-	// dem ein CSRF-Token übertragen wird — der Wert selbst kommt nie aus
-	// dieser Konstante.
+	//nolint:gosec // G101: not a secret, just the header/field name a
+	// CSRF token is transmitted in — the value itself never comes from
+	// this constant.
 	csrfTokenHeader = "X-CSRF-Token"
 	csrfTokenField  = "csrf_token"
 )
 
-// safeMethods sind Methoden, die laut HTTP-Semantik keinen Zustand
-// ändern — requireCSRF lässt sie ungeprüft durch, wie es requireCSRF
-// überall dort tun muss, wo GET-Anfragen (Seitenaufrufe, /api/diagramme/*)
-// denselben Handler-Baum durchlaufen wie künftige POST-Formulare.
+// safeMethods are methods that, per HTTP semantics, don't change state —
+// requireCSRF lets them through unchecked, as it must everywhere GET
+// requests (page views, /api/diagramme/*) run through the same handler
+// tree as future POST forms.
 func isSafeMethod(method string) bool {
 	return method == http.MethodGet || method == http.MethodHead || method == http.MethodOptions
 }
 
-// requireCSRF schützt zustandsändernde Anfragen (POST/PUT/PATCH/DELETE)
-// zusätzlich zu SameSite=Strict (MIGRATIONSPLAN.md Abschnitt 5: "CSRF").
-// Zwei unabhängige Prüfungen müssen beide bestehen:
+// requireCSRF protects state-changing requests (POST/PUT/PATCH/DELETE) in
+// addition to SameSite=Strict (MIGRATIONSPLAN.md section 5: "CSRF"). Two
+// independent checks must both pass:
 //
-//  1. sameOrigin(r): Origin- bzw. ersatzweise Sec-Fetch-Site-Header
-//     müssen denselben Origin wie r.Host ausweisen.
-//  2. Ein gültiges CSRF-Token (Header oder Formularfeld, siehe oben),
-//     das mit dem Instanz-Sitzungs-Token übereinstimmt.
+//  1. sameOrigin(r): the Origin header, or Sec-Fetch-Site as a fallback,
+//     must show the same origin as r.Host.
+//  2. A valid CSRF token (header or form field, see above) that matches
+//     the instance's session token.
 //
-// Aktuell (M1) registriert kein Handler eine zustandsändernde Route unter
-// dem protected-Baum — die Middleware ist bereits vollständig verdrahtet
-// und getestet, damit spätere Formulare (Konten, Sync, Import ab M3) sie
-// nur noch nutzen, nicht mehr selbst bauen müssen.
+// Currently (M1) no handler registers a state-changing route under the
+// protected tree — the middleware is already fully wired up and tested,
+// so later forms (accounts, sync, import from M3 on) only need to use it,
+// not build it themselves.
 func requireCSRF(a *auth, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isSafeMethod(r.Method) {
@@ -128,7 +127,7 @@ func requireCSRF(a *auth, next http.Handler) http.Handler {
 		}
 
 		if !sameOrigin(r) {
-			http.Error(w, "ungültiger Origin", http.StatusForbidden)
+			http.Error(w, "invalid origin", http.StatusForbidden)
 			return
 		}
 
@@ -137,7 +136,7 @@ func requireCSRF(a *auth, next http.Handler) http.Handler {
 			token = r.PostFormValue(csrfTokenField)
 		}
 		if !a.validCSRFToken(r, token) {
-			http.Error(w, "ungültiges oder fehlendes CSRF-Token", http.StatusForbidden)
+			http.Error(w, "invalid or missing CSRF token", http.StatusForbidden)
 			return
 		}
 
@@ -145,19 +144,18 @@ func requireCSRF(a *auth, next http.Handler) http.Handler {
 	})
 }
 
-// sameOrigin prüft Origin bzw. ersatzweise Sec-Fetch-Site gegen r.Host.
-// Fehlen beide Header, wird sicherheitshalber abgelehnt — jeder Browser,
-// der neu genug für fetch()/htmx ist, sendet mindestens einen der beiden
-// bei einer POST-Anfrage.
+// sameOrigin checks Origin, or Sec-Fetch-Site as a fallback, against
+// r.Host. If both headers are missing, it rejects to be safe — any
+// browser new enough for fetch()/htmx sends at least one of the two on a
+// POST request.
 //
-// Origin "null" zählt dabei wie ein fehlender Header: Browser senden
-// diesen wörtlichen Wert statt echter Origin für normale (nicht per
-// fetch/htmx ausgelöste) Formular-POSTs auf Seiten mit
-// Referrer-Policy: no-referrer (siehe securityHeaders) — reproduzierbar
-// beim "Abgleich starten"-Formular. Sec-Fetch-Site bleibt in dem Fall
-// zuverlässig, weil der Browser es unabhängig von der Referrer-Policy
-// aus dem tatsächlichen Navigationskontext setzt, nicht aus einem von
-// der Seite beeinflussbaren Wert.
+// An Origin of "null" counts as a missing header here: browsers send this
+// literal value instead of a real origin for ordinary (not
+// fetch/htmx-triggered) form POSTs on pages with Referrer-Policy:
+// no-referrer (see securityHeaders) — reproducible with the "Start sync"
+// form. Sec-Fetch-Site stays reliable in that case, because the browser
+// sets it from the actual navigation context regardless of the referrer
+// policy, not from a value the page can influence.
 func sameOrigin(r *http.Request) bool {
 	if origin := r.Header.Get("Origin"); origin != "" && origin != "null" {
 		u, err := url.Parse(origin)

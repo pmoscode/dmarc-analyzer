@@ -13,8 +13,8 @@ import (
 func TestListMailboxes_ReturnsAllSelectableMailboxesSorted(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
-	// DMARC-Berichte können in einem Unterordner statt in INBOX landen
-	// (z. B. per Mailregel einsortiert) — genau dafür ist der Picker da.
+	// DMARC reports can end up in a subfolder instead of INBOX (e.g. sorted
+	// there by a mail rule) — that's exactly what the picker is for.
 	require.NoError(t, ts.user.Create("INBOX/DMARC", nil))
 	require.NoError(t, ts.user.Create("Archive", nil))
 

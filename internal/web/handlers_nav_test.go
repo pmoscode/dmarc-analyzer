@@ -9,7 +9,7 @@ import (
 )
 
 func TestNav_AppearsOnEveryRealPage(t *testing.T) {
-	srv, _ := newTestServerWithAccounts(t, mustAccount(t, "Konto 1"))
+	srv, _ := newTestServerWithAccounts(t, mustAccount(t, "Account 1"))
 	client := authenticatedClient(t, srv)
 
 	for _, path := range []string{"/", "/berichte", "/quellen", "/domains", "/einstellungen"} {
@@ -30,7 +30,7 @@ func TestNav_AppearsOnEveryRealPage(t *testing.T) {
 }
 
 func TestNav_MarksCurrentPageActive(t *testing.T) {
-	srv, _ := newTestServerWithAccounts(t, mustAccount(t, "Konto 1"))
+	srv, _ := newTestServerWithAccounts(t, mustAccount(t, "Account 1"))
 	client := authenticatedClient(t, srv)
 
 	resp := httpGet(t, client, "http://"+srv.Addr()+"/einstellungen")
@@ -46,11 +46,11 @@ func TestNav_MarksCurrentPageActive(t *testing.T) {
 }
 
 func TestRealPages_RequireSession(t *testing.T) {
-	srv, _ := newTestServerWithAccounts(t, mustAccount(t, "Konto 1"))
+	srv, _ := newTestServerWithAccounts(t, mustAccount(t, "Account 1"))
 
-	// CheckRedirect stoppt vor dem Redirect-Ziel: /anmelden würde sonst
-	// bis zum (nicht auflösbaren) Fake-Provider weiterverfolgt, siehe
-	// testRedirectURL-Dokumentation in server_test.go.
+	// CheckRedirect stops before the redirect target: otherwise
+	// /anmelden would be followed all the way to the (unresolvable) fake
+	// provider, see the testRedirectURL documentation in server_test.go.
 	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 
 	for _, path := range []string{"/berichte", "/quellen", "/domains", "/einstellungen"} {
@@ -62,7 +62,7 @@ func TestRealPages_RequireSession(t *testing.T) {
 }
 
 func TestHandleDashboard_MarksOverviewNavItemActive(t *testing.T) {
-	srv, _ := newTestServerWithAccounts(t, mustAccount(t, "Konto 1"))
+	srv, _ := newTestServerWithAccounts(t, mustAccount(t, "Account 1"))
 	client := authenticatedClient(t, srv)
 
 	resp := httpGet(t, client, "http://"+srv.Addr()+"/")

@@ -25,17 +25,17 @@ func postForm(t *testing.T, client *http.Client, addr, path string, values map[s
 	return resp
 }
 
-// csrfFormValues liefert die Formularwerte mit einem gültigen CSRF-Token
-// für die Sitzung von client (siehe csrfTokenFor) — kein Formulartest in
-// diesem Paket braucht seit dem Umstieg auf reine ENV-Konfiguration
-// weitere Felder daneben.
+// csrfFormValues returns the form values with a valid CSRF token for
+// client's session (see csrfTokenFor) — no form test in this package has
+// needed other fields alongside it since the move to pure ENV
+// configuration.
 func csrfFormValues(t *testing.T, srv *Server, client *http.Client) map[string]string {
 	t.Helper()
 	return map[string]string{"csrf_token": csrfTokenFor(t, srv, client)}
 }
 
 func TestHandleSettings_RendersConfiguredAccountAndRuntimeSettings(t *testing.T) {
-	srv, _ := newTestServerWithAccounts(t, mustAccount(t, "Erstes Konto"))
+	srv, _ := newTestServerWithAccounts(t, mustAccount(t, "First account"))
 	client := authenticatedClient(t, srv)
 
 	resp := httpGet(t, client, "http://"+srv.Addr()+"/einstellungen")
@@ -46,11 +46,11 @@ func TestHandleSettings_RendersConfiguredAccountAndRuntimeSettings(t *testing.T)
 	require.NoError(t, err)
 	html := string(body)
 
-	require.Contains(t, html, "Erstes Konto")
+	require.Contains(t, html, "First account")
 	require.Contains(t, html, "imap.example.com")
-	require.Contains(t, html, "24 Monate")
-	require.Contains(t, html, "alle 60 Minuten")
-	require.NotContains(t, html, `name="passwort"`, "es gibt kein Kontoformular mehr — Zugangsdaten kommen aus ENV")
+	require.Contains(t, html, "24 months")
+	require.Contains(t, html, "every 60 minutes")
+	require.NotContains(t, html, `name="passwort"`, "there is no account form anymore — credentials come from ENV")
 }
 
 func TestHandleSettings_NoAccountConfigured_ShowsEmptyState(t *testing.T) {
@@ -63,11 +63,11 @@ func TestHandleSettings_NoAccountConfigured_ShowsEmptyState(t *testing.T) {
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(body), "Kein Konto konfiguriert")
+	require.Contains(t, string(body), "No account configured")
 }
 
 func TestHandleAccountTest_Success_ShowsSuccessMessage(t *testing.T) {
-	acc := mustAccount(t, "Konto 1")
+	acc := mustAccount(t, "Account 1")
 	srv, _ := newTestServerWithAccounts(t, acc)
 	client := authenticatedClient(t, srv)
 
@@ -77,11 +77,11 @@ func TestHandleAccountTest_Success_ShowsSuccessMessage(t *testing.T) {
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(body), "Verbindung erfolgreich.")
+	require.Contains(t, string(body), "Connection successful.")
 }
 
 func TestHandleAccountTest_ConnectionFails_ShowsErrorMessage(t *testing.T) {
-	acc := mustAccount(t, "Konto 1")
+	acc := mustAccount(t, "Account 1")
 	srv, fd := newTestServerWithAccounts(t, acc)
 	fd.source.connectErr = errTest
 	client := authenticatedClient(t, srv)
@@ -92,11 +92,11 @@ func TestHandleAccountTest_ConnectionFails_ShowsErrorMessage(t *testing.T) {
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(body), "Verbindung fehlgeschlagen.")
+	require.Contains(t, string(body), "Connection failed.")
 }
 
 func TestHandleAccountTest_MissingCSRFToken_Returns403(t *testing.T) {
-	acc := mustAccount(t, "Konto 1")
+	acc := mustAccount(t, "Account 1")
 	srv, _ := newTestServerWithAccounts(t, acc)
 	client := authenticatedClient(t, srv)
 

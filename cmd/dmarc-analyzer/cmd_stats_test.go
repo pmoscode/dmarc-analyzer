@@ -18,9 +18,9 @@ func (f *fakeStatsRepository) Compute(context.Context, analysis.Query) (analysis
 	return f.stats, nil
 }
 
-// DailyVolumes/TopSources/Heatmap: runStats (cmd_stats.go) ruft nur
-// Compute auf — leere Stubs, nur damit fakeStatsRepository
-// analysis.Repository weiterhin vollständig erfüllt.
+// DailyVolumes/TopSources/Heatmap: runStats (cmd_stats.go) only calls
+// Compute — empty stubs just so fakeStatsRepository still fully
+// satisfies analysis.Repository.
 func (f *fakeStatsRepository) DailyVolumes(context.Context, analysis.Query) ([]analysis.DailyVolume, error) {
 	return nil, nil
 }

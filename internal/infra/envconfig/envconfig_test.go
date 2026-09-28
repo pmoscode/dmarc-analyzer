@@ -8,13 +8,13 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/infra/envconfig"
 )
 
-// setValidEnv setzt alle Pflichtvariablen auf gültige Werte — Tests
-// überschreiben gezielt einzelne, um ein bestimmtes Verhalten zu prüfen.
+// setValidEnv sets all required variables to valid values — tests
+// selectively override individual ones to check specific behavior.
 func setValidEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv("DMARC_IMAP_HOST", "imap.example.com")
 	t.Setenv("DMARC_IMAP_USER", "dmarc@example.com")
-	t.Setenv("DMARC_IMAP_PASSWORD", "geheim123")
+	t.Setenv("DMARC_IMAP_PASSWORD", "secret123")
 	t.Setenv("DMARC_OIDC_ISSUER_URL", "https://authentik.example.com/application/o/dmarc/")
 	t.Setenv("DMARC_OIDC_CLIENT_ID", "dmarc-analyzer")
 	t.Setenv("DMARC_OIDC_CLIENT_SECRET", "oidc-secret")
@@ -32,7 +32,7 @@ func TestLoad_ValidEnv_AppliesDefaults(t *testing.T) {
 	require.Equal(t, 993, cfg.IMAPPort)
 	require.Equal(t, "INBOX", cfg.IMAPMailbox)
 	require.True(t, cfg.IMAPTLS)
-	require.Equal(t, []byte("geheim123"), cfg.IMAPSecret.Expose())
+	require.Equal(t, []byte("secret123"), cfg.IMAPSecret.Expose())
 	require.Equal(t, 24, cfg.RetentionMonths)
 	require.Equal(t, 60, cfg.SyncIntervalMinutes)
 	require.Equal(t, "/data", cfg.DataDir)
@@ -77,7 +77,7 @@ func TestLoad_OverridesDefaults(t *testing.T) {
 }
 
 func TestLoad_MissingRequiredVars_ReportsAllOfThem(t *testing.T) {
-	// Bewusst kein setValidEnv() — alle Pflichtvariablen fehlen.
+	// Deliberately no setValidEnv() — all required variables are missing.
 	_, err := envconfig.Load()
 
 	require.Error(t, err)
@@ -86,7 +86,7 @@ func TestLoad_MissingRequiredVars_ReportsAllOfThem(t *testing.T) {
 		"DMARC_OIDC_ISSUER_URL", "DMARC_OIDC_CLIENT_ID", "DMARC_OIDC_CLIENT_SECRET",
 		"DMARC_OIDC_REDIRECT_URL", "DMARC_OIDC_ADMIN_GROUP",
 	} {
-		require.Contains(t, err.Error(), want, "fehlermeldung sollte %s erwähnen", want)
+		require.Contains(t, err.Error(), want, "error message should mention %s", want)
 	}
 }
 
@@ -122,7 +122,7 @@ func TestLoad_NegativeRetention_ReturnsError(t *testing.T) {
 
 func TestLoad_InvalidBool_ReturnsError(t *testing.T) {
 	setValidEnv(t)
-	t.Setenv("DMARC_IMAP_TLS", "vielleicht")
+	t.Setenv("DMARC_IMAP_TLS", "maybe")
 
 	_, err := envconfig.Load()
 

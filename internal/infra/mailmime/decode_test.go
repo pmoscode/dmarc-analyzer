@@ -11,8 +11,8 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/infra/mailmime"
 )
 
-// buildMultipartMessage baut eine multipart/mixed-Testnachricht: ein
-// Textkörper (kein Anhang) plus die übergebenen Anhänge.
+// buildMultipartMessage builds a multipart/mixed test message: a text body
+// (not an attachment) plus the given attachments.
 func buildMultipartMessage(t *testing.T, attachments map[string]string) []byte {
 	t.Helper()
 
@@ -26,7 +26,7 @@ func buildMultipartMessage(t *testing.T, attachments map[string]string) []byte {
 	bodyHeader.SetContentType("text/plain", nil)
 	bodyPart, err := w.CreatePart(bodyHeader)
 	require.NoError(t, err)
-	_, err = io.WriteString(bodyPart, "Anbei Ihr DMARC-Report.")
+	_, err = io.WriteString(bodyPart, "Attached is your DMARC report.")
 	require.NoError(t, err)
 	require.NoError(t, bodyPart.Close())
 
@@ -90,12 +90,12 @@ func TestDecode_TextBodyWithoutAttachment_ReturnsNoAttachments(t *testing.T) {
 func TestDecode_NonMultipartAttachmentOnlyMessage(t *testing.T) {
 	t.Parallel()
 
-	// Manche Provider schicken den Report ohne umgebendes multipart/mixed
-	// direkt als einzige Entity mit Content-Disposition: attachment.
+	// Some providers send the report without an enclosing multipart/mixed,
+	// directly as the sole entity with Content-Disposition: attachment.
 	raw := []byte("Content-Type: application/gzip\r\n" +
 		"Content-Disposition: attachment; filename=\"report.xml.gz\"\r\n" +
 		"\r\n" +
-		"binärer-inhalt-hier")
+		"binary-content-here")
 
 	attachments, err := mailmime.Decode(raw)
 	require.NoError(t, err)
@@ -106,8 +106,8 @@ func TestDecode_NonMultipartAttachmentOnlyMessage(t *testing.T) {
 func TestDecode_FilenameFromContentTypeNameParam(t *testing.T) {
 	t.Parallel()
 
-	// Älterer, aber verbreiteter Weg: "name" im Content-Type statt
-	// "filename" im Content-Disposition.
+	// Older but still common approach: "name" in Content-Type instead of
+	// "filename" in Content-Disposition.
 	raw := []byte("Content-Type: application/xml; name=\"legacy-report.xml\"\r\n" +
 		"\r\n" +
 		"<feedback></feedback>")
@@ -121,11 +121,11 @@ func TestDecode_FilenameFromContentTypeNameParam(t *testing.T) {
 func TestDecode_InvalidMessage_DoesNotPanic(t *testing.T) {
 	t.Parallel()
 
-	// encoding/textproto ist tolerant gegenüber vielem; entscheidend ist,
-	// dass Decode niemals abstürzt — ob es dabei einen Fehler oder ein
-	// leeres Ergebnis liefert, ist beides akzeptabel (kein require auf
-	// err nötig, ein Panic ließe den Test ohnehin fehlschlagen).
+	// encoding/textproto tolerates a lot; what matters is that Decode never
+	// crashes — whether it returns an error or an empty result is both
+	// acceptable (no require on err needed, a panic would fail the test
+	// anyway).
 	require.NotPanics(t, func() {
-		_, _ = mailmime.Decode([]byte("das ist keine gültige mime-nachricht \x00\x01\x02"))
+		_, _ = mailmime.Decode([]byte("this is not a valid mime message \x00\x01\x02"))
 	})
 }

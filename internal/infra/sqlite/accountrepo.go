@@ -10,22 +10,22 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/account"
 )
 
-// AccountRepository implementiert account.Repository gegen SQLite.
+// AccountRepository implements account.Repository against SQLite.
 type AccountRepository struct {
 	db *sql.DB
 }
 
 var _ account.Repository = (*AccountRepository)(nil)
 
-// NewAccountRepository erzeugt ein einsatzbereites Repository. db muss
-// bereits über Open() geöffnet (und damit migriert) sein.
+// NewAccountRepository creates a ready-to-use repository. db must already
+// be opened via Open() (and thus migrated).
 func NewAccountRepository(db *sql.DB) *AccountRepository {
 	return &AccountRepository{db: db}
 }
 
-// Save legt einen Account neu an oder aktualisiert ihn (UPSERT über die
-// ID) — ohne Zugangsdaten, die kommen aus ENV (siehe
-// internal/infra/envconfig) und werden nie persistiert.
+// Save creates a new account or updates it (UPSERT on the ID) — without
+// credentials, which come from ENV (see internal/infra/envconfig) and are
+// never persisted.
 func (r *AccountRepository) Save(ctx context.Context, a *account.MailAccount) error {
 	const stmt = `
 		INSERT INTO accounts (id, display_name, host, port, username, mailbox, use_tls, created_at)
@@ -43,13 +43,13 @@ func (r *AccountRepository) Save(ctx context.Context, a *account.MailAccount) er
 		boolToInt(a.UseTLS), a.CreatedAt.UTC().Format(time.RFC3339Nano),
 	)
 	if err != nil {
-		return fmt.Errorf("account %q konnte nicht gespeichert werden: %w", a.ID, err)
+		return fmt.Errorf("could not save account %q: %w", a.ID, err)
 	}
 	return nil
 }
 
-// FindByID lädt einen Account. Liefert sql.ErrNoRows (gewrappt), wenn
-// keiner existiert.
+// FindByID loads an account. Returns sql.ErrNoRows (wrapped) if none
+// exists.
 func (r *AccountRepository) FindByID(ctx context.Context, id account.AccountID) (*account.MailAccount, error) {
 	const stmt = `
 		SELECT id, display_name, host, port, username, mailbox, use_tls, created_at
@@ -61,13 +61,13 @@ func (r *AccountRepository) FindByID(ctx context.Context, id account.AccountID) 
 		return nil, fmt.Errorf("account %q: %w", id, sql.ErrNoRows)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("account %q konnte nicht geladen werden: %w", id, err)
+		return nil, fmt.Errorf("could not load account %q: %w", id, err)
 	}
 	return acc, nil
 }
 
-// FindAll lädt alle Accounts, sortiert nach Anzeigename — für die
-// Kontoübersicht in den Einstellungen (AP 5).
+// FindAll loads all accounts, sorted by display name — for the account
+// overview in settings (AP 5).
 func (r *AccountRepository) FindAll(ctx context.Context) ([]account.MailAccount, error) {
 	const stmt = `
 		SELECT id, display_name, host, port, username, mailbox, use_tls, created_at
@@ -75,7 +75,7 @@ func (r *AccountRepository) FindAll(ctx context.Context) ([]account.MailAccount,
 
 	rows, err := r.db.QueryContext(ctx, stmt)
 	if err != nil {
-		return nil, fmt.Errorf("accounts konnten nicht geladen werden: %w", err)
+		return nil, fmt.Errorf("could not load accounts: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -83,19 +83,18 @@ func (r *AccountRepository) FindAll(ctx context.Context) ([]account.MailAccount,
 	for rows.Next() {
 		acc, err := scanAccount(rows)
 		if err != nil {
-			return nil, fmt.Errorf("account-zeile konnte nicht gelesen werden: %w", err)
+			return nil, fmt.Errorf("could not read account row: %w", err)
 		}
 		accounts = append(accounts, *acc)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("accounts konnten nicht vollständig gelesen werden: %w", err)
+		return nil, fmt.Errorf("could not fully read accounts: %w", err)
 	}
 	return accounts, nil
 }
 
-// rowScanner fasst *sql.Row und *sql.Rows unter einer gemeinsamen
-// Scan-Signatur zusammen, damit FindByID und FindAll dieselbe
-// Zeilen-Zuordnung nutzen können.
+// rowScanner combines *sql.Row and *sql.Rows under a shared Scan
+// signature, so FindByID and FindAll can share the same row mapping.
 type rowScanner interface {
 	Scan(dest ...any) error
 }
@@ -113,14 +112,14 @@ func scanAccount(row rowScanner) (*account.MailAccount, error) {
 
 	created, err := time.Parse(time.RFC3339Nano, createdAt)
 	if err != nil {
-		return nil, fmt.Errorf("gespeichertes created_at ist ungültig: %w", err)
+		return nil, fmt.Errorf("stored created_at is invalid: %w", err)
 	}
 
 	acc, err := account.NewMailAccount(
 		account.AccountID(id), displayName, host, port, username, mailbox, useTLS != 0, created,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("gespeicherter account ist ungültig: %w", err)
+		return nil, fmt.Errorf("stored account is invalid: %w", err)
 	}
 	return acc, nil
 }

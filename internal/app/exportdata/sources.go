@@ -9,9 +9,9 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/sources"
 )
 
-// WriteSourceStatsCSV exportiert eine Seite aggregierter Sendequellen
-// (z. B. das Ergebnis einer sourcestats.UseCase.List) als CSV — eine
-// Zeile pro Quell-IP, passend zur Sendequellen-Ansicht.
+// WriteSourceStatsCSV exports a page of aggregated sending sources (e.g.
+// the result of a sourcestats.UseCase.List) as CSV — one row per source
+// IP, matching the sending sources view.
 func WriteSourceStatsCSV(w io.Writer, stats []sources.Stat) error {
 	cw := csv.NewWriter(w)
 	if err := WriteSourceStatsCSVHeader(cw); err != nil {
@@ -24,25 +24,24 @@ func WriteSourceStatsCSV(w io.Writer, stats []sources.Stat) error {
 	}
 	cw.Flush()
 	if err := cw.Error(); err != nil {
-		return fmt.Errorf("csv konnte nicht vollständig geschrieben werden: %w", err)
+		return fmt.Errorf("csv could not be fully written: %w", err)
 	}
 	return nil
 }
 
-// WriteSourceStatsCSVHeader schreibt die Kopfzeile für
-// WriteSourceStatCSVRow — siehe WriteReportsCSVHeader/WriteReportCSVRow
-// in csv.go für dieselbe Begründung (Streaming über mehrere Seiten
-// hinweg).
+// WriteSourceStatsCSVHeader writes the header row for
+// WriteSourceStatCSVRow — see WriteReportsCSVHeader/WriteReportCSVRow in
+// csv.go for the same rationale (streaming across multiple pages).
 func WriteSourceStatsCSVHeader(cw *csv.Writer) error {
 	header := []string{"SourceIP", "TotalCount", "PassRate", "DKIMPassRate", "SPFPassRate", "Hostname", "Service", "FirstSeen", "LastSeen"}
 	if err := cw.Write(header); err != nil {
-		return fmt.Errorf("csv-kopfzeile konnte nicht geschrieben werden: %w", err)
+		return fmt.Errorf("csv header could not be written: %w", err)
 	}
 	return nil
 }
 
-// WriteSourceStatCSVRow schreibt eine einzelne Sendequellen-Zeile
-// passend zur Kopfzeile aus WriteSourceStatsCSVHeader.
+// WriteSourceStatCSVRow writes a single sending-source row matching the
+// header from WriteSourceStatsCSVHeader.
 func WriteSourceStatCSVRow(cw *csv.Writer, s sources.Stat) error {
 	row := []string{
 		s.SourceIP.String(),
@@ -56,7 +55,7 @@ func WriteSourceStatCSVRow(cw *csv.Writer, s sources.Stat) error {
 		formatCSVTime(s.LastSeen),
 	}
 	if err := cw.Write(row); err != nil {
-		return fmt.Errorf("csv-zeile für quell-ip %q konnte nicht geschrieben werden: %w", s.SourceIP.String(), err)
+		return fmt.Errorf("csv row for source IP %q could not be written: %w", s.SourceIP.String(), err)
 	}
 	return nil
 }

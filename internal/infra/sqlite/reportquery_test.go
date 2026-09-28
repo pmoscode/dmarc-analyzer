@@ -58,14 +58,13 @@ func TestQuery_FiltersByPeriod_Overlap(t *testing.T) {
 	saveTestReport(t, repo, reportOpts{reportID: "period-jan", begin: jan, end: feb})
 	saveTestReport(t, repo, reportOpts{reportID: "period-feb", begin: feb, end: mar})
 
-	// End bewusst hinter feb (nicht exakt feb): date_begin < End soll den
-	// bei feb beginnenden zweiten Report mit einschließen. .Unix() rundet
-	// auf volle Sekunden, ein Sub-Sekunden-Versatz würde dort verloren
-	// gehen.
+	// End deliberately set past feb (not exactly feb): date_begin < End
+	// should include the second report starting at feb. .Unix() rounds
+	// to whole seconds, a sub-second offset would be lost there.
 	period := report.DateRange{Begin: jan, End: feb.Add(time.Second)}
 	page, err := repo.Query(ctx, report.Query{Period: &period})
 	require.NoError(t, err)
-	require.Len(t, page.Reports, 2, "beide Reports überlappen mit dem Zeitraum jan bis feb+1s")
+	require.Len(t, page.Reports, 2, "both reports overlap with the period jan to feb+1s")
 
 	strictlyJan := report.DateRange{Begin: jan, End: jan.Add(time.Hour)}
 	page, err = repo.Query(ctx, report.Query{Period: &strictlyJan})
@@ -113,7 +112,7 @@ func TestQuery_ResultsHaveNoRecordsLoaded(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, page.Reports, 1)
 	require.Empty(t, page.Reports[0].Records,
-		"Query lädt laut Portvertrag keine Records — siehe domain/report/repository.go")
+		"per the port contract, Query does not load records — see domain/report/repository.go")
 }
 
 func TestQuery_SortByDateBeginAscendingAndDescending(t *testing.T) {
@@ -165,7 +164,7 @@ func TestQuery_GroupByOrg_KeepsGroupsAdjacent(t *testing.T) {
 	for i, r := range page.Reports {
 		orgs[i] = r.Metadata.OrgName
 	}
-	// Gleiche Organisation muss zusammenstehen, unabhängig vom Datum.
+	// Same organization must stay together, regardless of date.
 	require.Equal(t, []string{"org-a.example", "org-a.example", "org-b.example", "org-b.example"}, orgs)
 }
 
@@ -197,7 +196,7 @@ func TestQuery_KeysetPagination_CoversAllReportsExactlyOnce(t *testing.T) {
 		pages++
 
 		for _, r := range page.Reports {
-			require.False(t, seen[r.Metadata.ReportID], "Report %s doppelt gesehen", r.Metadata.ReportID)
+			require.False(t, seen[r.Metadata.ReportID], "report %s seen twice", r.Metadata.ReportID)
 			seen[r.Metadata.ReportID] = true
 		}
 
@@ -205,11 +204,11 @@ func TestQuery_KeysetPagination_CoversAllReportsExactlyOnce(t *testing.T) {
 			break
 		}
 		cursor = page.NextCursor
-		require.Less(t, pages, total, "Pagination terminiert nicht")
+		require.Less(t, pages, total, "pagination does not terminate")
 	}
 
 	require.Len(t, seen, total)
-	require.Equal(t, 4, pages, "25 Reports mit Limit 7 ergeben 4 Seiten (7+7+7+4)")
+	require.Equal(t, 4, pages, "25 reports with limit 7 yields 4 pages (7+7+7+4)")
 }
 
 func reportIDs(reports []report.AggregateReport) []string {

@@ -1,14 +1,14 @@
-// Package sourceinfo implementiert domain/sources.Enricher: rDNS-/
-// PTR-Auflösung von Quell-IPs mit Cache (FEATURES.md Vorschlag 11.2) und
-// Erkennung bekannter Diensteanbieter über den PTR-Hostnamen (Vorschlag
+// Package sourceinfo implements domain/sources.Enricher: rDNS/PTR
+// resolution of source IPs with a cache (FEATURES.md proposal 11.2) and
+// detection of known service providers via the PTR hostname (proposal
 // 11.3).
 //
-// Bewusst nur hostnamenbasiert, nicht zusätzlich über IP-Bereiche: die
-// veröffentlichten IP-Bereiche der großen Anbieter (Google, Microsoft,
-// Mailchimp, SendGrid, …) ändern sich fortlaufend, und ohne einen Prozess,
-// der sie aktuell hält, wäre eine hier fest einprogrammierte CIDR-Liste
-// nach kurzer Zeit stille falsche Auskunft — schlechter als gar keine.
-// PTR-Namen sind stabil genug, um allein zu tragen.
+// Deliberately hostname-based only, not additionally via IP ranges: the
+// published IP ranges of major providers (Google, Microsoft, Mailchimp,
+// SendGrid, …) change continuously, and without a process that keeps them
+// current, a CIDR list hardcoded here would quickly become silently wrong
+// information — worse than none at all. PTR names are stable enough to
+// carry this on their own.
 package sourceinfo
 
 import (
@@ -22,38 +22,36 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/sources"
 )
 
-// lookupTimeout begrenzt eine einzelne PTR-Auflösung — eine hängende
-// DNS-Anfrage darf die Sendequellen-Ansicht nicht blockieren.
+// lookupTimeout limits a single PTR resolution — a hanging DNS request
+// must not block the traffic sources view.
 const lookupTimeout = 3 * time.Second
 
-// addrResolver ist der Ausschnitt von *net.Resolver, den Enricher braucht
-// — als Schnittstelle, damit Tests ohne echte DNS-Auflösung laufen.
+// addrResolver is the slice of *net.Resolver that Enricher needs — as an
+// interface, so tests can run without real DNS resolution.
 type addrResolver interface {
 	LookupAddr(ctx context.Context, addr string) ([]string, error)
 }
 
-// Enricher implementiert sources.Enricher. Ergebnisse werden pro
-// Prozesslaufzeit unbegrenzt zwischengespeichert (kein TTL/Eviction) —
-// PTR-Einträge ändern sich in der Praxis selten, und die Anwendung läuft
-// nicht dauerhaft im Hintergrund, sodass veraltete Cache-Einträge kein
-// relevantes Risiko sind.
+// Enricher implements sources.Enricher. Results are cached without limit
+// for the process's lifetime (no TTL/eviction) — PTR entries rarely change
+// in practice, and the application doesn't run in the background
+// indefinitely, so stale cache entries pose no relevant risk.
 type Enricher struct {
 	resolver addrResolver
-	cache    sync.Map // map[string]sources.Enrichment, Key: SourceIP.String()
+	cache    sync.Map // map[string]sources.Enrichment, key: SourceIP.String()
 }
 
 var _ sources.Enricher = (*Enricher)(nil)
 
-// NewEnricher erzeugt einen einsatzbereiten Enricher gegen den
-// System-Resolver.
+// NewEnricher creates a ready-to-use Enricher against the system resolver.
 func NewEnricher() *Enricher {
 	return &Enricher{resolver: net.DefaultResolver}
 }
 
-// Enrich löst ip per PTR auf und gleicht den Hostnamen gegen die Liste
-// bekannter Dienste ab. Liefert nie einen Fehler — eine nicht auflösbare
-// PTR oder ein nicht erkannter Dienst sind normale Ausgänge (siehe
-// domain/sources.Enricher-Dokumentation).
+// Enrich resolves ip via PTR and matches the hostname against the list of
+// known services. Never returns an error — an unresolvable PTR or an
+// unrecognized service are normal outcomes (see the domain/sources.Enricher
+// documentation).
 func (e *Enricher) Enrich(ctx context.Context, ip report.SourceIP) sources.Enrichment {
 	key := ip.String()
 	if cached, ok := e.cache.Load(key); ok {
@@ -78,22 +76,22 @@ func (e *Enricher) resolve(ctx context.Context, ip string) sources.Enrichment {
 	return sources.Enrichment{Hostname: hostname, Service: detectService(hostname)}
 }
 
-// serviceRule bildet Hostnamen-Suffixe auf einen erkannten Diensteanbieter
-// ab (FEATURES.md Vorschlag 11.3: "kuratierte Liste ... Abgleich über
-// PTR"). Suffixe sind kleingeschrieben, Vergleich case-insensitiv.
+// serviceRule maps hostname suffixes to a recognized service provider
+// (FEATURES.md proposal 11.3: "curated list ... matched via PTR"). Suffixes
+// are lowercase, comparison is case-insensitive.
 type serviceRule struct {
 	name     string
 	suffixes []string
 }
 
-// knownServices ist eine kuratierte, nicht erschöpfende Auswahl gängiger
-// E-Mail-Diensteanbieter — ergänzbar, ohne den Rest des Pakets zu ändern.
+// knownServices is a curated, non-exhaustive selection of common email
+// service providers — extendable without changing the rest of the package.
 var knownServices = []serviceRule{
 	{name: "Google Workspace", suffixes: []string{".google.com", ".googlemail.com"}},
 	{name: "Microsoft 365", suffixes: []string{".outlook.com", ".protection.outlook.com"}},
 	{name: "Mailchimp", suffixes: []string{".mailchimp.com", ".mcsv.net", ".mcdlv.net"}},
 	{name: "SendGrid", suffixes: []string{".sendgrid.net"}},
-	{name: "Brevo (vormals Sendinblue)", suffixes: []string{".sendinblue.com", ".brevo.com"}},
+	{name: "Brevo (formerly Sendinblue)", suffixes: []string{".sendinblue.com", ".brevo.com"}},
 	{name: "Postmark", suffixes: []string{".mtasv.net"}},
 }
 

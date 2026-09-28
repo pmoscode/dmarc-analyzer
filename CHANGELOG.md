@@ -1,283 +1,277 @@
 # Changelog
 
-Alle nennenswerten Änderungen an diesem Projekt werden hier dokumentiert.
+All notable changes to this project are documented here.
 
-Das Format folgt [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
-die Versionierung folgt [Semantic Versioning](https://semver.org/lang/de/).
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+versioning follows [Semantic Versioning](https://semver.org/).
 
-## [Unveröffentlicht]
+## [Unreleased]
 
-### Hinzugefügt
+### Added
 
-- Projekt-Grundgerüst (AP 0): `go.mod`, Verzeichnisstruktur nach
-  Clean-Architecture-Schichten, `Taskfile.yml`, `.golangci.yml`,
-  GitHub-Actions-CI für macOS/Linux/Windows.
-- Zentrales Logging (`internal/platform/logging`) und plattformkonforme
-  Pfadauflösung (`internal/platform/paths`) für Datenbank, Konfiguration
-  und Logs.
-- Composition Root (`cmd/dmarc-analyzer`), startet und loggt die Version.
-- Dokumentation der geplanten Abhängigkeiten mit gepinnten Versionen
+- Project scaffolding (WP 0): `go.mod`, directory structure following
+  Clean Architecture layers, `Taskfile.yml`, `.golangci.yml`,
+  GitHub Actions CI for macOS/Linux/Windows.
+- Central logging (`internal/platform/logging`) and platform-appropriate
+  path resolution (`internal/platform/paths`) for database, configuration,
+  and logs.
+- Composition root (`cmd/dmarc-analyzer`), starts and logs the version.
+- Documentation of planned dependencies with pinned versions
   (`docs/DEPENDENCIES.md`).
-- `README.md`, `LICENSE` (MIT), dieses Changelog.
-- Domänenmodell für DMARC-Aggregate-Reports (AP 1): Aggregate Root
-  `report.AggregateReport`, Value Objects (`SourceIP`, `DomainName`,
+- `README.md`, `LICENSE` (MIT), this changelog.
+- Domain model for DMARC aggregate reports (WP 1): aggregate root
+  `report.AggregateReport`, value objects (`SourceIP`, `DomainName`,
   `DateRange`, `Disposition`, `Policy`, `AlignmentMode`, `AuthResultValue`),
-  `Record`, `PublishedPolicy` — alle mit erzwungenen Invarianten und ohne
-  Abhängigkeiten außerhalb der Standardbibliothek. Unbekannte Enum-Werte aus
-  der Praxis werden auf `Unknown` abgebildet statt verworfen.
-- `report.Repository`-Port (Filtern/Sortieren/Gruppieren, Keyset-Pagination)
-  und `sync.ReportParser`-Port, `sync.State` für den inkrementellen Sync.
-- DMARC-XML-Parser (`internal/infra/dmarcxml`): entpackt `.xml`, `.xml.gz`
-  und `.zip` (auch mit mehreren enthaltenen Reports), toleriert
-  RFC-Abweichungen einzelner Provider (Groß-/Kleinschreibung, fehlendes
-  `pct`/`adkim`/`aspf`), schützt mit einem 100-MB-Limit gegen Zip-/
-  Gzip-Bomben.
-- Golden-File-Tests gegen fünf synthetische Provider-Fixtures, Fuzz-Test
-  (`FuzzParse`) sowie ein Test, der belegt, dass externe XML-Entities (XXE)
-  nicht aufgelöst werden.
-- SQLite-Persistenz (AP 2): eigener Migrator mit eingebetteten,
-  nummerierten Migrationen; `internal/infra/sqlite.ReportRepository`
-  implementiert `report.Repository` vollständig — `Save` (Transaktion,
-  vorbereitete Batch-Statements), `Exists`/`ErrDuplicateReport` für
-  Deduplizierung nach `(org_name, report_id, date_begin)`, `FindByID`
-  (vollständig inkl. Records) und `Query` (Filter, Sortierung, Keyset-
-  Pagination über SQLite-Row-Value-Vergleiche).
-- Integrationstests gegen eine temporäre Datei-DB (WAL, echte
-  Transaktionen) sowie ein Performance-Test, der 100.000 Records importiert
-  und eine typische Berichtstabellen-Abfrage darauf misst (~7-8 ms).
-- Mail & Sicherheit (AP 3): `internal/domain/account` (Aggregate
-  `MailAccount`, Typ `Secret` mit strukturell erzwungener Maskierung über
-  `String()`/`GoString()`/`MarshalJSON()`, Ports `Repository` und
+  `Record`, `PublishedPolicy` — all with enforced invariants and no
+  dependencies outside the standard library. Unknown enum values seen in
+  practice are mapped to `Unknown` instead of being discarded.
+- `report.Repository` port (filtering/sorting/grouping, keyset pagination)
+  and `sync.ReportParser` port, `sync.State` for the incremental sync.
+- DMARC XML parser (`internal/infra/dmarcxml`): unpacks `.xml`, `.xml.gz`,
+  and `.zip` (including multiple reports per archive), tolerates RFC
+  deviations from individual providers (casing, missing
+  `pct`/`adkim`/`aspf`), guards against zip/gzip bombs with a 100 MB limit.
+- Golden-file tests against five synthetic provider fixtures, a fuzz test
+  (`FuzzParse`), and a test proving external XML entities (XXE) are not
+  resolved.
+- SQLite persistence (WP 2): a custom migrator with embedded, numbered
+  migrations; `internal/infra/sqlite.ReportRepository` fully implements
+  `report.Repository` — `Save` (transaction, prepared batch statements),
+  `Exists`/`ErrDuplicateReport` for deduplication by
+  `(org_name, report_id, date_begin)`, `FindByID` (complete, including
+  records), and `Query` (filtering, sorting, keyset pagination via SQLite
+  row-value comparisons).
+- Integration tests against a temporary file DB (WAL, real transactions)
+  plus a performance test that imports 100,000 records and measures a
+  typical report-table query against them (~7-8 ms).
+- Mail & security (WP 3): `internal/domain/account` (aggregate
+  `MailAccount`, type `Secret` with structurally enforced masking via
+  `String()`/`GoString()`/`MarshalJSON()`, ports `Repository` and
   `CredentialStore`).
-- IMAP-Adapter (`internal/infra/imap`) gegen `github.com/emersion/go-imap/v2`:
-  context-fähiger TLS-Verbindungsaufbau, `EXAMINE`+`BODY.PEEK[]` (Postfach
-  bleibt unberührt), UID-basierter streamender Iterator, automatischer
-  Rescan bei `UIDVALIDITY`-Wechsel, Backoff mit 3 Versuchen für den
-  Verbindungsaufbau (nicht für Login). Getestet gegen einen in-process
-  IMAP-Server (`imapmemserver`), 11 Tests, 89 % Coverage.
-- Keyring-Adapter (`internal/infra/keyring`): `OSStore` gegen den
-  Betriebssystem-Schlüsselbund (Service `de.pmoscode.dmarc-analyzer`),
-  `FileStore` als AES-256-GCM-Fallback mit scrypt-Schlüsselableitung für
-  Systeme ohne Secret Service, `IsAvailable()` zur Laufzeit-Erkennung.
-- Anwendungsschicht (AP 4): `syncreports.UseCase` orchestriert den
-  kompletten inkrementellen Sync (verbinden, abholen, MIME zerlegen,
-  parsen, deduplizieren, speichern, Fortschritt sichern) als nebenläufige
-  Pipeline (Abholen/Parsen parallel, Schreiben seriell) mit korrekter
-  Fortschritts-Fortschreibung auch bei außer der Reihe abgeschlossenen
-  Nachrichten. `importfiles.UseCase` importiert dieselben Formate aus
-  lokalen Dateien (.eml, .xml, .xml.gz, .zip) und teilt sich MIME-Zerlegung
-  und Deduplizierung mit `syncreports`. `manageaccount.UseCase` verwaltet
-  Konten vollständig (Anlegen, Verbindungstest, Löschen inkl.
-  Schlüsselbund-Eintrag). `statistics.UseCase` berechnet Dashboard-
-  Kennzahlen inklusive Vergleich zur Vorperiode. `queryreports.UseCase`
-  und `exportdata` (CSV-Export) ergänzen die Anwendungsschicht.
-- Neue SQLite-Adapter: `AccountRepository`, `SyncStateRepository`,
-  `FailedImportRepository`, `StatisticsRepository` (SQL-Aggregation statt
-  Laden einzelner Records).
-- MIME-Zerlegung (`internal/infra/mailmime`) roher Nachrichten in Anhänge,
-  gegen `github.com/emersion/go-message`.
-- CLI (`cmd/dmarc-analyzer`): `sync`, `import <pfad>`, `stats`,
-  `account add|list|test|delete`. Composition Root verdrahtet Adapter nur
-  für den tatsächlich aufgerufenen Unterbefehl — `stats`/`import` fassen
-  nie den OS-Schlüsselbund an.
-- `report.ErrDuplicate` und `report.SaveIfNew` als gemeinsame,
-  domänenseitige Deduplizierungslogik für alle Importwege.
-- UI-Grundgerüst (AP 5, `internal/ui`): Hauptfenster mit seitlicher
-  Navigation (Berichte/Einstellungen) und eigenem Theme (Akzentfarbe, hell
-  und dunkel über Fynes `ThemeVariant`-System). `internal/ui/i18n` bündelt
-  alle sichtbaren Texte zentral. `settings.View` zum Anlegen, Testen und
-  Löschen von Konten. Dreistufiger Ersteinrichtungs-Assistent
-  (`onboarding.Wizard`: Konto → Verbindungstest → erster Abgleich).
-  `reports.View` mit lazy-ladender Berichtstabelle über `ReportQuery`
-  (Seitengröße 50) und Detailansicht. Sync-Knopf mit Fortschrittsanzeige
-  und Abbruch, I/O ausschließlich über injizierbares `runBackground`
-  außerhalb des UI-Threads, Rückweg über `fyne.Do()`. Leerzustände und
-  Klartext-Fehlermeldungen für alle Ansichten. Vollständig mit
-  `fyne.io/fyne/v2/test` getestet (Aufbau, Navigation, Formularvalidierung),
-  `-race`-sauber dank injizierbarem `runBackground`.
-- Echter Bug behoben: `settings.View.refreshContent()` überschrieb bei
-  jedem `Reload()` die Kopfzeile (Titel + Hinzufügen-Button) statt der
-  Liste, weil bei `container.NewBorder` der Center-Slot an Index 0 liegt,
-  nicht am Ende von `.Objects` — aufgedeckt durch den Navigationstest
+- IMAP adapter (`internal/infra/imap`) against
+  `github.com/emersion/go-imap/v2`: context-aware TLS connection setup,
+  `EXAMINE`+`BODY.PEEK[]` (mailbox stays untouched), UID-based streaming
+  iterator, automatic rescan on `UIDVALIDITY` change, backoff with 3
+  retries for connection setup (not for login). Tested against an
+  in-process IMAP server (`imapmemserver`), 11 tests, 89% coverage.
+- Keyring adapter (`internal/infra/keyring`): `OSStore` against the OS
+  keychain (service `de.pmoscode.dmarc-analyzer`), `FileStore` as an
+  AES-256-GCM fallback with scrypt key derivation for systems without a
+  secret service, `IsAvailable()` for runtime detection.
+- Application layer (WP 4): `syncreports.UseCase` orchestrates the
+  complete incremental sync (connect, fetch, split MIME, parse,
+  deduplicate, save, persist progress) as a concurrent pipeline
+  (fetching/parsing in parallel, writing serial) with correct progress
+  persistence even for out-of-order completed messages.
+  `importfiles.UseCase` imports the same formats from local files (.eml,
+  .xml, .xml.gz, .zip) and shares MIME splitting and deduplication with
+  `syncreports`. `manageaccount.UseCase` fully manages accounts (create,
+  connection test, delete including keychain entry). `statistics.UseCase`
+  computes dashboard metrics including comparison to the previous period.
+  `queryreports.UseCase` and `exportdata` (CSV export) round out the
+  application layer.
+- New SQLite adapters: `AccountRepository`, `SyncStateRepository`,
+  `FailedImportRepository`, `StatisticsRepository` (SQL aggregation
+  instead of loading individual records).
+- MIME splitting (`internal/infra/mailmime`) of raw messages into
+  attachments, against `github.com/emersion/go-message`.
+- CLI (`cmd/dmarc-analyzer`): `sync`, `import <path>`, `stats`,
+  `account add|list|test|delete`. The composition root wires adapters
+  only for the subcommand actually invoked — `stats`/`import` never
+  touch the OS keychain.
+- `report.ErrDuplicate` and `report.SaveIfNew` as shared, domain-side
+  deduplication logic for all import paths.
+- UI scaffolding (WP 5, `internal/ui`): main window with a side
+  navigation (reports/settings) and its own theme (accent color, light
+  and dark via Fyne's `ThemeVariant` system). `internal/ui/i18n` bundles
+  all visible text centrally. `settings.View` for creating, testing, and
+  deleting accounts. Three-step first-run wizard (`onboarding.Wizard`:
+  account → connection test → first sync). `reports.View` with a
+  lazy-loading report table via `ReportQuery` (page size 50) and a
+  detail view. Sync button with progress display and cancel, I/O
+  exclusively via an injectable `runBackground` outside the UI thread,
+  returning via `fyne.Do()`. Empty states and plain-text error messages
+  for every view. Fully tested with `fyne.io/fyne/v2/test` (layout,
+  navigation, form validation), `-race`-clean thanks to injectable
+  `runBackground`.
+- Fixed a real bug: `settings.View.refreshContent()` overwrote the header
+  (title + add button) instead of the list on every `Reload()`, because
+  in `container.NewBorder` the center slot sits at index 0, not at the
+  end of `.Objects` — uncovered by the navigation test
   `TestShell_SelectNav_SwitchesToSettings`.
-- Auswertung und Visualisierung (AP 6): Übersicht (`internal/ui/dashboard`)
-  mit Kennzahlen-Kacheln inklusive Trendpfeil zur Vorperiode sowie vier
-  Diagrammen (Zeitreihe gestapelt nach Pass/Fail, Top-10-Sendequellen nach
-  Volumen und Pass-Rate eingefärbt, Disposition-Donut, Quelle-×-Tag-
-  Heatmap). `analysis.ChartRenderer`-Port gegen
-  `github.com/wcharczuk/go-chart/v2` implementiert
-  (`internal/infra/charts`); die Heatmap wird mangels go-chart-Unter-
-  stützung direkt mit `image/draw` gezeichnet. `analysis.Repository` um
-  `DailyVolumes`/`TopSources`/`Heatmap` erweitert (SQL-Aggregation wie
-  `Compute`), `statistics.UseCase.Dashboard` bündelt alle Übersichtsdaten
-  in einem Ladevorgang.
-- Sendequellen-Ansicht (`internal/ui/sources`): nach Quell-IP aggregierte,
-  lazy-ladende Tabelle (Volumen, Pass-Rate, PTR-Hostname, erkannter
-  Dienst) über den neuen Domänen-Port `domain/sources`
-  (`SourceStatsRepository` in `internal/infra/sqlite`, Keyset-Pagination
-  wie bei Reports). rDNS/PTR-Auflösung mit Prozess-Cache sowie
-  hostnamenbasierte Erkennung bekannter Diensteanbieter (Google
-  Workspace, Microsoft 365, Mailchimp, SendGrid, Brevo, Postmark) in
-  `internal/infra/sourceinfo` — bewusst ohne zusätzliche
-  IP-Bereichs-Listen, siehe UMSETZUNGSPLAN.md für die Begründung.
-- Gemeinsame Filterleiste (`components.FilterBar`: Zeitraum-Voreinstellung
-  + Domain) wirkt jetzt auf Übersicht, Berichte und Sendequellen
-  gleichzeitig. `reports.View` bekam zusätzlich einen eigenen
-  Gruppierungs-`Select` (Keine/Domain/Organisation), der das seit AP 2
-  vorhandene `report.Query.GroupBy` erstmals an die UI anschließt.
-- Glossar (`internal/ui/glossary`) mit den wichtigsten DMARC-Begriffen,
-  erreichbar über einen Kopfzeilen-Knopf sowie kleine "?"-Knöpfe an
-  einzelnen Kennzahlen-Kacheln — Ersatz für Hover-Tooltips, die Fyne v2.8
-  nicht unterstützt.
-- Export: `exportdata.WriteChartPNG` (Diagramme als PNG) und
-  `exportdata.WriteSourceStatsCSV` (Sendequellen als CSV) ergänzen den
-  bestehenden Report-/Record-CSV-Export; `reports.View`/`sources.View`/
-  jedes Diagramm-Panel haben je einen Export-Knopf.
-- Das grafische Programm ist jetzt tatsächlich startbar: `dmarc-analyzer`
-  ohne Argumente öffnet das Hauptfenster (`cmd_gui.go`), `--help`/`-h`
-  zeigt die Kommandozeilen-Hilfe. Vorher existierte `ui.BuildMainWindow`
-  zwar vollständig getestet, war aber nirgends verdrahtet — eine seit
-  AP 5 offene Lücke.
-- Echter Bug behoben (Konstruktionsreihenfolge): `widget.Select.
-  SetSelected()` löst `OnChanged` synchron aus, auch im Konstruktor. Das
-  neue Gruppierungs-`Select` in `reports.View` griff dadurch beim
-  `NewView()`-Aufruf über den vorzeitig ausgelösten Handler auf das noch
-  nicht zugewiesene `v.container` zu (Nil-Pointer-Panic) — aufgedeckt
-  durch einen einfachen Konstruktionstest.
-- Ordner-Picker fürs Kontoformular: DMARC-Berichte landen nicht
-  zwangsläufig im Wurzelpostfach — ein neuer, optionaler Port
-  `sync.MailboxLister` (implementiert von `imap.Adapter` über IMAP LIST,
-  ohne `\Noselect`-Postfächer) plus `manageaccount.UseCase.ListMailboxes`
-  lassen das Kontoformular (Einstellungen und Ersteinrichtungs-Assistent)
-  die auf dem Server tatsächlich vorhandenen Postfächer/Unterordner
-  auflisten. Das Postfach-Feld ist jetzt ein `widget.SelectEntry`
-  (weiterhin frei eintippbar, zusätzlich mit den gefundenen Ordnern als
-  Dropdown).
-- Moderneres, vollständig eigenes Farbschema (`internal/ui.appTheme`) für
-  hellen und dunklen Modus, nach der validierten Referenzpalette der
-  `dataviz`-Skill (Primärblau, feste Statusfarben Grün/Gelb/Rot) — löst
-  das gemeldete "altbacken, alles schwarz" im dunklen Systemmodus, das
-  vorher fast vollständig an Fynes generisches Standard-Theme delegiert
-  wurde. Dieselben Statusfarben jetzt auch in
-  `internal/infra/charts` (vorher ad-hoc gewählte Grün-/Rot-Töne) —
-  Oberfläche und Diagramme sprechen dieselbe Farbsprache. Größere
-  Eckenradien/Abstände (Karten, Knöpfe, Eingabefelder) für einen
-  luftigeren, weniger kantigen Eindruck.
-- Dashboard-Kacheln und -Diagramme stecken jetzt in `widget.Card` statt
-  frei auf dem Fensterhintergrund zu stehen, mit Symbolen je Kennzahl.
-  Die vier Diagramme sind neu gruppiert statt einer langen Spalte:
-  Zeitreihe und Disposition-Donut nebeneinander, Top-Sendequellen und
-  Heatmap je mit eigener voller Zeile und horizontalem Scrollbereich
-  (ihre Breite wächst mit der Anzahl Sendequellen/Tagen). Seitliche
-  Navigation jetzt mit Symbolen je Eintrag, Trennlinien zwischen
-  Kopfzeile/Navigation und dem Inhalt.
-- Echter Bug behoben: Der Bericht-Detaildialog (Berichte-Tabelle, Zeile
-  antippen) ließ sich nicht mehr schließen. Er lief auf
-  `dialog.NewCustomWithoutButtons` — ganz ohne Knopf, und kein Code-Pfad
-  rief `Hide()` auf. Anders als ein gewöhnliches Popup schließt das
-  zugrunde liegende `widget.ModalPopUp` nicht durch Antippen außerhalb,
-  der Dialog blieb also dauerhaft offen. Jetzt `dialog.NewCustom(...)`
-  mit einem "Schließen"-Knopf.
-- `DMARC_OIDC_INSECURE_SKIP_VERIFY` (optional, Vorgabe `false`): schaltet
-  die TLS-Zertifikatsprüfung für alle Calls gegen den OIDC-Issuer
-  (Discovery, JWKS, Token-Exchange) ab — ausschließlich für
-  Entwicklungsumgebungen mit selbstsigniertem Zertifikat gedacht (z. B.
-  Caddys `tls internal`), niemals für Produktion. Siehe
+- Analysis and visualization (WP 6): overview (`internal/ui/dashboard`)
+  with metric tiles including a trend arrow vs. the previous period, plus
+  four charts (time series stacked by pass/fail, top 10 sending sources
+  colored by volume and pass rate, disposition donut, source-×-day
+  heatmap). `analysis.ChartRenderer` port implemented against
+  `github.com/wcharczuk/go-chart/v2` (`internal/infra/charts`); the
+  heatmap is drawn directly with `image/draw` for lack of go-chart
+  support. `analysis.Repository` extended with
+  `DailyVolumes`/`TopSources`/`Heatmap` (SQL aggregation like
+  `Compute`), `statistics.UseCase.Dashboard` bundles all overview data
+  into a single load.
+- Sending-sources view (`internal/ui/sources`): a lazy-loading table
+  aggregated by source IP (volume, pass rate, PTR hostname, detected
+  service) via the new domain port `domain/sources`
+  (`SourceStatsRepository` in `internal/infra/sqlite`, keyset pagination
+  like reports). rDNS/PTR resolution with a process cache, plus
+  hostname-based detection of known service providers (Google Workspace,
+  Microsoft 365, Mailchimp, SendGrid, Brevo, Postmark) in
+  `internal/infra/sourceinfo` — deliberately without additional IP-range
+  lists, see UMSETZUNGSPLAN.md for the rationale.
+- A shared filter bar (`components.FilterBar`: time-range preset +
+  domain) now acts on the overview, reports, and sources views at once.
+  `reports.View` also got its own grouping `Select` (none/domain/
+  organization), connecting `report.Query.GroupBy` — present since WP 2 —
+  to the UI for the first time.
+- Glossary (`internal/ui/glossary`) with the most important DMARC terms,
+  reachable via a header button plus small "?" buttons on individual
+  metric tiles — a substitute for hover tooltips, which Fyne v2.8 doesn't
+  support.
+- Export: `exportdata.WriteChartPNG` (charts as PNG) and
+  `exportdata.WriteSourceStatsCSV` (sending sources as CSV) round out the
+  existing report/record CSV export; `reports.View`/`sources.View`/
+  every chart panel each have their own export button.
+- The GUI program is now actually launchable: `dmarc-analyzer` with no
+  arguments opens the main window (`cmd_gui.go`), `--help`/`-h` shows the
+  command-line help. Previously, `ui.BuildMainWindow` existed fully
+  tested but was wired up nowhere — a gap open since WP 5.
+- Fixed a real bug (construction order): `widget.Select.SetSelected()`
+  fires `OnChanged` synchronously, even from the constructor. The new
+  grouping `Select` in `reports.View` was thus accessing the not-yet-
+  assigned `v.container` via the prematurely fired handler during the
+  `NewView()` call (nil-pointer panic) — uncovered by a simple
+  construction test.
+- Folder picker for the account form: DMARC reports don't necessarily
+  land in the root mailbox — a new, optional port `sync.MailboxLister`
+  (implemented by `imap.Adapter` via IMAP LIST, excluding `\Noselect`
+  mailboxes) plus `manageaccount.UseCase.ListMailboxes` let the account
+  form (settings and first-run wizard) list the mailboxes/subfolders
+  that actually exist on the server. The mailbox field is now a
+  `widget.SelectEntry` (still freely typable, plus a dropdown of the
+  discovered folders).
+- A more modern, fully custom color scheme (`internal/ui.appTheme`) for
+  light and dark mode, following the validated reference palette of the
+  `dataviz` skill (primary blue, fixed status colors green/yellow/red) —
+  fixes the reported "dated, all black" look in dark system mode, which
+  previously delegated almost entirely to Fyne's generic default theme.
+  The same status colors are now also used in `internal/infra/charts`
+  (previously ad-hoc chosen green/red tones) — the UI and charts now
+  speak the same color language. Larger corner radii/spacing (cards,
+  buttons, input fields) for a more airy, less blocky feel.
+- Dashboard tiles and charts now live inside `widget.Card` instead of
+  standing freely on the window background, with an icon per metric.
+  The four charts are now regrouped instead of one long column: time
+  series and disposition donut side by side, top sending sources and
+  heatmap each getting their own full row with a horizontal scroll area
+  (their width grows with the number of sending sources/days). Side
+  navigation now has an icon per entry, dividers between header/
+  navigation and the content.
+- Fixed a real bug: the report detail dialog (report table, tap a row)
+  could no longer be closed. It ran on `dialog.NewCustomWithoutButtons` —
+  with no button at all, and no code path called `Hide()`. Unlike a
+  regular popup, the underlying `widget.ModalPopUp` doesn't close on a
+  tap outside it, so the dialog stayed open permanently. Now uses
+  `dialog.NewCustom(...)` with a "Close" button.
+- `DMARC_OIDC_INSECURE_SKIP_VERIFY` (optional, default `false`): disables
+  TLS certificate verification for all calls to the OIDC issuer
+  (discovery, JWKS, token exchange) — intended exclusively for
+  development environments with a self-signed certificate (e.g. Caddy's
+  `tls internal`), never for production. See
   `docs/features/deployment.md`.
 
-### Geändert
+### Changed
 
-- Migration der gesamten Präsentationsschicht von der Fyne-Desktop-
-  Oberfläche zu einer im Programm eingebetteten Web-Oberfläche
-  (`internal/web`, `MIGRATIONSPLAN.md` Meilensteine M0–M5): Beim Start
-  läuft ein lokaler HTTP-Server auf `127.0.0.1`, der Standardbrowser
-  öffnet automatisch eine Seite mit Einmal-Anmeldelink (60 s gültig, gegen
-  ein `HttpOnly`/`SameSite=Strict`-Sitzungs-Cookie eingetauscht).
-  Einzelinstanz-Erkennung über `instance.json`: ein zweiter Start holt
-  sich nur einen frischen Anmeldelink. Sicherheitsmodell: `Host`-Prüfung
-  gegen DNS-Rebinding, CSRF-Token- und `Origin`/`Sec-Fetch-Site`-Prüfung
-  bei jeder zustandsändernden Anfrage, Content-Security-Policy ohne
-  `unsafe-inline`. Lebenszyklus ausschließlich über Strg+C/SIGTERM (kein
-  Auto-Ende, kein „Beenden"-Knopf) — siehe README „Start und Beenden".
-- Alle vier Dashboard-Diagramme (Zeitreihe, Top-Sendequellen, Disposition,
-  Heatmap) werden jetzt clientseitig mit Chart.js gezeichnet
-  (`internal/web/static/charts.js`, Plugins `chartjs-chart-matrix` für die
-  Heatmap und `chartjs-plugin-zoom` für die Zeitreihe) statt serverseitig
-  als PNG (`go-chart`) — dadurch Tooltips, umschaltbare Legende, Zoom in
-  der Zeitreihe und Klick-Drilldown (ein Klick auf Tag/Quelle/Zelle/
-  Segment öffnet die passend gefilterten Berichte). Jedes Diagramm hat
-  zusätzlich eine zuschaltbare Tabellenansicht (Barrierefreiheit) sowie
-  PNG-/CSV-Export-Knöpfe.
-- Berichte- und Sendequellen-Tabellen laufen jetzt über seitenweises
-  Nachladen mit htmx statt einer virtualisierten Fyne-Tabelle; CSV-Export
-  lädt den gesamten gefilterten Bestand gestreamt nach, ohne ihn
-  vollständig im Speicher zu halten.
-- Import (`importfiles.UseCase.ImportData`) jetzt zusätzlich per Web-
-  Upload (`POST /import`, Drag & Drop, mehrere Dateien gleichzeitig,
-  50 MB je Datei) statt nur per CLI-Dateipfad.
-- Sync läuft jetzt als serverseitiger Hintergrund-Auftrag
-  (`internal/app/syncjob`, höchstens ein Lauf gleichzeitig, Abbruch per
-  Kontext) mit Live-Fortschritt über Server-Sent Events
-  (`GET /ereignisse`) statt eines synchronen Fyne-Fortschrittsdialogs.
-- Zugangsdaten-Sperre: `account.CredentialStore` kann jetzt gesperrt sein
-  (`account.ErrCredentialStoreLocked`) — die Oberfläche leitet dann auf
-  eine Entsperr-Seite (`/entsperren`) für die Master-Passphrase des
-  Datei-Fallback-Schlüsselspeichers (Linux ohne Secret Service), statt
-  wie zuvor auf der Konsole danach zu fragen (die es beim Start ohne
-  Terminal, z. B. per Doppelklick, nicht gibt).
+- Migrated the entire presentation layer from the Fyne desktop UI to a
+  web UI embedded in the program (`internal/web`, `MIGRATIONSPLAN.md`
+  milestones M0–M5): on startup, a local HTTP server runs on
+  `127.0.0.1`, and the default browser automatically opens a page with a
+  one-time login link (valid for 60 s, exchanged for an
+  `HttpOnly`/`SameSite=Strict` session cookie). Single-instance detection
+  via `instance.json`: a second launch just fetches a fresh login link.
+  Security model: `Host` check against DNS rebinding, CSRF token and
+  `Origin`/`Sec-Fetch-Site` checks on every state-changing request,
+  Content Security Policy without `unsafe-inline`. Lifecycle exclusively
+  via Ctrl+C/SIGTERM (no auto-exit, no "quit" button) — see README
+  "Start and stop".
+- All four dashboard charts (time series, top sending sources,
+  disposition, heatmap) are now drawn client-side with Chart.js
+  (`internal/web/static/charts.js`, plugins `chartjs-chart-matrix` for
+  the heatmap and `chartjs-plugin-zoom` for the time series) instead of
+  server-side as PNG (`go-chart`) — this brings tooltips, a toggleable
+  legend, zoom in the time series, and click drill-down (clicking a
+  day/source/cell/segment opens the correspondingly filtered reports).
+  Each chart also has a toggleable table view (accessibility) plus
+  PNG/CSV export buttons.
+- Report and sending-source tables now use paged lazy-loading via htmx
+  instead of a virtualized Fyne table; CSV export streams the entire
+  filtered dataset instead of holding it fully in memory.
+- Import (`importfiles.UseCase.ImportData`) now also works via web
+  upload (`POST /import`, drag & drop, multiple files at once, 50 MB per
+  file) instead of only via a CLI file path.
+- Sync now runs as a server-side background job
+  (`internal/app/syncjob`, at most one run at a time, cancellable via
+  context) with live progress over Server-Sent Events
+  (`GET /ereignisse`) instead of a synchronous Fyne progress dialog.
+- Credential-store lock: `account.CredentialStore` can now be locked
+  (`account.ErrCredentialStoreLocked`) — the UI then redirects to an
+  unlock page (`/entsperren`) for the master passphrase of the file
+  fallback key store (Linux without a secret service), instead of
+  prompting on the console as before (which doesn't exist when started
+  without a terminal, e.g. via double-click).
 
-### Entfernt
+### Removed
 
-- `internal/ui` (gesamte Fyne-Oberfläche, ~4.900 Zeilen inkl. Tests),
-  `cmd/dmarc-analyzer/cmd_gui.go` sowie `fyne.io/fyne/v2` und alle
-  transitiven Fyne-Abhängigkeiten aus `go.mod` (Meilenstein M5). Der
-  versteckte Übergangs-Unterbefehl `gui` (Vergleichs-/Rückfallpfad
-  während der Migration) entfällt damit ebenfalls.
-- `internal/infra/charts` (`go-chart`-Implementierung des
-  `ChartRenderer`-Ports), `analysis.ChartRenderer` selbst sowie
-  `exportdata.WriteChartPNG` — Diagramme entstehen jetzt vollständig im
-  Browser (siehe „Geändert" oben). `github.com/wcharczuk/go-chart/v2`
-  damit ebenfalls aus `go.mod` entfernt. Begründung in
-  `docs/adr/0001-web-oberflaeche-statt-fyne.md` und
+- `internal/ui` (the entire Fyne UI, ~4,900 lines including tests),
+  `cmd/dmarc-analyzer/cmd_gui.go`, and `fyne.io/fyne/v2` plus all
+  transitive Fyne dependencies from `go.mod` (milestone M5). The hidden
+  transitional subcommand `gui` (comparison/fallback path during the
+  migration) goes away with it as well.
+- `internal/infra/charts` (the `go-chart` implementation of the
+  `ChartRenderer` port), `analysis.ChartRenderer` itself, and
+  `exportdata.WriteChartPNG` — charts are now produced entirely in the
+  browser (see "Changed" above). `github.com/wcharczuk/go-chart/v2`
+  removed from `go.mod` as well. Rationale in
+  `docs/adr/0001-web-oberflaeche-statt-fyne.md` and
   `docs/adr/0002-chartjs-statt-chartrenderer-port.md`.
-- Damit ist das gesamte Modul jetzt frei von CGO-Abhängigkeiten
-  (`go list -deps ./... | grep fyne` liefert nichts mehr); `task release`
-  baut alle Zielplattformen (macOS arm64/amd64, Windows amd64, Linux
-  amd64/arm64) als reine `CGO_ENABLED=0`-Cross-Compiles auf einem
-  einzigen Rechner, ohne `fyne package` oder plattformspezifische
-  Toolchains — siehe `Taskfile.yml` (`release:darwin`/`release:windows`/
-  `release:linux`/`release`) und die neue GitHub-Actions-Pipeline
-  (`.github/workflows/ci.yml`: `task check` bei jedem Push/PR, `task
-  release` samt GitHub-Release bei Versions-Tags).
+- The whole module is now free of CGO dependencies
+  (`go list -deps ./... | grep fyne` returns nothing anymore); `task
+  release` builds all target platforms (macOS arm64/amd64, Windows
+  amd64, Linux amd64/arm64) as pure `CGO_ENABLED=0` cross-compiles on a
+  single machine, without `fyne package` or platform-specific
+  toolchains — see `Taskfile.yml` (`release:darwin`/`release:windows`/
+  `release:linux`/`release`) and the new GitHub Actions pipeline
+  (`.github/workflows/ci.yml`: `task check` on every push/PR, `task
+  release` including a GitHub release on version tags).
 
-### Behoben
+### Fixed
 
-- Zugriffsverweigerung bei fehlender Admin-Gruppenmitgliedschaft zeigte nur
-  einen nackten Klartext-Satz (`http.Error`, kein HTML, kein Styling) statt
-  einer nachvollziehbaren Fehlerseite. Neue eigenständige Seite
-  `access_denied.html` (ohne app-Layout, da an dieser Stelle keine Sitzung
-  existiert) nennt das betroffene Konto, erklärt die Ursache und bietet
-  einen Link zum erneuten Anmeldeversuch.
-- `/abmelden` (Logout) wirkte wirkungslos: der Redirect zu Authentiks
-  `end_session_endpoint` (RP-Initiated Logout) ist zwangsläufig eine andere
-  Origin, wurde vom eigenen CSP-Header (`form-action 'self'`) aber vom
-  Browser blockiert. Lokale Sitzung war zwar beendet, Authentik bekam den
-  Logout nie mitgeteilt — die nächste Anfrage (`GET /anmelden` leitet ohne
-  Zwischenschritt sofort zu Authentik weiter) meldete über die weiterhin
-  aktive Authentik-Session sofort wieder an, ohne dass etwas sichtbar
-  passierte. `form-action` erlaubt jetzt zusätzlich die Origin des
-  konfigurierten OIDC-Issuers (`internal/web/middleware.go:buildContentSecurityPolicy`).
-- `.zip`-Anhänge mit mehreren enthaltenen DMARC-Reports wurden sowohl
-  beim Datei-Import als auch beim IMAP-Sync nur zu einem Report
-  importiert (`ReportParser.Parse()` statt `ParseAll()`) — behoben über
-  eine neue, optionale Schnittstelle `domainsync.MultiReportParser` und
-  eine gemeinsame Hilfsfunktion `domainsync.ParseAttachment`.
-- `syncjob.Runner` meldete einen Abbruch während des letzten Kontos
-  fälschlich als `done`.
-- `/entsperren` akzeptierte jede Passphrase, wenn noch kein Konto
-  existierte.
-- Ein Chart.js-Diagramm (Nachrichtenvolumen pro Tag) wuchs beim Laden des
-  Dashboards unbegrenzt nach unten — klassischer Chart.js-
-  Rückkopplungsschleifen-Bug bei `responsive: true` +
-  `maintainAspectRatio: false` ohne Wrapper-Element mit fester,
-  vom Canvas unabhängiger Höhe (siehe `AGENTS.md`).
+- Access denial for missing admin group membership showed only a bare
+  plain-text sentence (`http.Error`, no HTML, no styling) instead of a
+  comprehensible error page. New standalone page `access_denied.html`
+  (without the app layout, since no session exists at this point) names
+  the affected account, explains the cause, and offers a link to try
+  logging in again.
+- `/abmelden` (logout) had no effect: the redirect to Authentik's
+  `end_session_endpoint` (RP-initiated logout) is necessarily a
+  different origin, but was blocked by the browser due to our own CSP
+  header (`form-action 'self'`). The local session was ended, but
+  Authentik was never told about the logout — the next request
+  (`GET /anmelden` redirects straight to Authentik with no intermediate
+  step) immediately logged back in via the still-active Authentik
+  session, with nothing visibly happening. `form-action` now also
+  allows the origin of the configured OIDC issuer
+  (`internal/web/middleware.go:buildContentSecurityPolicy`).
+- `.zip` attachments containing multiple DMARC reports were only
+  imported as a single report, both during file import and IMAP sync
+  (`ReportParser.Parse()` instead of `ParseAll()`) — fixed via a new,
+  optional interface `domainsync.MultiReportParser` and a shared helper
+  function `domainsync.ParseAttachment`.
+- `syncjob.Runner` incorrectly reported a cancellation during the last
+  account as `done`.
+- `/entsperren` accepted any passphrase when no account existed yet.
+- A Chart.js chart (message volume per day) grew unbounded downward
+  while the dashboard was loading — a classic Chart.js feedback-loop bug
+  with `responsive: true` + `maintainAspectRatio: false` without a
+  wrapper element that has a fixed height independent of the canvas
+  (see `AGENTS.md`).

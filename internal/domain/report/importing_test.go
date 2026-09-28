@@ -12,7 +12,7 @@ import (
 )
 
 type fakeSaveIfNewRepo struct {
-	report.Repository // eingebettet, nur die drei benötigten Methoden überschrieben
+	report.Repository // embedded, only the three needed methods overridden
 	saved             map[report.Key]bool
 	existsErr         error
 	saveErr           error
@@ -83,7 +83,7 @@ func TestSaveIfNew_SaveErrDuplicate_TreatedAsSkip(t *testing.T) {
 
 	repo := &fakeSaveIfNewRepo{saveErr: report.ErrDuplicate}
 	imported, err := report.SaveIfNew(context.Background(), repo, testAggregateReport(t))
-	require.NoError(t, err, "ErrDuplicate ist kein Fehlerfall für den Aufrufer, nur kein Neuimport")
+	require.NoError(t, err, "ErrDuplicate is not an error case for the caller, just no new import")
 	require.False(t, imported)
 }
 

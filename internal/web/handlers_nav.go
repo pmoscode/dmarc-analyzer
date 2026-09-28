@@ -1,30 +1,29 @@
 package web
 
-// navItem ist ein Eintrag der Hauptnavigation (layout.html) — Active wird
-// serverseitig anhand des angeforderten Pfads gesetzt (kein JavaScript
-// nötig, funktioniert auch ohne aktiviertes JS).
+// navItem is an entry in the main navigation (layout.html) — Active is
+// set server-side based on the requested path (no JavaScript needed,
+// works even with JS disabled).
 type navItem struct {
 	Label  string
 	Href   string
 	Active bool
 }
 
-// navItems baut die Hauptnavigation für die aktuelle Anfrage. Weitere
-// Filterparameter (zeitraum/domain) werden bewusst nicht mitgegeben — ein
-// Seitenwechsel über die Navigation ist serverseitig weiterhin ein
-// gewöhnlicher GET auf die reine Seiten-URL; dass dieselbe Ansicht ihren
-// zuletzt benutzten Filter trotzdem wiederfindet, übernimmt rein
-// client-seitig internal/web/static/app.js (localStorage je Seitenpfad,
-// kein Server-Zustand).
+// navItems builds the main navigation for the current request. Other
+// filter parameters (zeitraum/domain) are deliberately not carried along —
+// navigating via the nav is still, server-side, an ordinary GET to the
+// plain page URL; that the same view still finds its last-used filter
+// anyway is handled purely client-side by internal/web/static/app.js
+// (localStorage per page path, no server state).
 func navItems(currentPath string) []navItem {
 	items := []struct{ label, href string }{
-		{"Übersicht", "/"},
-		{"Berichte", "/berichte"},
-		{"Sendequellen", "/quellen"},
+		{"Overview", "/"},
+		{"Reports", "/berichte"},
+		{"Sending sources", "/quellen"},
 		{"Domains", "/domains"},
-		{"Fehlschläge", "/fehlschlaege"},
+		{"Failures", "/fehlschlaege"},
 		{"Import", "/import"},
-		{"Einstellungen", "/einstellungen"},
+		{"Settings", "/einstellungen"},
 	}
 
 	out := make([]navItem, len(items))

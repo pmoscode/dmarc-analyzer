@@ -2,13 +2,13 @@ package main
 
 import "runtime/debug"
 
-// resolvedCommit liefert den Git-Commit des laufenden Builds: bevorzugt
-// den per -ldflags gesetzten Wert (commit in main.go), sonst die von
-// "go build" selbst eingebettete Revision (vcs.revision, nur vorhanden,
-// wenn im Git-Checkout gebaut wurde — im Docker-Build fehlt .git, siehe
-// .dockerignore, deshalb dort das Build-Arg COMMIT). Ein Build aus einem
-// veränderten Arbeitsverzeichnis bekommt das Suffix "-dirty". Leer, wenn
-// nichts davon verfügbar ist (z. B. "go run", "go test").
+// resolvedCommit returns the git commit of the running build: prefers
+// the value set via -ldflags (commit in main.go), otherwise the revision
+// embedded by "go build" itself (vcs.revision, only present when built
+// from a git checkout — in the Docker build .git is missing, see
+// .dockerignore, hence the COMMIT build arg there). A build from a
+// modified working directory gets the "-dirty" suffix. Empty if none of
+// that is available (e.g. "go run", "go test").
 func resolvedCommit() string {
 	if commit != "" {
 		return commit
@@ -20,9 +20,9 @@ func resolvedCommit() string {
 	return commitFromBuildSettings(info.Settings)
 }
 
-// commitFromBuildSettings liest vcs.revision/vcs.modified aus den
-// Build-Einstellungen — getrennt von resolvedCommit, damit es sich ohne
-// echte Build-Informationen testen lässt.
+// commitFromBuildSettings reads vcs.revision/vcs.modified from the build
+// settings — kept separate from resolvedCommit so it can be tested
+// without real build information.
 func commitFromBuildSettings(settings []debug.BuildSetting) string {
 	var revision string
 	var modified bool

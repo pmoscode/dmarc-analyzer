@@ -14,9 +14,9 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/account"
 )
 
-// fakeAccountRepository implementiert nur, was Runner braucht (FindAll)
-// — Save/FindByID/Delete werden nie aufgerufen, sind aber Teil des
-// account.Repository-Interfaces.
+// fakeAccountRepository only implements what Runner needs (FindAll) —
+// Save/FindByID/Delete are never called, but are part of the
+// account.Repository interface.
 type fakeAccountRepository struct {
 	accounts []account.MailAccount
 	err      error
@@ -34,18 +34,18 @@ func (f *fakeAccountRepository) FindAll(context.Context) ([]account.MailAccount,
 	return f.accounts, nil
 }
 
-// fakeSyncer implementiert syncjob.Syncer mit einstellbarem Verhalten je
-// Konto — kein vollständig verdrahteter syncreports.UseCase nötig
-// (bräuchte IMAP-/Decoder-/Parser-Fakes, die für syncjob irrelevant
-// sind: Runner kennt nur die Syncer-Schnittstelle).
+// fakeSyncer implements syncjob.Syncer with configurable behavior per
+// account — no fully wired syncreports.UseCase needed (would require
+// IMAP/decoder/parser fakes that are irrelevant to syncjob: Runner only
+// knows the Syncer interface).
 type fakeSyncer struct {
 	mu    sync.Mutex
 	calls []account.AccountID
 
 	result syncreports.Result
 	err    error
-	// block lässt SyncAccount blockieren, bis ctx abgebrochen wird — für
-	// Cancel()-Tests.
+	// block makes SyncAccount block until ctx is canceled — for
+	// Cancel() tests.
 	block bool
 }
 
@@ -68,13 +68,12 @@ func (f *fakeSyncer) callCount() int {
 	return len(f.calls)
 }
 
-// controlledProgressSyncer meldet genau einen Fortschritts-Zwischenstand
-// und blockiert danach, bis der Test proceed schließt — macht
-// "kommt ein Zwischenstand tatsächlich beim Zuhörer an" deterministisch
-// testbar statt von der Präferenz eines gepufferten Kanals abzuhängen
-// (Runner.Subscribe liefert bewusst nur den JEWEILS NEUESTEN Stand, ein
-// schneller Produzent kann Zwischenstände sonst überschreiben, bevor ein
-// Testleser sie sieht).
+// controlledProgressSyncer reports exactly one progress snapshot and
+// then blocks until the test closes proceed — makes "does a snapshot
+// actually reach the listener" deterministically testable instead of
+// depending on the timing of a buffered channel (Runner.Subscribe
+// deliberately only delivers the LATEST state each time, a fast producer
+// can otherwise overwrite snapshots before a test reader sees them).
 type controlledProgressSyncer struct {
 	proceed chan struct{}
 }
@@ -111,7 +110,7 @@ func waitForStatus(t *testing.T, r *syncjob.Runner, want syncjob.Status) syncjob
 				return s
 			}
 		case <-deadline:
-			t.Fatalf("status %q nicht innerhalb der Frist erreicht (zuletzt: %q)", want, r.Snapshot().Status)
+			t.Fatalf("status %q not reached within the deadline (last: %q)", want, r.Snapshot().Status)
 		}
 	}
 }
@@ -120,8 +119,8 @@ func TestRunner_Start_SyncsAllAccountsSequentially(t *testing.T) {
 	t.Parallel()
 
 	accounts := &fakeAccountRepository{accounts: []account.MailAccount{
-		mustAccount(t, "acc-1", "Konto 1"),
-		mustAccount(t, "acc-2", "Konto 2"),
+		mustAccount(t, "acc-1", "Account 1"),
+		mustAccount(t, "acc-2", "Account 2"),
 	}}
 	syncer := &fakeSyncer{result: syncreports.Result{New: 2, Skipped: 1}}
 	r := syncjob.NewRunner(context.Background(), accounts, syncer)
@@ -130,7 +129,7 @@ func TestRunner_Start_SyncsAllAccountsSequentially(t *testing.T) {
 	final := waitForStatus(t, r, syncjob.StatusDone)
 
 	require.Equal(t, 2, syncer.callCount())
-	require.Equal(t, 4, final.Total.New) // 2 Konten × 2
+	require.Equal(t, 4, final.Total.New) // 2 accounts × 2
 	require.Equal(t, 2, final.Total.Skipped)
 	require.Equal(t, 2, final.TotalAccounts)
 	require.NoError(t, final.Err)
@@ -140,7 +139,7 @@ func TestRunner_Start_SyncsAllAccountsSequentially(t *testing.T) {
 func TestRunner_Start_AlreadyRunning_ReturnsError(t *testing.T) {
 	t.Parallel()
 
-	accounts := &fakeAccountRepository{accounts: []account.MailAccount{mustAccount(t, "acc-1", "Konto 1")}}
+	accounts := &fakeAccountRepository{accounts: []account.MailAccount{mustAccount(t, "acc-1", "Account 1")}}
 	syncer := &fakeSyncer{block: true}
 	r := syncjob.NewRunner(context.Background(), accounts, syncer)
 
@@ -156,34 +155,34 @@ func TestRunner_Cancel_StopsBeforeRemainingAccounts(t *testing.T) {
 	t.Parallel()
 
 	accounts := &fakeAccountRepository{accounts: []account.MailAccount{
-		mustAccount(t, "acc-1", "Konto 1"),
-		mustAccount(t, "acc-2", "Konto 2"),
+		mustAccount(t, "acc-1", "Account 1"),
+		mustAccount(t, "acc-2", "Account 2"),
 	}}
 	syncer := &fakeSyncer{block: true}
 	r := syncjob.NewRunner(context.Background(), accounts, syncer)
 
 	require.NoError(t, r.Start())
-	// Sicherstellen, dass der Lauf tatsächlich am ersten (blockierenden)
-	// Konto hängt, bevor abgebrochen wird.
+	// Make sure the run is actually stuck on the first (blocking) account
+	// before canceling.
 	require.Eventually(t, func() bool { return syncer.callCount() == 1 }, time.Second, 5*time.Millisecond)
 
 	r.Cancel()
 	final := waitForStatus(t, r, syncjob.StatusCancelled)
 
-	require.Equal(t, 1, syncer.callCount(), "das zweite Konto darf nach dem Abbruch nicht mehr angefasst werden")
+	require.Equal(t, 1, syncer.callCount(), "the second account must not be touched after cancellation")
 	require.Equal(t, syncjob.StatusCancelled, final.Status)
 }
 
-// TestRunner_Cancel_DuringOnlyAccount_StillReportsCancelled ist eine
-// Regression: Cancel() während des LETZTEN (hier: einzigen) Kontos
-// erreicht die "cancelled = true; break"-Prüfung am Schleifenanfang
-// nicht mehr (es gibt kein weiteres Konto, bei dem die Prüfung noch
-// laufen würde) — ohne eine zusätzliche Prüfung nach der Schleife wurde
-// ein währenddessen abgebrochener Lauf fälschlich als "done" gemeldet.
+// TestRunner_Cancel_DuringOnlyAccount_StillReportsCancelled is a
+// regression: Cancel() during the LAST (here: only) account no longer
+// reaches the "cancelled = true; break" check at the start of the loop
+// (there is no further account for which the check would still run) —
+// without an additional check after the loop, a run canceled during that
+// time was incorrectly reported as "done".
 func TestRunner_Cancel_DuringOnlyAccount_StillReportsCancelled(t *testing.T) {
 	t.Parallel()
 
-	accounts := &fakeAccountRepository{accounts: []account.MailAccount{mustAccount(t, "acc-1", "Konto 1")}}
+	accounts := &fakeAccountRepository{accounts: []account.MailAccount{mustAccount(t, "acc-1", "Account 1")}}
 	syncer := &fakeSyncer{block: true}
 	r := syncjob.NewRunner(context.Background(), accounts, syncer)
 
@@ -194,7 +193,7 @@ func TestRunner_Cancel_DuringOnlyAccount_StillReportsCancelled(t *testing.T) {
 	final := waitForStatus(t, r, syncjob.StatusCancelled)
 
 	require.Equal(t, syncjob.StatusCancelled, final.Status)
-	require.NoError(t, final.Err, "ein gewollter Abbruch ist kein Fehler")
+	require.NoError(t, final.Err, "an intentional cancellation is not an error")
 }
 
 func TestRunner_Cancel_WithoutRunningJob_DoesNothing(t *testing.T) {
@@ -208,7 +207,7 @@ func TestRunner_Cancel_WithoutRunningJob_DoesNothing(t *testing.T) {
 func TestRunner_AccountListError_SetsStatusFailed(t *testing.T) {
 	t.Parallel()
 
-	accounts := &fakeAccountRepository{err: errors.New("datenbank kaputt")}
+	accounts := &fakeAccountRepository{err: errors.New("database broken")}
 	r := syncjob.NewRunner(context.Background(), accounts, &fakeSyncer{})
 
 	require.NoError(t, r.Start())
@@ -220,23 +219,23 @@ func TestRunner_SingleAccountError_ContinuesWithRemainingAccounts(t *testing.T) 
 	t.Parallel()
 
 	accounts := &fakeAccountRepository{accounts: []account.MailAccount{
-		mustAccount(t, "acc-1", "Konto 1"),
-		mustAccount(t, "acc-2", "Konto 2"),
+		mustAccount(t, "acc-1", "Account 1"),
+		mustAccount(t, "acc-2", "Account 2"),
 	}}
-	syncer := &fakeSyncer{err: errors.New("verbindung fehlgeschlagen")}
+	syncer := &fakeSyncer{err: errors.New("connection failed")}
 	r := syncjob.NewRunner(context.Background(), accounts, syncer)
 
 	require.NoError(t, r.Start())
 	final := waitForStatus(t, r, syncjob.StatusDone)
 
-	require.Equal(t, 2, syncer.callCount(), "ein fehlerhaftes Konto darf die übrigen nicht blockieren")
+	require.Equal(t, 2, syncer.callCount(), "a failing account must not block the others")
 	require.Error(t, final.Err)
 }
 
 func TestRunner_Subscribe_ReceivesProgressUpdates(t *testing.T) {
 	t.Parallel()
 
-	accounts := &fakeAccountRepository{accounts: []account.MailAccount{mustAccount(t, "acc-1", "Konto 1")}}
+	accounts := &fakeAccountRepository{accounts: []account.MailAccount{mustAccount(t, "acc-1", "Account 1")}}
 	syncer := &controlledProgressSyncer{proceed: make(chan struct{})}
 	r := syncjob.NewRunner(context.Background(), accounts, syncer)
 
@@ -245,9 +244,9 @@ func TestRunner_Subscribe_ReceivesProgressUpdates(t *testing.T) {
 
 	require.NoError(t, r.Start())
 
-	// syncer.SyncAccount blockiert nach der Fortschrittsmeldung, bis wir
-	// proceed schließen — der Zwischenstand kann also nicht von einem
-	// späteren Broadcast überschrieben werden, bevor wir ihn lesen.
+	// syncer.SyncAccount blocks after reporting progress until we close
+	// proceed — so the snapshot can't be overwritten by a later broadcast
+	// before we read it.
 	deadline := time.After(2 * time.Second)
 	for {
 		select {
@@ -258,7 +257,7 @@ func TestRunner_Subscribe_ReceivesProgressUpdates(t *testing.T) {
 				return
 			}
 		case <-deadline:
-			t.Fatal("kein Fortschritts-Zwischenstand innerhalb der Frist beim Zuhörer angekommen")
+			t.Fatal("no progress snapshot reached the listener within the deadline")
 		}
 	}
 }
@@ -275,14 +274,14 @@ func TestRunner_Subscribe_NewSubscriberGetsCurrentStateImmediately(t *testing.T)
 	case s := <-ch:
 		require.Equal(t, syncjob.StatusIdle, s.Status)
 	default:
-		t.Fatal("ein neuer Zuhörer muss sofort den aktuellen Stand bekommen")
+		t.Fatal("a new listener must get the current state immediately")
 	}
 }
 
 func TestRunner_SecondRun_AfterCompletion_Works(t *testing.T) {
 	t.Parallel()
 
-	accounts := &fakeAccountRepository{accounts: []account.MailAccount{mustAccount(t, "acc-1", "Konto 1")}}
+	accounts := &fakeAccountRepository{accounts: []account.MailAccount{mustAccount(t, "acc-1", "Account 1")}}
 	syncer := &fakeSyncer{result: syncreports.Result{New: 1}}
 	r := syncjob.NewRunner(context.Background(), accounts, syncer)
 

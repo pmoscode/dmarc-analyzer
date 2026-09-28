@@ -1,96 +1,95 @@
-# Architektur
+# Architecture
 
-`dmarc-analyzer` folgt Clean Architecture: vier Schichten, Abhängigkeiten
-zeigen ausschließlich nach innen.
+`dmarc-analyzer` follows Clean Architecture: four layers, dependencies
+point exclusively inward.
 
 ```
 cmd/dmarc-analyzer  →  internal/web  →  internal/app  →  internal/domain
                         internal/infra ─────────────────↗
 ```
 
-## Schichten
+## Layers
 
-- **`internal/domain`** — reine Fachlogik: Aggregate (`report.AggregateReport`,
-  `account.MailAccount`), Wertobjekte, Validierung, Domänen-Ports (Interfaces wie `report.Repository`,
-  `sync.MessageSource`). Keine
-  Imports außerhalb der Standardbibliothek — kein `encoding/xml`, kein SQL,
-  kein `net/http` hier.
-- **`internal/app`** — Use Cases, die eine fachliche Aufgabe orchestrieren (`syncreports.UseCase.SyncAccount`,
-  `retention.UseCase.ApplyNow`,
-  `manageaccount.UseCase.TestConnectionByID`). Hängen nur an
-  Domänen-Ports, nie an einen konkreten Adapter.
-- **`internal/infra`** — Adapter, die Domänen-Ports gegen konkrete Technik
-  implementieren: `sqlite` (Persistenz), `imap` (IMAP-Zugriff), `dmarcxml`
-  (RFC-7489-Parser), `mailmime` (MIME-Zerlegung), `sourceinfo`
-  (PTR-/Dienst-Erkennung), `envconfig` (liest die gesamte
-  Laufzeit-Konfiguration aus Umgebungsvariablen, siehe
+- **`internal/domain`** — pure business logic: aggregates
+  (`report.AggregateReport`, `account.MailAccount`), value objects,
+  validation, domain ports (interfaces like `report.Repository`,
+  `sync.MessageSource`). No imports outside the standard library — no
+  `encoding/xml`, no SQL, no `net/http` here.
+- **`internal/app`** — use cases that orchestrate a business task
+  (`syncreports.UseCase.SyncAccount`, `retention.UseCase.ApplyNow`,
+  `manageaccount.UseCase.TestConnectionByID`). Depend only on domain
+  ports, never on a concrete adapter.
+- **`internal/infra`** — adapters that implement domain ports against
+  concrete technology: `sqlite` (persistence), `imap` (IMAP access),
+  `dmarcxml` (RFC 7489 parser), `mailmime` (MIME splitting), `sourceinfo`
+  (PTR/service detection), `envconfig` (reads the entire runtime
+  configuration from environment variables, see
   `docs/features/deployment.md`).
-- **`internal/web`** — die Ausliefer-Schicht: `net/http` + `html/template`
-  (kein Bundler, kein Node-Werkzeug) für serverseitig gerenderte Seiten,
-  Chart.js für Diagramme (`static/charts.js` bekommt fertig aufbereitete
-  JSON-Daten aus Go, bleibt selbst dünn), sowie der OIDC-Login-Flow (`auth.go`/`oidc.go`, siehe
-  `docs/features/auth.md`). Ruft
-  ausschließlich Use Cases aus `internal/app` auf, nie direkt einen
-  Infra-Adapter.
-- **`cmd/dmarc-analyzer`** — die Composition Root: einziger Ort, an dem
-  konkrete Adapter mit Use Cases verdrahtet werden (`wire.go`), liest hier
-  auch die ENV-Konfiguration (`envconfig.Load()`) und startet je nach
-  Unterbefehl (`web`, `sync`, `import`, `stats`, `healthcheck`) den
-  passenden Pfad.
+- **`internal/web`** — the delivery layer: `net/http` + `html/template`
+  (no bundler, no Node tooling) for server-rendered pages, Chart.js for
+  charts (`static/charts.js` receives already-prepared JSON data from Go
+  and stays thin itself), plus the OIDC login flow (`auth.go`/`oidc.go`,
+  see `docs/features/auth.md`). Calls exclusively into use cases from
+  `internal/app`, never directly into an infra adapter.
+- **`cmd/dmarc-analyzer`** — the composition root: the only place where
+  concrete adapters are wired to use cases (`wire.go`); also reads the
+  ENV configuration here (`envconfig.Load()`) and starts the appropriate
+  path depending on the subcommand (`web`, `sync`, `import`, `stats`,
+  `healthcheck`).
 
-## Warum diese Trennung
+## Why this separation
 
-- **Domain unabhängig testbar** — Geschäftsregeln (z. B. "wann gilt eine
-  Nachricht als DMARC-konform", RFC-7489-Feld-Defaults) lassen sich ohne
-  Datenbank, ohne Netzwerk, ohne HTTP-Server prüfen.
-- **Austauschbare Adapter** — `internal/app` kennt nur Interfaces wie
-  `report.Repository`; Tests setzen dort In-Memory-Fakes ein, Produktion
-  echtes SQLite. Ein Wechsel der Datenbank würde nur `internal/infra/sqlite`
-  betreffen, keine Zeile in `internal/domain`/`internal/app`.
-- **Ein einziger Ort kennt die konkrete Technik** — nur `cmd/dmarc-analyzer`
-  importiert gleichzeitig `internal/infra/sqlite`, `internal/infra/imap`
-  usw. *und* baut daraus die Use Cases zusammen. Das hält
-  `internal/app`/`internal/web` frei von technischen Details, die dort
-  nicht hingehören.
+- **Domain independently testable** — business rules (e.g. "when does a
+  message count as DMARC-compliant", RFC 7489 field defaults) can be
+  checked without a database, without network, without an HTTP server.
+- **Swappable adapters** — `internal/app` knows only interfaces like
+  `report.Repository`; tests plug in in-memory fakes there, production
+  uses real SQLite. Switching databases would only affect
+  `internal/infra/sqlite`, not a single line in
+  `internal/domain`/`internal/app`.
+- **A single place knows the concrete technology** — only
+  `cmd/dmarc-analyzer` imports `internal/infra/sqlite`,
+  `internal/infra/imap`, etc. *and* assembles the use cases from them.
+  This keeps `internal/app`/`internal/web` free of technical details
+  that don't belong there.
 
-## Optionale Ports statt großer Interfaces
+## Optional ports instead of large interfaces
 
-Mehrere Ports sind bewusst klein und optional zugeschnitten statt in ein
-großes Interface gepackt zu werden — ein Aufrufer prüft per
-Typ-Assertion, ob ein Adapter die Zusatzfähigkeit hat:
+Several ports are deliberately cut small and optional instead of being
+bundled into one large interface — a caller checks via type assertion
+whether an adapter has the extra capability:
 
-- `domainsync.MailboxLister` — optionale Erweiterung von
-  `domainsync.MessageSource`, die auf dem Server vorhandene Postfächer
-  auflisten kann.
-- `domainsync.MultiReportParser` — optionale Erweiterung von
-  `domainsync.ReportParser` für Anhänge mit mehreren Reports (z. B. ein
-  `.zip` mit mehreren XML-Dateien).
-- `report.Pruner` — eigener, schmaler Port nur für die
-  Aufbewahrungsrichtlinie (`DeleteOlderThan`), getrennt von
-  `report.Repository`, weil Löschen nach Alter eine reine
-  Wartungsoperation ist, die nur `internal/app/retention` braucht.
+- `domainsync.MailboxLister` — optional extension of
+  `domainsync.MessageSource` that can list the mailboxes present on the
+  server.
+- `domainsync.MultiReportParser` — optional extension of
+  `domainsync.ReportParser` for attachments with multiple reports (e.g.
+  a `.zip` with several XML files).
+- `report.Pruner` — its own narrow port just for the retention policy
+  (`DeleteOlderThan`), separate from `report.Repository`, because
+  deleting by age is a pure maintenance operation that only
+  `internal/app/retention` needs.
 
-## Sync-Pipeline (`internal/app/syncreports`)
+## Sync pipeline (`internal/app/syncreports`)
 
-Abholen und Parsen laufen nebenläufig (ein Worker-Pool dekodiert/parst
-MIME-Anhänge parallel), Schreiben nach SQLite läuft **seriell** über eine
-einzige Goroutine — SQLite verträgt keine konkurrierenden Schreiber gut.
-Der Fortschritt (`sync.State`, zuletzt verarbeitete UID) wird nur über eine
-lückenlose Grenze fortgeschrieben, damit ein Abbruch mitten im Lauf nie
-eine Nachricht überspringt, sondern höchstens eine bereits verarbeitete
-Nachricht beim nächsten Lauf erneut anfasst (der `UNIQUE`-Index auf
-`reports` fängt daraus resultierende Duplikate ab).
+Fetching and parsing run concurrently (a worker pool decodes/parses MIME
+attachments in parallel), while writing to SQLite runs **serially** through
+a single goroutine — SQLite doesn't tolerate concurrent writers well.
+Progress (`sync.State`, last processed UID) is only persisted at a
+gapless boundary, so a cancellation mid-run never skips a message, but at
+most reprocesses an already-handled message on the next run (the `UNIQUE`
+index on `reports` catches any resulting duplicates).
 
-## Hintergrund-Aufträge (`internal/app/syncjob`, `syncscheduler`, `retentionjob`)
+## Background jobs (`internal/app/syncjob`, `syncscheduler`, `retentionjob`)
 
-Drei unabhängige, langlebige Goroutinen laufen neben dem HTTP-Server (gestartet in `cmd/dmarc-analyzer/cmd_web.go`,
-beendet über denselben
-Kontext wie der Server):
+Three independent, long-lived goroutines run alongside the HTTP server
+(started in `cmd/dmarc-analyzer/cmd_web.go`, stopped via the same context
+as the server):
 
-- `syncjob.Runner` — höchstens ein manuell (`POST /abgleich`) oder geplant
-  angestoßener Sync-Lauf gleichzeitig, Fortschritt per Server-Sent Events
-  an beliebig viele Browser-Tabs.
-- `syncscheduler.Scheduler` — löst `syncjob.Runner.Start()` alle
-  `DMARC_SYNC_INTERVAL_MINUTES` aus (0 = deaktiviert).
-- `retentionjob.Runner` — wendet die Aufbewahrungsrichtlinie einmal beim
-  Start und danach alle 24 h an.
+- `syncjob.Runner` — at most one manually (`POST /abgleich`) or
+  scheduler-triggered sync run at a time, progress via Server-Sent
+  Events to any number of browser tabs.
+- `syncscheduler.Scheduler` — triggers `syncjob.Runner.Start()` every
+  `DMARC_SYNC_INTERVAL_MINUTES` (0 = disabled).
+- `retentionjob.Runner` — applies the retention policy once at startup
+  and then every 24h.

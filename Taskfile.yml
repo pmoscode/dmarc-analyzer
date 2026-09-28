@@ -6,36 +6,36 @@ vars:
   BIN_DIR: bin
   BIN_NAME: dmarc-analyzer
   COVER_FILE: coverage.out
-  # VERSION: letzter Tag plus Abstand/Hash, z. B. "v0.1.0-2-g9a79aa6-dirty".
+  # VERSION: latest tag plus distance/hash, e.g. "v0.1.0-2-g9a79aa6-dirty".
   VERSION:
     sh: git describe --tags --always --dirty 2>/dev/null || echo dev
-  # COMMIT: voller Hash, bei uncommitteten Änderungen mit "-dirty" — das
-  # --match auf ein nie existierendes Tag erzwingt die reine Hash-Ausgabe.
+  # COMMIT: full hash, with "-dirty" for uncommitted changes — the
+  # --match against a tag that never exists forces plain hash output.
   COMMIT:
     sh: git describe --always --dirty --abbrev=40 --match='NeVeRmAtCh' 2>/dev/null || true
   IMAGE: '{{.BIN_NAME}}'
   CONTAINER: '{{.BIN_NAME}}'
 
-# VERSION/COMMIT auch als Umgebungsvariablen — docker-compose.yml reicht
-# sie als Build-Args an das Dockerfile durch (siehe compose:*-Tasks).
+# VERSION/COMMIT also as environment variables — docker-compose.yml
+# passes them through as build args to the Dockerfile (see compose:* tasks).
 env:
   VERSION: '{{.VERSION}}'
   COMMIT: '{{.COMMIT}}'
 
 tasks:
   default:
-    desc: Zeigt die verfügbaren Tasks.
+    desc: Shows the available tasks.
     cmds:
       - task --list
 
   setup:
-    desc: Werkzeuge installieren und Abhängigkeiten laden.
+    desc: Install tools and download dependencies.
     cmds:
       - go mod download
       - go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 
   build:
-    desc: Binärdatei nach bin/ bauen, Version und Git-Commit eingebettet.
+    desc: Build the binary into bin/, with version and Git commit embedded.
     cmds:
       - mkdir -p {{.BIN_DIR}}
       - CGO_ENABLED=0 go build -ldflags "-X main.version={{.VERSION}} -X main.commit={{.COMMIT}}" -o {{.BIN_DIR}}/{{.BIN_NAME}} ./cmd/dmarc-analyzer
@@ -47,27 +47,27 @@ tasks:
       - "{{.BIN_DIR}}/{{.BIN_NAME}}"
 
   run:
-    desc: Programm im Entwicklungsmodus starten (ohne Argumente öffnet sich der Standardbrowser mit der Web-Oberfläche).
+    desc: Start the program in development mode (with no arguments, opens the default browser to the web UI).
     cmds:
       - go run ./cmd/dmarc-analyzer {{.CLI_ARGS}}
 
   test:
-    desc: Alle Tests mit -race.
+    desc: All tests, with -race.
     cmds:
       - go test ./... -race -count=1
 
   test:unit:
-    desc: Nur schnelle Tests (ohne Build-Tag integration).
+    desc: Fast tests only (without the integration build tag).
     cmds:
       - go test ./... -race -count=1 -short
 
   test:integration:
-    desc: Integrationstests (Build-Tag integration).
+    desc: Integration tests (integration build tag).
     cmds:
       - go test ./... -race -count=1 -tags=integration
 
   cover:
-    desc: Coverage messen und als HTML öffnen.
+    desc: Measure coverage and open it as HTML.
     cmds:
       - go test ./... -race -count=1 -coverprofile={{.COVER_FILE}}
       - go tool cover -html={{.COVER_FILE}} -o coverage.html
@@ -79,19 +79,19 @@ tasks:
       - golangci-lint run ./...
 
   fmt:
-    desc: gofmt -s -w und goimports.
+    desc: gofmt -s -w and goimports.
     cmds:
       - gofmt -s -w .
       - go run golang.org/x/tools/cmd/goimports@latest -w -local {{.MODULE}} .
 
   tidy:
-    desc: go mod tidy und Prüfung auf ungenutzte Abhängigkeiten.
+    desc: go mod tidy and check for unused dependencies.
     cmds:
       - go mod tidy
       - go run golang.org/x/tools/cmd/deadcode@latest ./cmd/dmarc-analyzer || true
 
   docker:build:
-    desc: Docker-Image lokal bauen, mit Version und Git-Commit (getaggt als VERSION und latest).
+    desc: Build the Docker image locally, with version and Git commit (tagged as VERSION and latest).
     cmds:
       - >-
         docker build
@@ -103,9 +103,9 @@ tasks:
 
   docker:run:
     desc: >-
-      Lokal gebautes Image im Vordergrund starten (baut vorher, falls nötig) —
-      erwartet eine .env-Datei mit den in .env.example/docs/features/deployment.md
-      dokumentierten Variablen.
+      Start the locally built image in the foreground (builds first if needed) —
+      expects a .env file with the variables documented in
+      .env.example/docs/features/deployment.md.
     deps: [docker:build]
     cmds:
       - >-
@@ -116,39 +116,39 @@ tasks:
         {{.IMAGE}}:{{.VERSION}} {{.CLI_ARGS}}
 
   docker:version:
-    desc: Version und Git-Commit des lokal gebauten Images anzeigen (aus den OCI-Labels).
+    desc: Show version and Git commit of the locally built image (from the OCI labels).
     cmds:
       - >-
         docker image inspect {{.IMAGE}}:latest
         --format 'Version: {{"{{"}}index .Config.Labels "org.opencontainers.image.version"{{"}}"}}{{"{{"}}println{{"}}"}}Commit:  {{"{{"}}index .Config.Labels "org.opencontainers.image.revision"{{"}}"}}'
 
   compose:build:
-    desc: Images per docker compose bauen, mit Version und Git-Commit.
+    desc: Build images via docker compose, with version and Git commit.
     cmds:
       - docker compose build {{.CLI_ARGS}}
 
   compose:up:
-    desc: docker compose im Hintergrund starten (baut vorher mit Version und Git-Commit neu).
+    desc: Start docker compose in the background (rebuilds first with version and Git commit).
     cmds:
       - docker compose up -d --build {{.CLI_ARGS}}
 
   compose:down:
-    desc: docker compose stoppen und Container entfernen (Volumes bleiben erhalten).
+    desc: Stop docker compose and remove containers (volumes are kept).
     cmds:
       - docker compose down {{.CLI_ARGS}}
 
   compose:logs:
-    desc: Logs von dmarc-analyzer per docker compose verfolgen.
+    desc: Follow dmarc-analyzer logs via docker compose.
     cmds:
       - docker compose logs -f dmarc-analyzer
 
   clean:
-    desc: Build-Artefakte entfernen.
+    desc: Remove build artifacts.
     cmds:
       - rm -rf {{.BIN_DIR}} {{.COVER_FILE}} coverage.html
 
   check:
-    desc: fmt + lint + test — das, was auch die CI ausführt.
+    desc: fmt + lint + test — the same thing CI runs.
     cmds:
       - task: fmt
       - task: lint

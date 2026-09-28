@@ -8,20 +8,19 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/report"
 )
 
-// dayLabel ist das im Diagramm angezeigte Kurzformat ("01.09."), dayISO
-// das für Drill-down-URLs und als eindeutiger Matrix-Schlüssel
-// (MIGRATIONSPLAN.md Abschnitt 6a: "Der Server liefert nur Daten ...
-// Ziel-URL für den Drill-down").
+// dayLabel is the short format shown in the chart ("01.09."), dayISO the
+// one for drill-down URLs and as a unique matrix key (MIGRATIONSPLAN.md
+// section 6a: "the server only delivers data ... target URL for the
+// drill-down").
 func dayLabel(t time.Time) string { return t.Format("02.01.") }
 func dayISO(t time.Time) string   { return t.Format("2006-01-02") }
 
-// reportsURL baut die Ziel-URL für den Drill-down von einem Diagrammpunkt
-// zur (noch nicht existierenden, Meilenstein M2) Berichtstabelle —
-// fertig aufbereitet vom Server, damit charts.js keine eigene
-// Filterlogik kennen muss. domainFilter ist der aktuell in der
-// Filterleiste gesetzte Domain-Filter (leer: keiner) — ein Drill-down
-// soll den Filter nicht verlieren, unter dem das Diagramm gezeichnet
-// wurde (MIGRATIONSPLAN.md Abschnitt 9.6).
+// reportsURL builds the target URL for the drill-down from a chart point
+// to the (not yet existing, milestone M2) reports table — fully prepared
+// by the server, so charts.js doesn't need to know its own filter logic.
+// domainFilter is the domain filter currently set in the filter bar
+// (empty: none) — a drill-down shouldn't lose the filter the chart was
+// drawn under (MIGRATIONSPLAN.md section 9.6).
 func reportsURL(day time.Time, sourceIP string, domainFilter string) string {
 	v := url.Values{}
 	v.Set("von", dayISO(day))
@@ -35,12 +34,11 @@ func reportsURL(day time.Time, sourceIP string, domainFilter string) string {
 	return "/berichte?" + v.Encode()
 }
 
-// reportsURLForPeriod ist dieselbe Drill-down-URL wie reportsURL, aber für
-// den gesamten gewählten Zeitraum statt für einen einzelnen Tag — für
-// Top-Sendequellen (ganzer Zeitraum, gefiltert auf eine IP) und die
-// Disposition-Verteilung (ganzer Zeitraum, gefiltert auf eine
-// Disposition). disposition ist leer, wenn kein Disposition-Filter
-// gesetzt werden soll.
+// reportsURLForPeriod is the same drill-down URL as reportsURL, but for
+// the entire selected period instead of a single day — for top sending
+// sources (whole period, filtered to one IP) and the disposition
+// breakdown (whole period, filtered to one disposition). disposition is
+// empty when no disposition filter should be set.
 func reportsURLForPeriod(period report.DateRange, sourceIP, domainFilter string, disposition report.Disposition) string {
 	v := url.Values{}
 	v.Set("von", dayISO(period.Begin))
@@ -57,7 +55,7 @@ func reportsURLForPeriod(period report.DateRange, sourceIP, domainFilter string,
 	return "/berichte?" + v.Encode()
 }
 
-// --- Nachrichtenvolumen pro Tag (gestapeltes Balkendiagramm) -----------
+// --- Message volume per day (stacked bar chart) -------------------------
 
 type dailyVolumeResponse struct {
 	Days []dailyVolumePoint `json:"days"`
@@ -97,7 +95,7 @@ func (s *Server) handleChartDailyVolume(w http.ResponseWriter, r *http.Request) 
 	s.writeJSON(w, r, resp)
 }
 
-// --- Sendequelle × Tag (Heatmap) ----------------------------------------
+// --- Sending source × day (heatmap) -------------------------------------
 
 type heatmapResponse struct {
 	SourceLabels []string      `json:"sourceLabels"`
@@ -105,9 +103,9 @@ type heatmapResponse struct {
 	Cells        []heatmapCell `json:"cells"`
 }
 
-// heatmapCell trägt X/Y als Achsen-Label (chartjs-chart-matrix ordnet
-// Zellen bei einer category-Achse über exakt diese Strings zu, siehe
-// charts.js) statt über einen Zeilen-/Spaltenindex.
+// heatmapCell carries X/Y as axis labels (chartjs-chart-matrix maps cells
+// on a category axis via exactly these strings, see charts.js) instead
+// of via a row/column index.
 type heatmapCell struct {
 	X        string  `json:"x"`
 	Y        string  `json:"y"`
@@ -142,12 +140,11 @@ func (s *Server) handleChartHeatmap(w http.ResponseWriter, r *http.Request) {
 	for si, ip := range heatmap.Sources {
 		label := ip.String()
 		if si < len(heatmap.SourceLabels) && heatmap.SourceLabels[si] != "" {
-			// IP-Adresse immer mit anzeigen, nicht nur den erkannten Namen:
-			// chartjs-chart-matrix ordnet Zellen bei einer category-Achse
-			// über den Label-String zu (siehe charts.js) — zwei
-			// unterschiedliche Quellen mit demselben erkannten Dienst
-			// (z. B. zwei IPs von "Google Workspace") dürften sonst
-			// fälschlich in derselben Zeile landen.
+			// Always show the IP address too, not just the detected name:
+			// chartjs-chart-matrix maps cells on a category axis via the
+			// label string (see charts.js) — two different sources with
+			// the same detected service (e.g. two IPs from "Google
+			// Workspace") would otherwise wrongly end up in the same row.
 			label = heatmap.SourceLabels[si] + " (" + ip.String() + ")"
 		}
 		resp.SourceLabels[si] = label
@@ -168,7 +165,7 @@ func (s *Server) handleChartHeatmap(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, r, resp)
 }
 
-// --- Top-Sendequellen (horizontales Balkendiagramm) ---------------------
+// --- Top sending sources (horizontal bar chart) --------------------------
 
 type sourceVolumeResponse struct {
 	Sources []sourceVolumePoint `json:"sources"`
@@ -181,10 +178,10 @@ type sourceVolumePoint struct {
 	URL      string  `json:"url"`
 }
 
-// sourceLabel zeigt den von statistics.UseCase angereicherten Namen
-// (erkannter Dienst oder PTR-Hostname) zusätzlich zur IP-Adresse — analog
-// zu den Heatmap-Zeilenbeschriftungen oben (dieselbe Begründung: zwei
-// Quellen mit demselben erkannten Dienst müssen unterscheidbar bleiben).
+// sourceLabel shows the name enriched by statistics.UseCase (detected
+// service or PTR hostname) in addition to the IP address — analogous to
+// the heatmap row labels above (same reasoning: two sources with the same
+// detected service must stay distinguishable).
 func sourceLabel(s report.SourceIP, enrichedLabel string) string {
 	if enrichedLabel == "" {
 		return s.String()
@@ -219,12 +216,11 @@ func (s *Server) handleChartTopSources(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, r, resp)
 }
 
-// --- Verteilung nach Disposition (Donut) --------------------------------
+// --- Disposition breakdown (donut) ----------------------------------------
 
-// dispositionOrder legt eine feste, deterministische Reihenfolge für den
-// Donut fest — dieselbe Reihenfolge wie zuvor internal/infra/charts
-// (Renderer.DispositionChart), die Iteration über eine map wäre nicht
-// reproduzierbar.
+// dispositionOrder fixes a deterministic order for the donut — the same
+// order as formerly internal/infra/charts (Renderer.DispositionChart);
+// iterating over a map wouldn't be reproducible.
 var dispositionOrder = []report.Disposition{
 	report.DispositionNone, report.DispositionQuarantine, report.DispositionReject, report.DispositionUnknown,
 }
@@ -232,13 +228,13 @@ var dispositionOrder = []report.Disposition{
 func dispositionLabel(d report.Disposition) string {
 	switch d {
 	case report.DispositionNone:
-		return "Keine Maßnahme"
+		return "No action"
 	case report.DispositionQuarantine:
-		return "Quarantäne"
+		return "Quarantine"
 	case report.DispositionReject:
-		return "Zurückgewiesen"
+		return "Rejected"
 	default:
-		return "Unbekannt"
+		return "Unknown"
 	}
 }
 

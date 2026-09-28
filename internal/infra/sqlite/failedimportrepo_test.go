@@ -21,8 +21,8 @@ func TestFailedImportRepository_Record(t *testing.T) {
 		AccountID:  "acc-1",
 		MessageUID: 42,
 		Filename:   "report.xml.gz",
-		Error:      "gzip konnte nicht geöffnet werden",
-		Raw:        []byte("kaputte-daten"),
+		Error:      "could not open gzip",
+		Raw:        []byte("corrupt-data"),
 		OccurredAt: time.Date(2026, 9, 16, 10, 0, 0, 0, time.UTC),
 	})
 	require.NoError(t, err)
@@ -34,7 +34,7 @@ func TestFailedImportRepository_Record(t *testing.T) {
 	var filename, errMsg string
 	require.NoError(t, db.QueryRowContext(ctx, "SELECT filename, error FROM failed_imports").Scan(&filename, &errMsg))
 	require.Equal(t, "report.xml.gz", filename)
-	require.Equal(t, "gzip konnte nicht geöffnet werden", errMsg)
+	require.Equal(t, "could not open gzip", errMsg)
 }
 
 func TestFailedImportRepository_Record_WithoutTimestamp_DefaultsToNow(t *testing.T) {

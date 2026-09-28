@@ -1,8 +1,7 @@
-// Package account enthält das Aggregate MailAccount, den Typ Secret für
-// den sicheren Umgang mit Zugangsdaten im Speicher, sowie den Port
-// Repository. Das Secret kommt seit dem Umstieg auf reine
-// ENV-Konfiguration aus internal/infra/envconfig statt aus einem
-// persistierten Schlüsselbund.
+// Package account contains the MailAccount aggregate, the Secret type for
+// safely handling credentials in memory, and the Repository port. Secret
+// has come from internal/infra/envconfig rather than a persisted keychain
+// ever since the switch to pure ENV configuration.
 package account
 
 import (
@@ -11,23 +10,23 @@ import (
 	"time"
 )
 
-// AccountID identifiziert ein MailAccount eindeutig. Von der
-// Persistenzschicht vergeben (UUID o. ä.), nicht vom Domänenmodell.
+// AccountID uniquely identifies a MailAccount. Assigned by the persistence
+// layer (UUID or similar), not by the domain model.
 //
-// Umbenennung zu "ID" würde mit dem Feld MailAccount.ID kollidieren
-// (Feld und Typ hießen dann identisch "ID ID") — dieselbe Ausnahme wie bei
-// report.ReportID, siehe AGENTS.md.
+// Renaming to "ID" would collide with the MailAccount.ID field (field and
+// type would both be called "ID ID") — the same exception as
+// report.ReportID, see AGENTS.md.
 //
-//nolint:revive // "AccountID" stuttert als account.AccountID, aber eine
+//nolint:revive // "AccountID" stutters as account.AccountID, but a
 type AccountID string
 
-// defaultMailbox ist das IMAP-Standardpostfach, wenn keines angegeben wird.
+// defaultMailbox is the default IMAP mailbox when none is given.
 const defaultMailbox = "INBOX"
 
-// MailAccount ist das Aggregate für ein konfiguriertes IMAP-Postfach, aus
-// dem DMARC-Aggregate-Reports abgeholt werden. Enthält bewusst kein
-// Passwort — das kommt ausschließlich aus einer Umgebungsvariable
-// (internal/infra/envconfig) und wird nie in der DB gespeichert.
+// MailAccount is the aggregate for a configured IMAP mailbox from which
+// DMARC aggregate reports are fetched. Deliberately contains no password —
+// that comes exclusively from an environment variable
+// (internal/infra/envconfig) and is never stored in the DB.
 type MailAccount struct {
 	ID          AccountID
 	DisplayName string
@@ -35,30 +34,30 @@ type MailAccount struct {
 	Port        int
 	Username    string
 	Mailbox     string
-	// UseTLS steuert IMAPS (Port 993 typischerweise). Klartext-IMAP ist nur
-	// mit expliziter Bestätigung in der UI vorgesehen (Abschnitt 9) — diese
-	// Bestätigung ist Sache der UI-Schicht, nicht dieser Invariante; das
-	// Domänenmodell lässt UseTLS=false bewusst zu, weil es sonst nicht
-	// gegen einen lokalen Test-Server ohne TLS nutzbar wäre.
+	// UseTLS controls IMAPS (typically port 993). Plaintext IMAP is only
+	// meant to be used with explicit confirmation in the UI (section 9) —
+	// that confirmation is the UI layer's concern, not this invariant; the
+	// domain model deliberately allows UseTLS=false, otherwise it couldn't
+	// be used against a local test server without TLS.
 	UseTLS    bool
 	CreatedAt time.Time
 }
 
-// NewMailAccount erzwingt die naheliegenden Invarianten: ID, Host und
-// Username dürfen nicht leer sein, Port muss ein gültiger TCP-Port sein.
-// Mailbox fällt auf "INBOX" zurück, wenn leer.
+// NewMailAccount enforces the obvious invariants: ID, Host and Username
+// must not be empty, Port must be a valid TCP port. Mailbox falls back to
+// "INBOX" when empty.
 func NewMailAccount(id AccountID, displayName, host string, port int, username, mailbox string, useTLS bool, createdAt time.Time) (*MailAccount, error) {
 	if strings.TrimSpace(string(id)) == "" {
-		return nil, fmt.Errorf("account ohne id ist ungültig")
+		return nil, fmt.Errorf("account without id is invalid")
 	}
 	if strings.TrimSpace(host) == "" {
-		return nil, fmt.Errorf("account ohne host ist ungültig")
+		return nil, fmt.Errorf("account without host is invalid")
 	}
 	if port < 1 || port > 65535 {
-		return nil, fmt.Errorf("port muss zwischen 1 und 65535 liegen, war %d", port)
+		return nil, fmt.Errorf("port must be between 1 and 65535, was %d", port)
 	}
 	if strings.TrimSpace(username) == "" {
-		return nil, fmt.Errorf("account ohne benutzername ist ungültig")
+		return nil, fmt.Errorf("account without username is invalid")
 	}
 
 	if strings.TrimSpace(mailbox) == "" {

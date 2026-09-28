@@ -20,7 +20,7 @@ func TestSave_And_FindByID_RoundTrip(t *testing.T) {
 	r := newTestReport(t, reportOpts{orgName: "roundtrip.example"})
 
 	require.NoError(t, repo.Save(ctx, r))
-	require.NotZero(t, r.ID, "Save muss die vergebene ID setzen")
+	require.NotZero(t, r.ID, "Save must set the assigned ID")
 
 	loaded, err := repo.FindByID(ctx, r.ID)
 	require.NoError(t, err)
@@ -64,7 +64,7 @@ func TestSave_ReportWithErrors(t *testing.T) {
 
 	repo := sqlite.NewReportRepository(newTestDB(t))
 	r := newTestReport(t, reportOpts{})
-	r.Metadata.Errors = []string{"unbekanntes element im xml", "pct fehlte"}
+	r.Metadata.Errors = []string{"unknown element in xml", "pct missing"}
 
 	require.NoError(t, repo.Save(ctx, r))
 
@@ -82,9 +82,9 @@ func TestSave_DuplicateKey_ReturnsErrDuplicateReport(t *testing.T) {
 	first := newTestReport(t, reportOpts{orgName: "dup.example", reportID: "dup-1"})
 	require.NoError(t, repo.Save(ctx, first))
 
-	// Zweiter Report mit identischer fachlicher Identität
-	// (org_name, report_id, date_begin) — z. B. dieselbe Mail zweimal
-	// abgeholt (IMPLEMENTIERUNG.md Abschnitt 6.3).
+	// Second report with identical domain identity
+	// (org_name, report_id, date_begin) — e.g. the same mail fetched
+	// twice (IMPLEMENTIERUNG.md section 6.3).
 	second := newTestReport(t, reportOpts{orgName: "dup.example", reportID: "dup-1"})
 
 	err := repo.Save(ctx, second)
@@ -100,13 +100,13 @@ func TestExists(t *testing.T) {
 
 	exists, err := repo.Exists(ctx, r.Key())
 	require.NoError(t, err)
-	require.False(t, exists, "vor dem Speichern darf der Report nicht existieren")
+	require.False(t, exists, "the report must not exist before saving")
 
 	require.NoError(t, repo.Save(ctx, r))
 
 	exists, err = repo.Exists(ctx, r.Key())
 	require.NoError(t, err)
-	require.True(t, exists, "nach dem Speichern muss der Report existieren")
+	require.True(t, exists, "the report must exist after saving")
 }
 
 func TestFindByID_NotFound(t *testing.T) {
@@ -135,7 +135,7 @@ func TestSave_ContextCancelled_RollsBackFully(t *testing.T) {
 
 	var count int
 	require.NoError(t, db.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM reports").Scan(&count))
-	require.Zero(t, count, "bei abgebrochenem Kontext darf kein Report übrig bleiben")
+	require.Zero(t, count, "no report must remain when the context was cancelled")
 }
 
 func TestSave_SetsIDOnlyOnSuccess(t *testing.T) {
@@ -149,8 +149,8 @@ func TestSave_SetsIDOnlyOnSuccess(t *testing.T) {
 	firstID := r.ID
 	require.NotZero(t, firstID)
 
-	// Erneutes Speichern desselben Domänenobjekts (gleiche Identität)
-	// scheitert an der Deduplizierung — r.ID darf sich dabei nicht ändern.
+	// Saving the same domain object again (same identity) fails due to
+	// deduplication — r.ID must not change in the process.
 	err := repo.Save(ctx, r)
 	require.True(t, errors.Is(err, report.ErrDuplicate))
 	require.Equal(t, firstID, r.ID)
@@ -165,11 +165,11 @@ func TestFindByID_CorruptedMessageUID_ReturnsError(t *testing.T) {
 	r := newTestReport(t, reportOpts{orgName: "corrupt.example", reportID: "corrupt-1"})
 	require.NoError(t, repo.Save(ctx, r))
 
-	// Simuliert eine von außerhalb dieses Programms manipulierte Datei:
-	// message_uid außerhalb des uint32-Bereichs (IMAP-UIDs sind 32 Bit).
+	// Simulates a file manipulated from outside this program:
+	// message_uid outside the uint32 range (IMAP UIDs are 32 bits).
 	_, err := db.ExecContext(ctx, "UPDATE reports SET message_uid = ? WHERE id = ?", int64(1)<<40, int64(r.ID))
 	require.NoError(t, err)
 
 	_, err = repo.FindByID(ctx, r.ID)
-	require.Error(t, err, "ein message_uid außerhalb des uint32-Bereichs muss abgelehnt werden, nicht still abgeschnitten")
+	require.Error(t, err, "a message_uid outside the uint32 range must be rejected, not silently truncated")
 }

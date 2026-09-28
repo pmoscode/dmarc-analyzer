@@ -1,4 +1,3 @@
-// Package syncreports orchestriert den Use Case "Reports abholen und
-// importieren" (siehe IMPLEMENTIERUNG.md Abschnitt 7). Wird in AP 4
-// implementiert.
+// Package syncreports orchestrates the "fetch and import reports" use
+// case (see IMPLEMENTIERUNG.md section 7). Implemented in work package 4.
 package syncreports

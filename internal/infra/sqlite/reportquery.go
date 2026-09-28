@@ -11,21 +11,21 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/report"
 )
 
-// defaultPageSize und maxPageSize begrenzen Query, wenn Limit unbesetzt
-// oder unplausibel groß ist — eine UI-Tabelle soll nie versehentlich
-// hunderttausende Zeilen auf einmal anfordern können.
+// defaultPageSize and maxPageSize limit Query when Limit is unset or
+// implausibly large — a UI table should never be able to accidentally
+// request hundreds of thousands of rows at once.
 const (
 	defaultPageSize = 50
 	maxPageSize     = 500
 )
 
-// errGroupBySourceIPUnsupported: siehe Kommentar bei GroupBySourceIP in
+// errGroupBySourceIPUnsupported: see the comment on GroupBySourceIP in
 // internal/domain/report/repository.go.
-var errGroupBySourceIPUnsupported = errors.New("groupby source_ip ist auf report-ebene nicht sinnvoll abbildbar")
+var errGroupBySourceIPUnsupported = errors.New("groupby source_ip cannot be meaningfully represented at the report level")
 
-// Query filtert, sortiert und paginiert gespeicherte Reports. Gibt gemäß
-// dem Port-Vertrag (siehe domain/report/repository.go) AggregateReport-Werte
-// ohne geladene Records zurück.
+// Query filters, sorts, and paginates stored reports. Per the port
+// contract (see domain/report/repository.go), returns AggregateReport
+// values without loaded records.
 func (repo *ReportRepository) Query(ctx context.Context, q report.Query) (report.Page, error) {
 	if q.GroupBy == report.GroupBySourceIP {
 		return report.Page{}, errGroupBySourceIPUnsupported
@@ -56,8 +56,8 @@ func (repo *ReportRepository) Query(ctx context.Context, q report.Query) (report
 		whereClause = "WHERE " + strings.Join(where, " AND ")
 	}
 
-	// limit+1: ein zusätzliches Ergebnis anfordern, um ohne separates
-	// COUNT(*) zu erkennen, ob eine weitere Seite existiert.
+	// limit+1: request one extra result to detect whether another page
+	// exists without a separate COUNT(*).
 	reports, err := loadReports(ctx, repo.db, whereClause, args, orderBy, limit+1, false)
 	if err != nil {
 		return report.Page{}, err
@@ -78,7 +78,7 @@ func buildWhere(q report.Query) ([]string, []any) {
 	var args []any
 
 	if q.Period != nil {
-		// Überlappung des Report-Zeitraums mit dem angefragten Zeitraum.
+		// Overlap of the report period with the requested period.
 		clauses = append(clauses, "r.date_begin < ? AND r.date_end > ?")
 		args = append(args, q.Period.End.Unix(), q.Period.Begin.Unix())
 	}
@@ -102,10 +102,10 @@ func buildWhere(q report.Query) ([]string, []any) {
 	return clauses, args
 }
 
-// sortColumn liefert die SQL-Spalte für ein SortField. Unbekannte/leere
-// Werte fallen auf date_begin zurück — ein Report ohne Sortierangabe soll
-// trotzdem eine stabile, nützliche Reihenfolge bekommen (neueste zuerst
-// wäre Sache des Aufrufers über SortDirection).
+// sortColumn returns the SQL column for a SortField. Unknown/empty
+// values fall back to date_begin — a report without a sort specification
+// should still get a stable, useful order (newest first would be the
+// caller's responsibility via SortDirection).
 func sortColumn(field report.SortField) string {
 	switch field {
 	case report.SortByOrgName:
@@ -145,10 +145,10 @@ func buildOrderBy(q report.Query) string {
 	return "ORDER BY " + strings.Join(parts, ", ")
 }
 
-// buildCursorWhere baut den Keyset-Vergleich für die zweite und folgende
-// Seiten. SQLite unterstützt Row-Value-Vergleiche
-// ("WHERE (a, b, c) > (?, ?, ?)") seit 3.15 — das hält die Bedingung auch
-// mit Gruppierungsspalte einfach und indexnutzbar.
+// buildCursorWhere builds the keyset comparison for the second and
+// subsequent pages. SQLite has supported row-value comparisons
+// ("WHERE (a, b, c) > (?, ?, ?)") since 3.15 — this keeps the condition
+// simple and index-usable even with a grouping column.
 func buildCursorWhere(q report.Query) (string, []any, error) {
 	cur, err := decodeCursor(q.Cursor)
 	if err != nil {
@@ -185,9 +185,9 @@ func buildCursorWhere(q report.Query) (string, []any, error) {
 	return clause, args, nil
 }
 
-// buildCursor liest die Sortier-/Gruppierungswerte aus dem zuletzt
-// geladenen Report — direkt aus den bereits typisierten Domänenwerten,
-// nicht erneut aus SQL abgeleitet.
+// buildCursor reads the sort/group values from the last-loaded report —
+// directly from the already-typed domain values, not re-derived from
+// SQL.
 func buildCursor(q report.Query, last report.AggregateReport) queryCursor {
 	cur := queryCursor{ID: int64(last.ID)}
 
@@ -205,7 +205,7 @@ func buildCursor(q report.Query, last report.AggregateReport) queryCursor {
 		cur.SortStr = last.Metadata.OrgName
 	case report.SortByDomain:
 		cur.SortStr = last.Policy.Domain.String()
-	default: // SortByDateBegin und unbekannte Werte, siehe sortColumn.
+	default: // SortByDateBegin and unknown values, see sortColumn.
 		cur.HasInt = true
 		cur.SortInt = last.Metadata.Range.Begin.Unix()
 	}
@@ -213,10 +213,10 @@ func buildCursor(q report.Query, last report.AggregateReport) queryCursor {
 	return cur
 }
 
-// loadReports lädt Reports gemäß whereClause/args/orderBy/limit. Ist
-// withRecords gesetzt, werden zusätzlich Records, deren Reasons und
-// Auth-Ergebnisse nachgeladen (für FindByID) — sonst bleibt Records leer
-// (für Query, siehe Port-Dokumentation).
+// loadReports loads reports per whereClause/args/orderBy/limit. If
+// withRecords is set, records and their reasons and auth results are
+// additionally loaded (for FindByID) — otherwise Records stays empty
+// (for Query, see the port documentation).
 func loadReports(ctx context.Context, db *sql.DB, whereClause string, args []any, orderBy string, limit int, withRecords bool) ([]report.AggregateReport, error) {
 	query := fmt.Sprintf(`
 		SELECT
@@ -235,7 +235,7 @@ func loadReports(ctx context.Context, db *sql.DB, whereClause string, args []any
 
 	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("reports konnten nicht geladen werden: %w", err)
+		return nil, fmt.Errorf("could not load reports: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -248,7 +248,7 @@ func loadReports(ctx context.Context, db *sql.DB, whereClause string, args []any
 		reports = append(reports, r)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("reports konnten nicht vollständig gelesen werden: %w", err)
+		return nil, fmt.Errorf("could not fully read reports: %w", err)
 	}
 
 	if withRecords {
@@ -303,7 +303,7 @@ func scanReport(rows *sql.Rows) (report.AggregateReport, error) {
 		&row.accountID, &row.mailbox, &row.messageUID, &row.filename, &row.importedAt,
 	)
 	if err != nil {
-		return report.AggregateReport{}, fmt.Errorf("report-zeile konnte nicht gelesen werden: %w", err)
+		return report.AggregateReport{}, fmt.Errorf("could not read report row: %w", err)
 	}
 
 	return rowToAggregateReport(row)
@@ -312,7 +312,7 @@ func scanReport(rows *sql.Rows) (report.AggregateReport, error) {
 func rowToAggregateReport(row reportRow) (report.AggregateReport, error) {
 	domain, err := report.NewDomainName(row.policyDomain)
 	if err != nil {
-		return report.AggregateReport{}, fmt.Errorf("gespeicherte policy-domain %q ist ungültig: %w", row.policyDomain, err)
+		return report.AggregateReport{}, fmt.Errorf("stored policy domain %q is invalid: %w", row.policyDomain, err)
 	}
 
 	dateRange, err := report.NewDateRange(
@@ -320,7 +320,7 @@ func rowToAggregateReport(row reportRow) (report.AggregateReport, error) {
 		time.Unix(row.dateEnd, 0).UTC(),
 	)
 	if err != nil {
-		return report.AggregateReport{}, fmt.Errorf("gespeicherter zeitraum ist ungültig: %w", err)
+		return report.AggregateReport{}, fmt.Errorf("stored period is invalid: %w", err)
 	}
 
 	pct := 0
@@ -338,17 +338,17 @@ func rowToAggregateReport(row reportRow) (report.AggregateReport, error) {
 		row.policyFO.String,
 	)
 	if err != nil {
-		return report.AggregateReport{}, fmt.Errorf("gespeicherte policy ist ungültig: %w", err)
+		return report.AggregateReport{}, fmt.Errorf("stored policy is invalid: %w", err)
 	}
 
 	importedAt, err := time.Parse(time.RFC3339Nano, row.importedAt)
 	if err != nil {
-		return report.AggregateReport{}, fmt.Errorf("gespeichertes imported_at ist ungültig: %w", err)
+		return report.AggregateReport{}, fmt.Errorf("stored imported_at is invalid: %w", err)
 	}
 
 	messageUID, err := toUint32(row.messageUID.Int64)
 	if err != nil {
-		return report.AggregateReport{}, fmt.Errorf("gespeicherte message_uid ist ungültig: %w", err)
+		return report.AggregateReport{}, fmt.Errorf("stored message_uid is invalid: %w", err)
 	}
 
 	metadata := report.Metadata{
@@ -368,7 +368,7 @@ func rowToAggregateReport(row reportRow) (report.AggregateReport, error) {
 
 	r, err := report.NewAggregateReport(metadata, policy, nil, sourceRef, importedAt)
 	if err != nil {
-		return report.AggregateReport{}, fmt.Errorf("gespeicherter report ist ungültig: %w", err)
+		return report.AggregateReport{}, fmt.Errorf("stored report is invalid: %w", err)
 	}
 	r.ID = report.ReportID(row.id)
 
@@ -390,7 +390,7 @@ func loadReportErrors(ctx context.Context, db *sql.DB, reports []report.Aggregat
 
 	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("report_errors konnten nicht geladen werden: %w", err)
+		return nil, fmt.Errorf("could not load report_errors: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -399,12 +399,12 @@ func loadReportErrors(ctx context.Context, db *sql.DB, reports []report.Aggregat
 		var reportID int64
 		var message string
 		if err := rows.Scan(&reportID, &message); err != nil {
-			return nil, fmt.Errorf("report_errors-zeile konnte nicht gelesen werden: %w", err)
+			return nil, fmt.Errorf("could not read report_errors row: %w", err)
 		}
 		result[reportID] = append(result[reportID], message)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("report_errors konnten nicht vollständig gelesen werden: %w", err)
+		return nil, fmt.Errorf("could not fully read report_errors: %w", err)
 	}
 
 	return result, nil

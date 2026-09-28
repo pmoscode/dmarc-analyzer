@@ -12,7 +12,7 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/sources"
 )
 
-var errTest = errors.New("testfehler")
+var errTest = errors.New("test error")
 
 type fakeSourcesRepository struct {
 	page sources.Page
@@ -65,7 +65,7 @@ func TestUseCase_List_EnrichesEveryRow(t *testing.T) {
 
 	require.Equal(t, "mail.google.com", got.Stats[0].Enrichment.Hostname)
 	require.Equal(t, "Google Workspace", got.Stats[0].Enrichment.Service)
-	require.Empty(t, got.Stats[1].Enrichment.Hostname, "quelle ohne bekanntes PTR bleibt leer, kein Fehler")
+	require.Empty(t, got.Stats[1].Enrichment.Hostname, "source without a known PTR stays empty, not an error")
 
 	require.ElementsMatch(t, []string{"203.0.113.1", "203.0.113.2"}, enricher.calls)
 }

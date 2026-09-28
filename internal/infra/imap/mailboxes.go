@@ -12,13 +12,12 @@ import (
 
 var _ sync.MailboxLister = (*Adapter)(nil)
 
-// ListMailboxes implementiert sync.MailboxLister: listet per IMAP LIST
-// alle auf dem Server vorhandenen Postfächer/Ordner, ausgenommen solche
-// mit dem Attribut \Noselect (reine Hierarchie-Knoten, die selbst keine
-// Nachrichten enthalten können, siehe RFC 9051 Abschnitt 7.3.1) —
-// niemand kann DMARC-Berichte in einem solchen "Ordner" ablegen, ihn in
-// den Picker aufzunehmen wäre nur verwirrend. Ergebnis alphabetisch
-// sortiert für eine stabile, vorhersehbare Anzeige.
+// ListMailboxes implements sync.MailboxLister: lists all mailboxes/folders
+// present on the server via IMAP LIST, excluding those with the \Noselect
+// attribute (pure hierarchy nodes that cannot themselves contain messages,
+// see RFC 9051 section 7.3.1) — nobody can put DMARC reports in such a
+// "folder", so including it in the picker would only be confusing. Result
+// sorted alphabetically for a stable, predictable display.
 func (a *Adapter) ListMailboxes(ctx context.Context) ([]string, error) {
 	if a.client == nil {
 		return nil, errNotConnected
@@ -39,7 +38,7 @@ func (a *Adapter) ListMailboxes(ctx context.Context) ([]string, error) {
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("postfächer konnten nicht aufgelistet werden: %w", err)
+		return nil, fmt.Errorf("failed to list mailboxes: %w", err)
 	}
 
 	sort.Strings(mailboxes)

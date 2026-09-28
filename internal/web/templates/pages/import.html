@@ -1,19 +1,19 @@
 {{define "content"}}
 {{if .Error}}<p class="form-error">{{.Error}}</p>{{end}}
 {{if .HasResult}}
-<p class="form-success">{{.New}} neu, {{.Skipped}} übersprungen, {{.Failed}} fehlerhaft.</p>
+<p class="form-success">{{.New}} new, {{.Skipped}} skipped, {{.Failed}} failed.</p>
 {{end}}
 
 <section class="detail-card narrow-card">
-  <h2>DMARC-Reports importieren</h2>
-  <p class="chart-hint">Unterstützte Formate: .eml, .xml, .xml.gz, .zip — auch mehrere Dateien auf einmal.</p>
+  <h2>Import DMARC reports</h2>
+  <p class="chart-hint">Supported formats: .eml, .xml, .xml.gz, .zip — multiple files at once are fine too.</p>
   <form method="post" action="/import" enctype="multipart/form-data" class="stacked-form">
     <input type="hidden" name="csrf_token" value="{{csrfToken}}">
     <label class="dropzone" id="import-dropzone" for="import-file-input">
       <input type="file" name="dateien" id="import-file-input" multiple accept=".eml,.xml,.gz,.zip" class="dropzone-input">
-      <span id="import-dropzone-text">Dateien hierher ziehen oder klicken zum Auswählen</span>
+      <span id="import-dropzone-text">Drag files here or click to choose</span>
     </label>
-    <button type="submit">Hochladen</button>
+    <button type="submit">Upload</button>
   </form>
 </section>
 {{end}}

@@ -8,14 +8,13 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/domainstats"
 )
 
-// domainsPageSize ist die je Ladeschritt angeforderte Seitengröße —
-// dieselbe Lazy-Nachladelogik wie /berichte und /quellen.
+// domainsPageSize is the page size requested per load step — the same
+// lazy-loading logic as /berichte and /quellen.
 const domainsPageSize = 50
 
-// domainsFilter fasst Filter und Sortierung von /domains zusammen.
-// Genau wie sourcesFilter kennt domainstats.Query keine
-// Drill-down-spezifischen Felder — nur Zeitraum, Domain (geteilte
-// Filterleiste) und ein Sortierfeld.
+// domainsFilter combines the filter and sort order of /domains. Just
+// like sourcesFilter, domainstats.Query has no drill-down-specific
+// fields — only period, domain (shared filter bar) and a sort field.
 type domainsFilter struct {
 	Period    filterParams
 	SortField domainstats.SortField
@@ -72,11 +71,11 @@ func domainsPageURL(filter domainsFilter, cursor string) string {
 	return "/domains/seite?" + v.Encode()
 }
 
-// domainReportsURL verlinkt eine Domain-Zeile auf die Berichte-Liste,
-// gefiltert auf genau diese Domain und denselben Zeitraum — der
-// eigentliche Zweck dieser Ansicht: eine Zeile pro Domain zum Überblicken,
-// mit einem Klick weiter zu den einzelnen Reports dahinter (die die
-// Domains-Ansicht bewusst NICHT ersetzt, siehe domainstats.Stat.ReportCount).
+// domainReportsURL links a domain row to the reports list, filtered to
+// exactly that domain and the same period — the actual purpose of this
+// view: one row per domain for an overview, one click away from the
+// individual reports behind it (which this view deliberately does NOT
+// replace, see domainstats.Stat.ReportCount).
 func domainReportsURL(days int, domain string) string {
 	v := url.Values{}
 	v.Set("zeitraum", strconv.Itoa(days))
@@ -84,7 +83,7 @@ func domainReportsURL(days int, domain string) string {
 	return "/berichte?" + v.Encode()
 }
 
-// --- Vorlagendaten -------------------------------------------------------
+// --- Template data ---------------------------------------------------------
 
 type domainRowView struct {
 	Domain          string
@@ -127,7 +126,7 @@ type domainsPageData struct {
 	SortDomainURL string
 	SortField     string
 
-	// ExportURL: siehe reportsPageData.ExportURL.
+	// ExportURL: see reportsPageData.ExportURL.
 	ExportURL string
 
 	Rows domainsRowsData
@@ -150,7 +149,7 @@ func buildDomainsPageData(filter domainsFilter, page domainstats.Page) domainsPa
 	}
 }
 
-// --- Handler --------------------------------------------------------------
+// --- Handlers ---------------------------------------------------------------
 
 func (s *Server) handleDomains(w http.ResponseWriter, r *http.Request) {
 	filter := parseDomainsFilter(r)

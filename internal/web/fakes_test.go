@@ -23,11 +23,11 @@ type fakeErr string
 
 func (e fakeErr) Error() string { return string(e) }
 
-var errTest = fakeErr("testfehler")
+var errTest = fakeErr("test error")
 
-// fakeRepository implementiert analysis.Repository mit fest verdrahteten
-// Rückgabewerten — derselbe Aufbau wie zuvor internal/ui/dashboard
-// (fakes_test.go), hier eigenständig für internal/web.
+// fakeRepository implements analysis.Repository with hard-wired return
+// values — the same structure as formerly internal/ui/dashboard
+// (fakes_test.go), here standalone for internal/web.
 type fakeRepository struct {
 	stats        analysis.Statistics
 	dailyVolumes []analysis.DailyVolume
@@ -35,10 +35,10 @@ type fakeRepository struct {
 	heatmap      analysis.Heatmap
 	computeErr   error
 
-	// lastDailyVolumesQuery hält die zuletzt an DailyVolumes übergebene
-	// Query fest — für Tests, die prüfen, dass die URL-Filterleiste
-	// (zeitraum/domain, MIGRATIONSPLAN.md Meilenstein M1) tatsächlich bis
-	// zum Repository durchgereicht wird, statt nur am Handler zu enden.
+	// lastDailyVolumesQuery keeps the query last passed to DailyVolumes —
+	// for tests that check the URL filter bar (zeitraum/domain,
+	// MIGRATIONSPLAN.md milestone M1) actually makes it all the way to
+	// the repository, not just ending at the handler.
 	lastDailyVolumesQuery analysis.Query
 }
 
@@ -70,11 +70,10 @@ func mustSourceIP(s string) report.SourceIP {
 	return ip
 }
 
-// mustAccount baut ein gültiges MailAccount mit sinnvollen Test-Vorgaben
-// unter einer festen Test-ID ("acc-1") — kein Test in diesem Paket
-// braucht mehrere unterschiedliche Konten gleichzeitig, deshalb bewusst
-// ohne ID-Parameter (sonst floggt unparam zu Recht: id würde nie
-// variieren).
+// mustAccount builds a valid MailAccount with sensible test defaults
+// under a fixed test ID ("acc-1") — no test in this package needs
+// several different accounts at once, hence deliberately no ID parameter
+// (otherwise unparam would rightly flag it: id would never vary).
 func mustAccount(t *testing.T, displayName string) account.MailAccount {
 	t.Helper()
 	acc, err := account.NewMailAccount(testAccountID, displayName, "imap.example.com", 993, "user@example.com", "INBOX", true, time.Now())
@@ -84,15 +83,15 @@ func mustAccount(t *testing.T, displayName string) account.MailAccount {
 	return *acc
 }
 
-// testAccountID ist die feste Konto-ID, die mustAccount vergibt — auch
-// direkt nutzbar für URL-Pfade wie "/konten/" + string(testAccountID) +
-// "/test".
+// testAccountID is the fixed account ID mustAccount assigns — also
+// directly usable for URL paths like "/konten/" + string(testAccountID)
+// + "/test".
 const testAccountID account.AccountID = "acc-1"
 
-// fakeReportRepository implementiert report.Repository mit fest
-// verdrahteten Rückgabewerten — für Tests von /berichte, /berichte/seite
-// und /berichte/{id}. Save/Exists werden von queryreports.UseCase nicht
-// benutzt, müssen aber für das Interface vorhanden sein.
+// fakeReportRepository implements report.Repository with hard-wired
+// return values — for tests of /berichte, /berichte/seite and
+// /berichte/{id}. Save/Exists aren't used by queryreports.UseCase, but
+// must exist for the interface.
 type fakeReportRepository struct {
 	mu        sync.Mutex
 	page      report.Page
@@ -114,10 +113,9 @@ func (f *fakeReportRepository) Exists(context.Context, report.Key) (bool, error)
 	return false, nil
 }
 
-// count meldet, wie oft Save() erfolgreich aufgerufen wurde — für
-// Import-Tests (handlers_import_test.go), die über
-// report.SaveIfNew()/importfiles.UseCase tatsächlich gespeicherte
-// Reports zählen wollen.
+// count reports how many times Save() was called successfully — for
+// import tests (handlers_import_test.go) that want to count reports
+// actually saved via report.SaveIfNew()/importfiles.UseCase.
 func (f *fakeReportRepository) count() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -130,7 +128,7 @@ func (f *fakeReportRepository) FindByID(_ context.Context, id report.ReportID) (
 	}
 	full, ok := f.byID[id]
 	if !ok {
-		return nil, fakeErr("nicht gefunden")
+		return nil, fakeErr("not found")
 	}
 	return full, nil
 }
@@ -143,17 +141,17 @@ func (f *fakeReportRepository) Query(_ context.Context, q report.Query) (report.
 	return f.page, nil
 }
 
-// fakePruner implementiert report.Pruner mit einem festen Rückgabewert —
-// die eigentliche Löschlogik ist bereits in internal/app/retention und
-// internal/infra/sqlite getestet, hier reicht ein einfacher Stub.
+// fakePruner implements report.Pruner with a fixed return value — the
+// actual deletion logic is already tested in internal/app/retention and
+// internal/infra/sqlite, a simple stub suffices here.
 type fakePruner struct{}
 
 func (f *fakePruner) DeleteOlderThan(context.Context, time.Time) (int64, error) {
 	return 0, nil
 }
 
-// fakeSourcesRepository implementiert domainsources.Repository mit fest
-// verdrahteten Rückgabewerten — für Tests von /quellen und /quellen/seite.
+// fakeSourcesRepository implements domainsources.Repository with
+// hard-wired return values — for tests of /quellen and /quellen/seite.
 type fakeSourcesRepository struct {
 	page     domainsources.Page
 	queryErr error
@@ -169,8 +167,8 @@ func (f *fakeSourcesRepository) Query(_ context.Context, q domainsources.Query) 
 	return f.page, nil
 }
 
-// fakeDomainsRepository implementiert domainstats.Repository mit fest
-// verdrahteten Rückgabewerten — für Tests von /domains und /domains/seite.
+// fakeDomainsRepository implements domainstats.Repository with
+// hard-wired return values — for tests of /domains and /domains/seite.
 type fakeDomainsRepository struct {
 	page     domainstats.Page
 	queryErr error
@@ -186,8 +184,8 @@ func (f *fakeDomainsRepository) Query(_ context.Context, q domainstats.Query) (d
 	return f.page, nil
 }
 
-// fakeFailedRecordsRepository implementiert failedrecords.Repository mit
-// fest verdrahteten Rückgabewerten — für Tests von /fehlschlaege und
+// fakeFailedRecordsRepository implements failedrecords.Repository with
+// hard-wired return values — for tests of /fehlschlaege and
 // /fehlschlaege/seite.
 type fakeFailedRecordsRepository struct {
 	page     failedrecords.Page
@@ -212,10 +210,9 @@ func mustDomainName(s string) report.DomainName {
 	return d
 }
 
-// fakeEnricher liefert für jede Quell-IP dieselbe fest verdrahtete
-// Anreicherung (leer, solange nichts anderes konfiguriert ist) — echte
-// PTR-/Dienst-Erkennung ist Netzwerk-I/O und hat in Handler-Tests nichts
-// zu suchen.
+// fakeEnricher returns the same hard-wired enrichment for every source
+// IP (empty as long as nothing else is configured) — real PTR/service
+// detection is network I/O and has no place in handler tests.
 type fakeEnricher struct {
 	enrichment domainsources.Enrichment
 }
@@ -224,7 +221,7 @@ func (f *fakeEnricher) Enrich(context.Context, report.SourceIP) domainsources.En
 	return f.enrichment
 }
 
-// fakeAccountRepository implementiert account.Repository — für Tests von
+// fakeAccountRepository implements account.Repository — for tests of
 // /einstellungen.
 type fakeAccountRepository struct {
 	mu         sync.Mutex
@@ -252,7 +249,7 @@ func (f *fakeAccountRepository) FindByID(_ context.Context, id account.AccountID
 	defer f.mu.Unlock()
 	a, ok := f.accounts[id]
 	if !ok {
-		return nil, fmt.Errorf("konto %q nicht gefunden", id)
+		return nil, fmt.Errorf("account %q not found", id)
 	}
 	return &a, nil
 }
@@ -271,9 +268,9 @@ func (f *fakeAccountRepository) FindAll(context.Context) ([]account.MailAccount,
 	return out, nil
 }
 
-// fakeMessageSource implementiert domainsync.MessageSource — für Tests,
-// die manageaccount.UseCase.TestConnectionByID durchlaufen ("Verbindung
-// testen" auf der Status-Seite).
+// fakeMessageSource implements domainsync.MessageSource — for tests that
+// run through manageaccount.UseCase.TestConnectionByID ("test
+// connection" on the status page).
 type fakeMessageSource struct {
 	connectErr error
 	closed     bool
@@ -292,10 +289,10 @@ func (f *fakeMessageSource) Close() error {
 	return nil
 }
 
-// fakeJobSyncer implementiert syncjob.Syncer — für Tests, die einen
-// Server mit Dependencies.SyncJob brauchen (Kontoseiten, /abgleich),
-// ohne einen vollständig verdrahteten syncreports.UseCase (siehe
-// internal/app/syncjob/runner_test.go für dieselbe Begründung).
+// fakeJobSyncer implements syncjob.Syncer — for tests that need a server
+// with Dependencies.SyncJob (account pages, /abgleich) without a fully
+// wired-up syncreports.UseCase (see internal/app/syncjob/runner_test.go
+// for the same rationale).
 type fakeJobSyncer struct {
 	mu     sync.Mutex
 	calls  []account.AccountID
@@ -324,8 +321,9 @@ func (f *fakeJobSyncer) callCount() int {
 	return len(f.calls)
 }
 
-// fakeFailedImportRepository implementiert domainsync.FailedImportRepository
-// — für Tests von /import, die eine kaputte Datei einreichen.
+// fakeFailedImportRepository implements
+// domainsync.FailedImportRepository — for tests of /import that submit a
+// broken file.
 type fakeFailedImportRepository struct {
 	mu      sync.Mutex
 	records []domainsync.FailedImport

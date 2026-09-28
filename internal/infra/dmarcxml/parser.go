@@ -1,6 +1,6 @@
-// Package dmarcxml implementiert den Port sync.ReportParser: entpackt
-// Anhänge (blankes .xml, .xml.gz, .zip) und parst DMARC-Aggregate-XML
-// (RFC 7489 Anhang C) zu Domänenobjekten.
+// Package dmarcxml implements the sync.ReportParser port: unpacks
+// attachments (plain .xml, .xml.gz, .zip) and parses DMARC aggregate XML
+// (RFC 7489 Appendix C) into domain objects.
 package dmarcxml
 
 import (
@@ -16,29 +16,29 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/sync"
 )
 
-// defaultPercentage ist der von RFC 7489 vorgeschriebene Default für "pct",
-// wenn das Feld im XML fehlt.
+// defaultPercentage is the default RFC 7489 mandates for "pct" when the
+// field is missing from the XML.
 const defaultPercentage = 100
 
-// Parser implementiert sync.ReportParser für DMARC-Aggregate-Reports (RUA)
-// und toleriert dabei RFC-Abweichungen einzelner Provider: unbekannte
-// Enum-Werte werden auf Unknown abgebildet statt den Import abzubrechen.
+// Parser implements sync.ReportParser for DMARC aggregate reports (RUA)
+// and tolerates RFC deviations by individual providers: unknown enum
+// values are mapped to Unknown instead of aborting the import.
 type Parser struct {
-	// Clock liefert den Zeitpunkt für AggregateReport.ImportedAt.
-	// Standardmäßig time.Now; für Tests austauschbar.
+	// Clock supplies the timestamp for AggregateReport.ImportedAt.
+	// Defaults to time.Now; swappable in tests.
 	Clock func() time.Time
 }
 
 var _ sync.ReportParser = (*Parser)(nil)
 
-// NewParser erzeugt einen einsatzbereiten Parser.
+// NewParser creates a ready-to-use Parser.
 func NewParser() *Parser {
 	return &Parser{Clock: time.Now}
 }
 
-// Supports erkennt anhand von Dateiname und Inhalt, ob ein Anhang ein
-// unterstütztes DMARC-Aggregate-Format ist: blankes .xml, .xml.gz/.gz oder
-// .zip mit mindestens einer .xml-Datei.
+// Supports determines from filename and content whether an attachment is a
+// supported DMARC aggregate format: plain .xml, .xml.gz/.gz, or .zip
+// containing at least one .xml file.
 func (p *Parser) Supports(attachment sync.RawAttachment) bool {
 	name := strings.ToLower(attachment.Filename)
 	switch {
@@ -47,15 +47,15 @@ func (p *Parser) Supports(attachment sync.RawAttachment) bool {
 		strings.HasSuffix(name, ".zip"):
 		return true
 	default:
-		// Fallback über Magic Bytes: manche Provider hängen nur die
-		// Report-ID ohne aussagekräftige Endung an.
+		// Fallback via magic bytes: some providers only append the
+		// report ID without a meaningful extension.
 		return isGzip(attachment.Data) || isZip(attachment.Data) || looksLikeXML(attachment.Data)
 	}
 }
 
-// Parse entpackt den Anhang und wandelt das erste enthaltene XML-Dokument
-// zu einem AggregateReport um. Für .zip-Anhänge mit mehreren Reports siehe
-// ParseAll.
+// Parse unpacks the attachment and converts the first contained XML
+// document into an AggregateReport. For .zip attachments with multiple
+// reports, see ParseAll.
 func (p *Parser) Parse(ctx context.Context, attachment sync.RawAttachment) (*report.AggregateReport, error) {
 	reports, err := p.ParseAll(ctx, attachment)
 	if err != nil {
@@ -64,9 +64,9 @@ func (p *Parser) Parse(ctx context.Context, attachment sync.RawAttachment) (*rep
 	return reports[0], nil
 }
 
-// ParseAll entpackt den Anhang vollständig und liefert alle enthaltenen
-// Reports — bei .zip potenziell mehrere. Bricht bei ctx.Err() sofort ab
-// (IMPLEMENTIERUNG.md Abschnitt 7.2: jeder Schritt respektiert
+// ParseAll fully unpacks the attachment and returns all contained
+// reports — potentially several for .zip. Aborts immediately on
+// ctx.Err() (IMPLEMENTIERUNG.md section 7.2: every step honors
 // context.Context).
 func (p *Parser) ParseAll(ctx context.Context, attachment sync.RawAttachment) ([]*report.AggregateReport, error) {
 	if err := ctx.Err(); err != nil {
@@ -75,7 +75,7 @@ func (p *Parser) ParseAll(ctx context.Context, attachment sync.RawAttachment) ([
 
 	xmlDocs, err := extractXML(attachment.Data)
 	if err != nil {
-		return nil, fmt.Errorf("anhang %q konnte nicht entpackt werden: %w", attachment.Filename, err)
+		return nil, fmt.Errorf("failed to unpack attachment %q: %w", attachment.Filename, err)
 	}
 
 	reports := make([]*report.AggregateReport, 0, len(xmlDocs))
@@ -86,7 +86,7 @@ func (p *Parser) ParseAll(ctx context.Context, attachment sync.RawAttachment) ([
 
 		r, err := p.parseDocument(doc)
 		if err != nil {
-			return nil, fmt.Errorf("anhang %q: %w", attachment.Filename, err)
+			return nil, fmt.Errorf("attachment %q: %w", attachment.Filename, err)
 		}
 		reports = append(reports, r)
 	}
@@ -98,7 +98,7 @@ func (p *Parser) parseDocument(data []byte) (*report.AggregateReport, error) {
 	var fb feedback
 	decoder := xml.NewDecoder(bytes.NewReader(data))
 	if err := decoder.Decode(&fb); err != nil {
-		return nil, fmt.Errorf("xml konnte nicht dekodiert werden: %w", err)
+		return nil, fmt.Errorf("failed to decode xml: %w", err)
 	}
 
 	metadata, err := mapMetadata(fb.ReportMetadata)
@@ -125,7 +125,7 @@ func mapMetadata(m reportMetadata) (report.Metadata, error) {
 
 	dr, err := report.NewDateRange(begin, end)
 	if err != nil {
-		return report.Metadata{}, fmt.Errorf("ungültiger zeitraum: %w", err)
+		return report.Metadata{}, fmt.Errorf("invalid date range: %w", err)
 	}
 
 	return report.Metadata{
@@ -141,7 +141,7 @@ func mapMetadata(m reportMetadata) (report.Metadata, error) {
 func mapPolicy(pub policyPublished) (report.PublishedPolicy, error) {
 	domain, err := report.NewDomainName(pub.Domain)
 	if err != nil {
-		return report.PublishedPolicy{}, fmt.Errorf("ungültige policy-domain: %w", err)
+		return report.PublishedPolicy{}, fmt.Errorf("invalid policy domain: %w", err)
 	}
 
 	percentage, err := parsePercentage(pub.Percentage)
@@ -160,9 +160,9 @@ func mapPolicy(pub policyPublished) (report.PublishedPolicy, error) {
 	)
 }
 
-// parseAlignmentModeWithDefault wendet den RFC-7489-Default "r" (relaxed)
-// an, wenn adkim/aspf im XML fehlen — viele Provider lassen beide Felder
-// weg, weil "r" bereits der Default ist.
+// parseAlignmentModeWithDefault applies the RFC 7489 default "r" (relaxed)
+// when adkim/aspf are missing from the XML — many providers omit both
+// fields because "r" is already the default.
 func parseAlignmentModeWithDefault(raw string) report.AlignmentMode {
 	if strings.TrimSpace(raw) == "" {
 		return report.AlignmentRelaxed
@@ -170,7 +170,7 @@ func parseAlignmentModeWithDefault(raw string) report.AlignmentMode {
 	return report.ParseAlignmentMode(raw)
 }
 
-// parsePercentage wendet den RFC-7489-Default an, wenn "pct" fehlt.
+// parsePercentage applies the RFC 7489 default when "pct" is missing.
 func parsePercentage(raw string) (int, error) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
@@ -179,7 +179,7 @@ func parsePercentage(raw string) (int, error) {
 
 	pct, err := strconv.Atoi(trimmed)
 	if err != nil {
-		return 0, fmt.Errorf("ungültiger pct-wert %q: %w", raw, err)
+		return 0, fmt.Errorf("invalid pct value %q: %w", raw, err)
 	}
 	return pct, nil
 }
@@ -199,12 +199,12 @@ func mapRecords(records []record) ([]report.Record, error) {
 func mapRecord(r record) (report.Record, error) {
 	sourceIP, err := report.NewSourceIP(r.Row.SourceIP)
 	if err != nil {
-		return report.Record{}, fmt.Errorf("ungültige quell-ip: %w", err)
+		return report.Record{}, fmt.Errorf("invalid source ip: %w", err)
 	}
 
 	headerFrom, err := report.NewDomainName(r.Identifiers.HeaderFrom)
 	if err != nil {
-		return report.Record{}, fmt.Errorf("ungültiger header_from: %w", err)
+		return report.Record{}, fmt.Errorf("invalid header_from: %w", err)
 	}
 
 	evaluated := report.PolicyEvaluation{

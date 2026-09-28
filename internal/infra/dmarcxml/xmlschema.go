@@ -2,14 +2,13 @@ package dmarcxml
 
 import "encoding/xml"
 
-// Die folgenden Structs bilden das XML-Schema aus RFC 7489 Anhang C ab.
-// Bewusst string-basiert und ohne eigene Validierung: die Umwandlung in
-// Domänentypen (inkl. Unknown-Fallback für RFC-abweichende Enum-Werte)
-// passiert erst beim Mapping in parser.go. So bleibt das Schema tolerant
-// gegenüber Providern, die vom RFC abweichen — ein strenger Typ (z. B. int
-// für "pct") würde den ganzen Report an einer einzigen fehlerhaften Stelle
-// scheitern lassen, noch bevor wir selbst entscheiden konnten, wie tolerant
-// wir sein wollen.
+// The following structs mirror the XML schema from RFC 7489 Appendix C.
+// Deliberately string-based and without their own validation: conversion
+// into domain types (including the Unknown fallback for RFC-deviating enum
+// values) only happens during mapping in parser.go. This keeps the schema
+// tolerant of providers that deviate from the RFC — a strict type (e.g. int
+// for "pct") would fail the entire report at a single bad spot, before we
+// could even decide for ourselves how tolerant to be.
 type feedback struct {
 	XMLName         xml.Name        `xml:"feedback"`
 	ReportMetadata  reportMetadata  `xml:"report_metadata"`
@@ -26,8 +25,8 @@ type reportMetadata struct {
 	Errors           []string  `xml:"error"`
 }
 
-// dateRange nutzt int64 statt time.Time: das XML liefert Unix-Sekunden als
-// Zahl, keine ISO-Zeitangabe.
+// dateRange uses int64 instead of time.Time: the XML supplies Unix seconds
+// as a number, not an ISO timestamp.
 type dateRange struct {
 	Begin int64 `xml:"begin"`
 	End   int64 `xml:"end"`
@@ -39,8 +38,8 @@ type policyPublished struct {
 	ASPF            string `xml:"aspf"`
 	Policy          string `xml:"p"`
 	SubdomainPolicy string `xml:"sp"`
-	// Percentage bleibt String: "pct" ist laut RFC optional (Default 100),
-	// das unterscheiden wir erst beim Mapping zwischen "fehlt" und "0".
+	// Percentage stays a string: "pct" is optional per RFC (default 100);
+	// we only distinguish "missing" from "0" during mapping.
 	Percentage     string `xml:"pct"`
 	FailureOptions string `xml:"fo"`
 }

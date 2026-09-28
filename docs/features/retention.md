@@ -1,40 +1,40 @@
-# Aufbewahrungsrichtlinie
+# Retention policy
 
-DMARC-Aggregate-Reports werden nicht unbegrenzt aufgehoben — nach einer
-konfigurierbaren Anzahl Monate werden sie automatisch gelöscht.
+DMARC aggregate reports aren't kept forever — after a configurable
+number of months they're automatically deleted.
 
-## Konfiguration
+## Configuration
 
-`DMARC_RETENTION_MONTHS` (Vorgabe: `24`, siehe
-[`deployment.md`](deployment.md)). `0` bedeutet: unbegrenzte Aufbewahrung,
-keine automatische Löschung. Eine Änderung braucht einen
-Container-Neustart (12-factor: kein Laufzeit-Formular dafür, siehe
+`DMARC_RETENTION_MONTHS` (default: `24`, see
+[`deployment.md`](deployment.md)). `0` means: unlimited retention, no
+automatic deletion. A change requires a container restart (12-factor: no
+runtime form for this, see
 `docs/adr/0003-docker-nativ-oidc-statt-desktop-keychain.md`).
 
-Die aktuell geltenden Werte (Aufbewahrungsdauer und Sync-Intervall) werden
-auf der Status-Seite (`/einstellungen`) rein lesend angezeigt.
+The currently effective values (retention period and sync interval) are
+shown read-only on the status page (`/einstellungen`).
 
-## Wie ein Report als "alt" gilt
+## When a report counts as "old"
 
-Ein Report gilt als alt, sobald sein Berichtszeitraum vollständig vor dem
-Stichtag `heute − DMARC_RETENTION_MONTHS Monate` endet — maßgeblich ist
-das Ende des im Report selbst angegebenen Zeitraums (`date_end`), nicht
-der Zeitpunkt des Imports.
+A report counts as old as soon as its report period ends entirely before
+the cutoff date `today − DMARC_RETENTION_MONTHS months` — what matters is
+the end of the period stated in the report itself (`date_end`), not the
+time it was imported.
 
-## Wann die Regel angewendet wird
+## When the rule is applied
 
-`internal/app/retentionjob.Runner` wendet die Regel automatisch im
-Hintergrund an: einmal sofort beim Start des Containers (eine frisch
-geänderte Aufbewahrungsdauer soll nicht erst nach einem vollen Tag
-wirken) und danach alle 24 Stunden, für die gesamte Lebensdauer des
-Containers.
+`internal/app/retentionjob.Runner` applies the rule automatically in the
+background: once immediately at container startup (a freshly changed
+retention period shouldn't only take effect after a full day) and then
+every 24 hours, for the lifetime of the container.
 
-## Implementierung
+## Implementation
 
-Löschen läuft über `report.Pruner.DeleteOlderThan` — ein schmaler,
-eigener Port (`internal/domain/report/repository.go`), getrennt von
-`report.Repository`, weil Löschen nach Alter eine reine
-Wartungsoperation ist. Die SQLite-Implementierung (`internal/infra/sqlite.ReportRepository.DeleteOlderThan`) löscht per
-einem einzelnen `DELETE FROM reports WHERE date_end < ?` — die zugehörigen
-Records, Auth-Ergebnisse, Reasons und der Rohbericht werden über
-bestehende `ON DELETE CASCADE`-Fremdschlüssel automatisch mitentfernt.
+Deletion goes through `report.Pruner.DeleteOlderThan` — a narrow, own
+port (`internal/domain/report/repository.go`), separate from
+`report.Repository`, because deleting by age is a pure maintenance
+operation. The SQLite implementation
+(`internal/infra/sqlite.ReportRepository.DeleteOlderThan`) deletes via a
+single `DELETE FROM reports WHERE date_end < ?` — the associated records,
+auth results, reasons, and the raw report are automatically removed too,
+via existing `ON DELETE CASCADE` foreign keys.

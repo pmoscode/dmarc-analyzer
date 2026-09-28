@@ -1,672 +1,688 @@
-# Umsetzungsplan — DMARC Analyzer
+# Implementation progress plan — DMARC Analyzer
 
-> Stand: 2026-09-16. Abgleich von `FEATURES.md` gegen den tatsächlichen
-> Repository-Inhalt, danach der konkrete Arbeitsplan.
-> `IMPLEMENTIERUNG.md` bleibt das Architekturdokument (das *Was* und *Warum*),
-> dieses Dokument ist der Arbeitsplan (das *In welcher Reihenfolge*).
+> As of: 2026-09-16. Reconciles `FEATURES.md` against the actual
+> repository content, followed by the concrete work plan.
+> `IMPLEMENTIERUNG.md` remains the architecture document (the *what* and
+> *why*), this document is the work plan (the *in which order*).
 
 ---
 
-## 1. Ist-Stand
+## 1. Current state
 
-Das Repository enthält:
+The repository contains:
 
 ```
-.gitignore          Go-Standard
-FEATURES.md         Anforderungen (1 Zeile uncommitted geändert)
-IMPLEMENTIERUNG.md  Architekturplan, 713 Zeilen
-.idea/              IDE-Konfiguration
+.gitignore          Go standard
+FEATURES.md         requirements (1 line changed, uncommitted)
+IMPLEMENTIERUNG.md  architecture plan, 713 lines
+.idea/              IDE configuration
 ```
 
-**Es existiert keine einzige Go-Datei.** Kein `go.mod`, kein `Taskfile.yml`,
-kein `README.md`, kein `CHANGELOG.md`, keine Tests. Der Implementierungsgrad
-gegenüber `FEATURES.md` liegt bei **0 %** — alles unten Beschriebene ist
-Neubau, nichts ist Nacharbeit.
+**There isn't a single Go file.** No `go.mod`, no `Taskfile.yml`, no
+`README.md`, no `CHANGELOG.md`, no tests. Implementation progress against
+`FEATURES.md` stands at **0%** — everything described below is new
+work, none of it is follow-up.
 
-Werkzeuge lokal vorhanden und passend zum Plan: Go 1.27.1, Task 3.53.1,
+Tools present locally and matching the plan: Go 1.27.1, Task 3.53.1,
 golangci-lint 2.13.2.
 
 ---
 
-## 2. Feature-Abgleich
+## 2. Feature reconciliation
 
-| # | Anforderung aus `FEATURES.md` | Im Architekturplan | Im Code | Lücke |
+| # | Requirement from `FEATURES.md` | In the architecture plan | In the code | Gap |
 | --- | --- | --- | --- | --- |
-| F1 | DMARC-Daten analysieren und visualisieren | Abschnitt 6, 10.3 | — | AP 1–2, AP 6 |
-| F2 | Oberfläche zum Erkunden und Verstehen der Daten | Abschnitt 10.1 | — | AP 5–6 |
-| F3 | Verschiedene Datenformate, große Datenmengen | Abschnitt 7.1, 10.4 | — | **Formatmatrix fehlt** (siehe 3.2) |
-| F4 | Filtern, Sortieren, Gruppieren | Abschnitt 10.1/10.3 | — | **Nur benannt, nicht spezifiziert** (siehe 3.3) |
-| F5 | Diagramme und Grafiken | Abschnitt 10.3 | — | AP 6 |
-| F6 | Daten aus einem Mailkonto holen | Abschnitt 7 | — | AP 3 |
-| F7 | Zugangsdaten sicher speichern und nutzen | Abschnitt 9 | — | AP 3 |
-| F8 | Nur neue Daten im Postfach entdecken | Abschnitt 7.1 | — | AP 3 |
-| F9 | Zusätzliche Funktionen vorschlagen | Abschnitt 11 | — | erledigt, Auswahl offen |
-| N1 | Go-Binary mit Fyne | Abschnitt 3 | — | AP 0 |
-| N2 | Credentials sicher gespeichert | Abschnitt 9 | — | AP 3 |
-| N3 | Taskfile mit den üblichen Tasks | Abschnitt 13 | — | AP 0 |
-| N4 | Tests | Abschnitt 12 | — | in jedem AP |
-| N5 | README.md | Abschnitt 14 | — | AP 0 (Rohfassung), AP 7 (final) |
-| N6 | CHANGELOG.md | Abschnitt 14 | — | AP 0, danach je AP gepflegt |
-| N7–N10 | SOLID, DDD, Clean Architecture, Clean Code | Abschnitt 4.2 | — | Struktur ab AP 0, Prüfung per Lint |
-| N11 | Fyne Best Practices | Abschnitt 10.4 | — | AP 5 |
-| **N12** | **Benutzerfreundliche Oberfläche für einfache Navigation und Bedienung** | **nur implizit** | — | **neu hinzugekommen, siehe 3.1** |
+| F1 | Analyze and visualize DMARC data | Section 6, 10.3 | — | WP 1–2, WP 6 |
+| F2 | UI for exploring and understanding the data | Section 10.1 | — | WP 5–6 |
+| F3 | Various data formats, large data volumes | Section 7.1, 10.4 | — | **format matrix missing** (see 3.2) |
+| F4 | Filter, sort, group | Section 10.1/10.3 | — | **only named, not specified** (see 3.3) |
+| F5 | Charts and graphics | Section 10.3 | — | WP 6 |
+| F6 | Fetch data from a mail account | Section 7 | — | WP 3 |
+| F7 | Store and use credentials securely | Section 9 | — | WP 3 |
+| F8 | Discover only new data in the mailbox | Section 7.1 | — | WP 3 |
+| F9 | Propose additional features | Section 11 | — | done, selection open |
+| N1 | Go binary with Fyne | Section 3 | — | WP 0 |
+| N2 | Credentials stored securely | Section 9 | — | WP 3 |
+| N3 | Taskfile with the usual tasks | Section 13 | — | WP 0 |
+| N4 | Tests | Section 12 | — | in every WP |
+| N5 | README.md | Section 14 | — | WP 0 (draft), WP 7 (final) |
+| N6 | CHANGELOG.md | Section 14 | — | WP 0, then maintained per WP |
+| N7–N10 | SOLID, DDD, Clean Architecture, Clean Code | Section 4.2 | — | structure from WP 0, checked via lint |
+| N11 | Fyne best practices | Section 10.4 | — | WP 5 |
+| **N12** | **User-friendly interface for easy navigation and operation** | **only implicit** | — | **newly added, see 3.1** |
 
 ---
 
-## 3. Was im Architekturplan nachgeschärft werden muss
+## 3. What needs sharpening in the architecture plan
 
-### 3.1 N12 — Benutzerfreundlichkeit ist neu und bisher nur implizit abgedeckt
+### 3.1 N12 — usability is new and so far only implicitly covered
 
-Diese Zeile kam nach dem Schreiben von `IMPLEMENTIERUNG.md` in `FEATURES.md`
-dazu und ist dort nicht als eigenständige Anforderung behandelt. Abschnitt 10
-beschreibt *welche Ansichten* es gibt, aber nicht, woran sich „benutzerfreundlich"
-messen lässt. Verbindliche Kriterien für AP 5–7:
+This line was added to `FEATURES.md` after `IMPLEMENTIERUNG.md` was
+written, and isn't treated there as a standalone requirement. Section 10
+describes *which views* exist, but not what "user-friendly" is measured
+against. Binding criteria for WP 5–7:
 
-* **Ersteinrichtung geführt** — beim ersten Start ein Assistent in drei Schritten
-  (Konto → Verbindung testen → erster Sync). Kein leeres Fenster ohne Hinweis.
-* **Leerzustände mit Handlungsaufforderung** — jede Ansicht ohne Daten erklärt,
-  *warum* sie leer ist und welcher Knopf weiterhilft.
-* **Fachbegriffe erklärt** — DMARC-Vokabular (Disposition, Alignment, Policy)
-  bekommt Tooltips und ein Glossar. Zielgruppe versteht Mail, nicht RFC 7489.
-* **Fehlermeldungen in Klartext** — „Anmeldung fehlgeschlagen — bei aktivierter
-  Zwei-Faktor-Authentifizierung wird ein App-Passwort benötigt." statt
-  `imap: NO [AUTHENTICATIONFAILED]`. Technischer Originaltext aufklappbar.
-* **Tastaturbedienung** — vollständige Tab-Reihenfolge, `Cmd/Ctrl+R` Sync,
-  `Cmd/Ctrl+F` Filter, `Esc` schließt Dialoge.
-* **Keine blockierende UI** — jede Aktion über 300 ms zeigt Fortschritt und
-  lässt sich abbrechen.
-* **Barrierefreiheit** — Pass/Fail nie nur über Farbe, Mindestkontrast 4,5:1,
-  Schriftgröße folgt der Systemeinstellung.
+* **Guided first-run setup** — on first launch, a three-step wizard
+  (account → test connection → first sync). No empty window with no
+  guidance.
+* **Empty states with a call to action** — every view with no data
+  explains *why* it's empty and which button helps.
+* **Technical terms explained** — DMARC vocabulary (disposition,
+  alignment, policy) gets tooltips and a glossary. The target audience
+  understands mail, not RFC 7489.
+* **Plain-language error messages** — "Login failed — if two-factor
+  authentication is enabled, an app password is required." instead of
+  `imap: NO [AUTHENTICATIONFAILED]`. The original technical text is
+  available expanded.
+* **Keyboard operation** — full tab order, `Cmd/Ctrl+R` sync,
+  `Cmd/Ctrl+F` filter, `Esc` closes dialogs.
+* **No blocking UI** — every action over 300ms shows progress and can be
+  cancelled.
+* **Accessibility** — pass/fail never conveyed by color alone, minimum
+  contrast 4.5:1, font size follows the system setting.
 
-### 3.2 F3 — „Various data formats" braucht eine verbindliche Liste
+### 3.2 F3 — "various data formats" needs a binding list
 
-Der Plan nennt `.gz`, `.zip` und blankes `.xml`. Für AP 1 festgelegt:
+The plan names `.gz`, `.zip`, and plain `.xml`. Fixed for WP 1:
 
-| Format | Umgang |
+| Format | Handling |
 | --- | --- |
-| `report.xml` | direkt parsen |
-| `report.xml.gz` | `compress/gzip`, Größenlimit 100 MB |
-| `report.zip` | `archive/zip`, **alle** enthaltenen XML-Dateien, Limit pro Eintrag und Summe |
-| `.eml`-Datei | MIME zerlegen wie eine IMAP-Nachricht (Datei-Import, Vorschlag 11.1) |
-| base64-Inline-Body ohne Anhang | erkennen und dekodieren — kommt bei einzelnen Providern vor |
-| unbekannt | Quarantäne in `failed_imports`, Lauf läuft weiter |
+| `report.xml` | parse directly |
+| `report.xml.gz` | `compress/gzip`, 100 MB size limit |
+| `report.zip` | `archive/zip`, **all** contained XML files, limit per entry and in total |
+| `.eml` file | split MIME like an IMAP message (file import, suggestion 11.1) |
+| base64 inline body with no attachment | detect and decode — occurs with some providers |
+| unknown | quarantine in `failed_imports`, the run continues |
 
-### 3.3 F4 — Filtern/Sortieren/Gruppieren gehört in SQL, nicht in die UI
+### 3.3 F4 — filter/sort/group belongs in SQL, not the UI
 
-Damit „große Datenmengen effizient" (F3) nicht zur Lüge wird: `ReportQuery`
-bekommt in AP 2 Filterfelder (Zeitraum, Domain, Org, Quell-IP, Disposition,
-Pass/Fail), Sortierschlüssel mit Richtung, Gruppierungsdimension und
-Keyset-Pagination. Die UI-Tabelle in AP 5 lädt ausschließlich sichtbare Seiten
-nach. Kein `SELECT *` ins RAM, keine Sortierung in Go.
+So "efficiently handle large data volumes" (F3) doesn't become a lie:
+`ReportQuery` gets filter fields (time range, domain, org, source IP,
+disposition, pass/fail) in WP 2, a sort key with direction, a grouping
+dimension, and keyset pagination. The UI table in WP 5 lazy-loads only
+visible pages. No `SELECT *` into RAM, no sorting in Go.
 
-### 3.4 Modulpfad und Keyring-Service sind falsch vorgeschlagen
+### 3.4 Module path and keyring service are proposed incorrectly
 
-`IMPLEMENTIERUNG.md` schlägt `github.com/Freie-Schule/dmarc-analyzer` und den
-Keyring-Service `de.freie-schule.dmarc-analyzer` vor. Das Repository liegt unter
-`pmoscode/dmarc-analyzer`. **Festlegung:**
+`IMPLEMENTIERUNG.md` proposes `github.com/Freie-Schule/dmarc-analyzer`
+and the keyring service `de.freie-schule.dmarc-analyzer`. The repository
+lives under `pmoscode/dmarc-analyzer`. **Decision:**
 
-* Modulpfad: `github.com/pmoscode/dmarc-analyzer`
-* Keyring-Service: `de.pmoscode.dmarc-analyzer`
+* Module path: `github.com/pmoscode/dmarc-analyzer`
+* Keyring service: `de.pmoscode.dmarc-analyzer`
 
-Der Keyring-Service lässt sich später nur mit Migrationsaufwand ändern — das
-gehört vor die erste Zeile Code entschieden, nicht danach.
+The keyring service can only be changed later with migration effort —
+that has to be decided before the first line of code, not after.
 
-### 3.5 Offene Fragen: Vorschlagswerte gelten, bis widersprochen wird
+### 3.5 Open questions: proposed values apply until challenged
 
-O-2 bis O-8 aus `IMPLEMENTIERUNG.md` werden mit den dort vorgeschlagenen
-Antworten umgesetzt (englische Bezeichner, MIT-Lizenz, `BODY.PEEK` ohne
-Markierung, 24 Monate Aufbewahrung, CLI-Modus ja, alle drei Plattformen bauen).
-Nur O-5 bleibt echt offen: **echte Beispiel-Reports aus dem Postfach wären für
-AP 1 wertvoll.** Ohne sie werden synthetische Fixtures aus den RFC-Beispielen
-erzeugt — das deckt die Provider-Eigenheiten schlechter ab.
+O-2 through O-8 from `IMPLEMENTIERUNG.md` are implemented with the
+answers proposed there (English identifiers, MIT license, `BODY.PEEK`
+with no marking, 24-month retention, CLI mode yes, all three platforms
+build). Only O-5 stays genuinely open: **real sample reports from the
+mailbox would be valuable for WP 1.** Without them, synthetic fixtures
+are generated from the RFC examples — that covers provider quirks less
+well.
 
 ---
 
-## 4. Arbeitspakete
+## 4. Work packages
 
-Jedes AP endet mit grünem `task check` und einem CHANGELOG-Eintrag.
-Die APs 0–4 sind vollständig ohne UI testbar.
+Every WP ends with a green `task check` and a CHANGELOG entry.
+WPs 0–4 are fully testable without a UI.
 
-### AP 0 — Grundgerüst
+### WP 0 — Scaffolding
 
-**Ziel:** `task check` läuft grün auf einem leeren, aber vollständig
-konfigurierten Projekt.
+**Goal:** `task check` runs green on an empty but fully configured project.
 
 - [x] `go mod init github.com/pmoscode/dmarc-analyzer`
-- [x] Verzeichnisbaum nach `IMPLEMENTIERUNG.md` Abschnitt 5 anlegen
-- [x] Abhängigkeiten recherchiert und **auf konkrete Versionen gepinnt** (Fyne, go-imap/v2,
-      go-message, modernc.org/sqlite, go-keyring, go-chart/v2, testify) — Details und eine
-      Abweichung von der ursprünglichen Idee in `docs/DEPENDENCIES.md`: nur `testify` steht
-      bereits in `go.mod`, weil es ab AP 0 tatsächlich in Tests importiert wird. Die übrigen
-      fünf sind dort mit Zielversion für ihre jeweilige Phase dokumentiert statt ungenutzt in
-      `go.mod` erzwungen — sonst entfernt sie der nächste `task tidy` wieder, und `go.mod`
-      würde über den Ist-Zustand lügen.
-- [x] `Taskfile.yml` mit den 16 Tasks aus Abschnitt 13
-- [x] `.golangci.yml`: govet, staticcheck, errcheck, revive, gosec, ineffassign, gocritic —
-      **`misspell` bewusst weggelassen**: die deutschen Kommentare (Projektkonvention, siehe
-      1.3) erzeugen mit einem englischen Wörterbuch ständig Fehlalarme
-      (`Konfiguration` → `Configuration`), begründet in `.golangci.yml`.
-- [x] `.github/workflows/ci.yml`: `task check` + `task build` auf ubuntu/macos/windows,
-      zusätzlich Prüfung auf gofmt-/goimports-Drift
-- [x] `internal/platform/logging` (slog, Textformat lokal, JSON per Option)
-- [x] `internal/platform/paths` (DB-, Log-, Konfigpfad plattformkonform, mit Tests)
-- [x] `cmd/dmarc-analyzer/main.go` — startet, loggt Version, beendet sich, mit Tests
-- [x] `README.md` und `CHANGELOG.md` als Rohfassung, `LICENSE` (MIT)
+- [x] Create the directory tree per `IMPLEMENTIERUNG.md` section 5
+- [x] Researched dependencies and **pinned to concrete versions** (Fyne,
+      go-imap/v2, go-message, modernc.org/sqlite, go-keyring,
+      go-chart/v2, testify) — details and one deviation from the
+      original idea in `docs/DEPENDENCIES.md`: only `testify` is
+      already in `go.mod`, because it's actually imported in tests from
+      WP 0 on. The other five are documented there with a target
+      version for their respective phase instead of being forced into
+      `go.mod` unused — otherwise the next `task tidy` removes them
+      again, and `go.mod` would lie about the actual state.
+- [x] `Taskfile.yml` with the 16 tasks from section 13
+- [x] `.golangci.yml`: govet, staticcheck, errcheck, revive, gosec,
+      ineffassign, gocritic — **`misspell` deliberately left out**: the
+      German comments (project convention, see 1.3) constantly trigger
+      false positives with an English dictionary (`Konfiguration` →
+      `Configuration`), explained in `.golangci.yml`.
+- [x] `.github/workflows/ci.yml`: `task check` + `task build` on
+      ubuntu/macos/windows, plus a check for gofmt/goimports drift
+- [x] `internal/platform/logging` (slog, text format locally, JSON via an option)
+- [x] `internal/platform/paths` (DB, log, config path, platform-appropriate, with tests)
+- [x] `cmd/dmarc-analyzer/main.go` — starts, logs the version, exits, with tests
+- [x] `README.md` and `CHANGELOG.md` as a draft, `LICENSE` (MIT)
 
-**Fertig wenn:** `task build` erzeugt eine lauffähige Binärdatei, `task check`
-ist grün, CI ist auf allen drei Plattformen grün. — Lokal erreicht (`task check`,
-`task build` beide grün, Coverage `platform/*` 83 %). CI-Grün auf allen drei
-Plattformen lässt sich erst nach dem ersten Push/PR verifizieren.
+**Done when:** `task build` produces a runnable binary, `task check` is
+green, CI is green on all three platforms. — Reached locally (`task
+check`, `task build` both green, coverage `platform/*` 83%). CI green
+on all three platforms can only be verified after the first push/PR.
 
-### AP 1 — Domäne und Parser
+### WP 1 — Domain and parser
 
-**Ziel:** Ein beliebiger Report wird korrekt zu Domänenobjekten.
+**Goal:** Any report correctly turns into domain objects.
 
-- [x] `internal/domain/report`: Entities, Value Objects, Konstruktoren mit
-      Invarianten (Abschnitt 6.1/6.2) — inkl. `Repository`-Port (Abschnitt 6.4),
-      vorgezogen aus AP 2, weil die Schnittstelle neben dem Aggregate hingehört
-      (Implementierung bleibt AP 2)
-- [x] Unbekannte Enum-Werte → `Unknown`, nie verwerfen — für Disposition, Policy,
-      AlignmentMode und AuthResultValue, mit Golden-File-Test abgesichert
-- [x] `internal/domain/sync`: `State`, `ReportParser` — **`MessageSource` bewusst
-      noch nicht definiert**, siehe Kommentar in `ports.go`: der Port hängt von
-      `account.MailAccount` ab, das erst in AP 3 entsteht. Ihn jetzt mit einem
-      Platzhalter-Kontotyp einzuführen hieße, eine Abhängigkeit vorzutäuschen,
-      die es noch nicht gibt. Aus demselben Grund heißt der Typ `sync.State`
-      statt `sync.SyncState` (vermeidet den Stutter `sync.SyncState`) — dieselbe
-      Konsequenz wurde in `report.Key`/`Query`/`Page`/`Repository` gezogen
-      (statt `ReportKey` etc.), `ReportID` blieb Ausnahme (Feldkollision mit
-      `AggregateReport.ID`, siehe Kommentar im Code).
-- [x] `internal/infra/dmarcxml`: XML-Parser, tolerant gegenüber
-      Provider-Abweichungen (Groß-/Kleinschreibung, fehlendes `pct`, fehlendes
-      `adkim`/`aspf` mit RFC-Default `r`, unbekannte Enum-Werte)
-- [x] Entpacker für die Formatmatrix aus 3.2 (`.xml`, `.xml.gz`, `.zip` mit
-      mehreren XML-Dateien), Größenlimit 100 MB gegen Zip-/Gzip-Bomben
-- [x] Fixtures in `testdata/reports/` — **synthetisch aus RFC-7489-Beispielen**
-      (E-4 blieb unbeantwortet, Fallback aus Abschnitt 6 angewendet), fünf
-      Provider-Stile (RFC-Beispiel, Google, Microsoft, Multi-Report-Zip, drei
-      Sonderfälle), `example.com`/RFC-5737-Adressen
-- [x] Golden-File-Tests je Provider-Stil, Fuzz-Test (`FuzzParse`, 30 s / 2,26 Mio.
-      Durchläufe ohne Fund lokal verifiziert)
-- [x] XXE-Test — mit einer Korrektur gegenüber der ursprünglichen Annahme:
-      `encoding/xml` löst die externe Entity nicht still auf, sondern lehnt das
-      ganze Dokument ab. Der Test prüft jetzt genau das (Fehler, kein
-      Erfolg mit ignorierter Entity).
+- [x] `internal/domain/report`: entities, value objects, constructors
+      with invariants (section 6.1/6.2) — including the `Repository`
+      port (section 6.4), pulled forward from WP 2 because the
+      interface belongs next to the aggregate (the implementation stays
+      in WP 2)
+- [x] Unknown enum values → `Unknown`, never discarded — for
+      Disposition, Policy, AlignmentMode, and AuthResultValue, backed
+      by a golden-file test
+- [x] `internal/domain/sync`: `State`, `ReportParser` — **`MessageSource`
+      deliberately not yet defined**, see the comment in `ports.go`:
+      the port depends on `account.MailAccount`, which only appears in
+      WP 3. Introducing it now with a placeholder account type would
+      fake a dependency that doesn't exist yet. For the same reason the
+      type is called `sync.State`, not `sync.SyncState` (avoids the
+      stutter `sync.SyncState`) — the same consequence was applied to
+      `report.Key`/`Query`/`Page`/`Repository` (instead of `ReportKey`
+      etc.), `ReportID` stayed an exception (field collision with
+      `AggregateReport.ID`, see the comment in the code).
+- [x] `internal/infra/dmarcxml`: XML parser, tolerant of provider
+      deviations (casing, missing `pct`, missing `adkim`/`aspf` with
+      the RFC default `r`, unknown enum values)
+- [x] Unpacker for the format matrix from 3.2 (`.xml`, `.xml.gz`, `.zip`
+      with multiple XML files), 100 MB size limit against zip/gzip bombs
+- [x] Fixtures in `testdata/reports/` — **synthetic from RFC 7489
+      examples** (E-4 stayed unanswered, the fallback from section 6
+      applied), five provider styles (RFC example, Google, Microsoft,
+      multi-report zip, three edge cases), `example.com`/RFC 5737
+      addresses
+- [x] Golden-file tests per provider style, fuzz test (`FuzzParse`, 30s
+      / 2.26M runs verified locally with no findings)
+- [x] XXE test — with a correction to the original assumption:
+      `encoding/xml` doesn't silently resolve the external entity, it
+      rejects the whole document. The test now checks exactly that
+      (an error, not a success with the entity ignored).
 
-**Fertig wenn:** Abdeckung `domain` ≥ 90 %, `dmarcxml` ≥ 85 %, Fuzz läuft 60 s
-ohne Fund. — Erreicht: `domain/report` 100 %, `infra/dmarcxml` 90,7 %, Fuzz
-30 s ohne Fund (lokal; 60 s sind in CI oder vor dem Release nachzuholen).
-Die beiden Zip-/Gzip-Bomben-Tests sind mit `testing.Short()` markiert, damit
-`task test:unit` schnell bleibt (~1,5 s statt ~7 s).
+**Done when:** `domain` coverage ≥ 90%, `dmarcxml` ≥ 85%, fuzzing runs
+60s with no findings. — Reached: `domain/report` 100%,
+`infra/dmarcxml` 90.7%, fuzz 30s with no findings (locally; 60s is to
+be caught up on in CI or before release). The two zip/gzip-bomb tests
+are marked with `testing.Short()` so `task test:unit` stays fast (~1.5s
+instead of ~7s).
 
-### AP 2 — Persistenz
+### WP 2 — Persistence
 
-**Ziel:** Reports werden gespeichert, dedupliziert und performant abgefragt.
+**Goal:** Reports are saved, deduplicated, and queried performantly.
 
-- [x] SQLite-Verbindung mit PRAGMAs (WAL, foreign_keys, busy_timeout, synchronous)
-      — als DSN-Parameter beim Öffnen, nicht als separate PRAGMA-Statements
-      (`_journal_mode`/`_foreign_keys`/`_busy_timeout`/`_synchronous`,
-      modernc.org/sqlite-eigene Kurzform)
-- [x] Eigener Migrator (~150 Zeilen) + eingebettete `migrations/*.sql`
-      (Schema Abschnitt 8.1, erweitert um `report_errors` sowie
-      `mailbox`/`filename`/`org_extra_contact_info` auf `reports` — die
-      Abschnitt-8.1-Tabelle war als „Auszug" markiert, das war die Lücke
-      zum vollständigen Domänenmodell aus AP 1)
-- [x] `reportrepo.go` mit Batch-Insert (vorbereitete Statements je Tabelle,
-      wiederverwendet über alle Records eines Reports) in einer Transaktion
-- [x] Deduplizierung über UNIQUE `(org_name, report_id, date_begin)`,
-      als `ErrDuplicateReport` über `sqlite.Error.Code()` erkannt (nicht
-      String-Matching auf die Fehlermeldung)
-- [x] `Query` vollständig nach 3.3: Filter (Zeitraum-Überlappung, Domain,
-      Org, Quell-IP, Disposition über `EXISTS`-Subqueries), Sortierung,
-      Keyset-Pagination über SQLite-Row-Value-Vergleiche. **Präzisierung zu
-      `GroupBy`:** wirkt als zusätzlicher primärer Sortierschlüssel (gleiche
-      Gruppe steht zusammen), nicht als SQL-`GROUP BY` mit Aggregation —
-      `Query` liefert laut Portvertrag weiterhin einzelne `AggregateReport`,
-      keine Kennzahlen. `GroupBySourceIP` lehnt der Adapter mit Fehler ab
-      (Quell-IP ist eine Record-, keine Report-Eigenschaft). Siehe
-      Kommentare in `domain/report/repository.go`.
-- [ ] Aggregationen für die Kennzahlen aus Abschnitt 10.2 **in SQL** —
-      **bewusst nicht in AP 2.** Das sind anwendungsseitige Fragen
-      (Pass-Rate nach Alignment-Definition, Trend zur Vorperiode), keine
-      reine Persistenzaufgabe — gehören zum Statistics-Use-Case in AP 4,
-      der dafür eigene, zugeschnittene Repository-Methoden bekommt statt
-      `Query`/`GroupBy` zu überladen.
-- [x] `raw_reports` und `failed_imports` — **nur das Schema** (Tabellen +
-      Indizes existieren). Tatsächliches Schreiben (Rohdaten-Archiv,
-      Fehlerquarantäne beim Sync) ist Teil des SyncReports-Use-Case in
-      AP 3/4, nicht der reinen Persistenzschicht.
-- [x] Integrationstests gegen eine temporäre Datei-DB (nie `:memory:`),
-      Migration wird in `TestMigrate_IsIdempotent` zweimal angewendet
-- [x] Benchmark: 100.000 Records importieren und abfragen — **als
-      regulärer, mit `testing.Short()` übersprungener Test** statt
-      `go test -bench`: das Szenario ist ein einmaliger Ablauf (Datenmenge
-      aufbauen, eine realistische Abfrage messen), keine Mikro-Benchmark-
-      Schleife. Ergebnisse siehe unten.
+- [x] SQLite connection with PRAGMAs (WAL, foreign_keys, busy_timeout,
+      synchronous) — as DSN parameters on open, not as separate PRAGMA
+      statements (`_journal_mode`/`_foreign_keys`/`_busy_timeout`/
+      `_synchronous`, modernc.org/sqlite's own short form)
+- [x] A custom migrator (~150 lines) + embedded `migrations/*.sql`
+      (schema per section 8.1, extended with `report_errors` plus
+      `mailbox`/`filename`/`org_extra_contact_info` on `reports` — the
+      section 8.1 table was marked as an "excerpt", that was the gap
+      versus the complete domain model from WP 1)
+- [x] `reportrepo.go` with batch insert (prepared statements per table,
+      reused across all records of a report) in one transaction
+- [x] Deduplication via UNIQUE `(org_name, report_id, date_begin)`,
+      detected as `ErrDuplicateReport` via `sqlite.Error.Code()` (not
+      string-matching on the error message)
+- [x] `Query` complete per 3.3: filters (time-range overlap, domain,
+      org, source IP, disposition via `EXISTS` subqueries), sorting,
+      keyset pagination via SQLite row-value comparisons.
+      **Clarification on `GroupBy`:** acts as an additional primary sort
+      key (same group stands together), not as SQL `GROUP BY` with
+      aggregation — `Query` still returns individual `AggregateReport`
+      values per the port contract, not metrics. The adapter rejects
+      `GroupBySourceIP` with an error (source IP is a record property,
+      not a report property). See the comments in
+      `domain/report/repository.go`.
+- [ ] Aggregations for the metrics from section 10.2 **in SQL** —
+      **deliberately not in WP 2.** Those are application-side
+      questions (pass rate under the alignment definition, trend vs.
+      the previous period), not a pure persistence task — they belong
+      to the statistics use case in WP 4, which gets its own, tailored
+      repository methods for this instead of overloading
+      `Query`/`GroupBy`.
+- [x] `raw_reports` and `failed_imports` — **schema only** (tables +
+      indexes exist). Actually writing to them (raw-data archive, error
+      quarantine during sync) is part of the SyncReports use case in
+      WP 3/4, not the pure persistence layer.
+- [x] Integration tests against a temporary file DB (never `:memory:`),
+      migration applied twice in `TestMigrate_IsIdempotent`
+- [x] Benchmark: import and query 100,000 records — **as a regular test
+      skipped via `testing.Short()`** instead of `go test -bench`: the
+      scenario is a one-shot flow (build up a data volume, measure one
+      realistic query), not a micro-benchmark loop. Results below.
 
-**Ein echter Performance-Bug unterwegs gefunden und behoben:** Die erste
-Fassung der Batch-Ladefunktionen für Records/Reasons/Auth-Ergebnisse baute
-eine `IN (?, ?, ..., ?)`-Klausel mit einem Platzhalter je Record — bei
-10.000 Records dauerte allein das Vorbereiten dieser Statements so lange,
-dass `FindByID` über 3 Sekunden brauchte. Zusätzlich fehlten Indizes auf
+**A real performance bug found and fixed along the way:** the first
+version of the batch loading functions for records/reasons/auth results
+built an `IN (?, ?, ..., ?)` clause with one placeholder per record —
+at 10,000 records, just preparing these statements alone took so long
+that `FindByID` needed over 3 seconds. Indexes were also missing on
 `record_reasons.record_id`, `auth_results_dkim.record_id`,
-`auth_results_spf.record_id` und `report_errors.report_id` (das Schema
-zieht schon vor dem ersten Release, kein `0002`-Migrationsumweg). Beides
-behoben: Indizes ergänzt, die drei Ladefunktionen von IN-Klausel auf
-`JOIN records ON ... WHERE records.report_id = ?` umgestellt.
+`auth_results_spf.record_id`, and `report_errors.report_id` (the schema
+was still moving before the first release, no `0002` migration
+detour needed). Both fixed: indexes added, the three loading functions
+switched from an IN clause to `JOIN records ON ... WHERE
+records.report_id = ?`.
 
-**Fertig wenn:** Doppelimport derselben Mail erzeugt genau einen Datensatz —
-erreicht (`TestSave_DuplicateKey_ReturnsErrDuplicateReport`). Abfrage über
-100.000 Records unter 100 ms — erreicht für den eigentlichen Zielpfad, die
-Berichtstabelle: lokal gemessen **~7-8 ms** für eine sortierte, gefilterte
-Seite über 1.001 Reports mit 110.000 Records insgesamt. Das Laden eines
-einzelnen, unrealistisch großen Reports mit 10.000 Records (`FindByID`,
-Detailansicht) liegt bei **~460 ms** — spürbar über 100 ms, aber ein
-Randfall (reale DMARC-Reports haben selten mehr als niedrige Hunderte
-Records) und für eine einmalige Detailansicht akzeptabel; als möglicher
-Optimierungspunkt für später vorgemerkt, kein Blocker für AP 2.
+**Done when:** double-importing the same mail produces exactly one
+record — reached (`TestSave_DuplicateKey_ReturnsErrDuplicateReport`). A
+query over 100,000 records under 100ms — reached for the actual target
+path, the report table: measured locally at **~7-8ms** for a sorted,
+filtered page over 1,001 reports with 110,000 records total. Loading a
+single, unrealistically large report with 10,000 records (`FindByID`,
+detail view) comes in at **~460ms** — noticeably over 100ms, but an
+edge case (real DMARC reports rarely have more than low hundreds of
+records) and acceptable for a one-off detail view; noted as a possible
+future optimization point, not a blocker for WP 2.
 
-### AP 3 — Mail und Sicherheit
+### WP 3 — Mail and security
 
-**Ziel:** Aus einem echten Postfach wird nur Neues geholt.
+**Goal:** Only new items are fetched from a real mailbox.
 
-- [x] IMAP-Adapter (`internal/infra/imap.Adapter`): TLS erzwungen sofern
-      `MailAccount.UseTLS` (context-fähiger Dial über `tls.Dialer`/
-      `net.Dialer`, nie `InsecureSkipVerify`), `BODY.PEEK[]` **und**
-      `EXAMINE` statt `SELECT` (read-only, doppelt abgesichert), UID-basiert,
-      streamender `iter.Seq2`-Iterator über `FetchMessageData.Collect()` je
-      Nachricht (nicht die ganze Ergebnismenge auf einmal)
-- [x] `UIDVALIDITY`-Wechsel → vollständiger Rescan (`startUID = 1`,
-      `baseline.LastUID = 0`), Duplikate fängt der UNIQUE-Index aus AP 2 ab
-      — mit In-Process-Server verifiziert (`TestFetchNew_
-      UIDValidityChange_TriggersFullRescan`)
-- [x] `SyncState` (`sync.State`) nach jeder Nachricht fortschreiben —
-      **Präzisierung:** `FetchNew` selbst schreibt nichts fort, sondern
-      liefert einen Baseline-State (v. a. die aktuelle `UIDValidity`) plus
-      pro Nachricht deren UID; der Aufrufer (SyncReports-Use-Case, AP 4)
-      schreibt `LastUID` nach jeder erfolgreich verarbeiteten Nachricht
-      fort. Siehe Kommentar an `sync.MessageSource` in `ports.go`.
-- [x] Backoff bei temporären Fehlern (3 Versuche, exponentiell) — **nur für
-      den Verbindungsaufbau**, nicht für Login: ein falsches Passwort wird
-      durch Wiederholen nicht richtig und wiederholte Fehlversuche können
-      Konten beim Provider sperren. Mit einem echten transienten Fehler
-      verifiziert (`TestConnect_RetriesTransientDialFailure`: Server startet
-      erst während der Backoff-Wartezeit zwischen Versuch 1 und 2).
-- [x] Keyring-Adapter (`internal/infra/keyring.OSStore`), Service
+- [x] IMAP adapter (`internal/infra/imap.Adapter`): TLS enforced when
+      `MailAccount.UseTLS` (context-aware dial via `tls.Dialer`/
+      `net.Dialer`, never `InsecureSkipVerify`), `BODY.PEEK[]` **and**
+      `EXAMINE` instead of `SELECT` (read-only, doubly secured),
+      UID-based, streaming `iter.Seq2` iterator via
+      `FetchMessageData.Collect()` per message (not the whole result
+      set at once)
+- [x] `UIDVALIDITY` change → full rescan (`startUID = 1`,
+      `baseline.LastUID = 0`), the UNIQUE index from WP 2 catches
+      duplicates — verified with an in-process server
+      (`TestFetchNew_UIDValidityChange_TriggersFullRescan`)
+- [x] Persist `SyncState` (`sync.State`) after every message —
+      **clarification:** `FetchNew` itself persists nothing, but
+      returns a baseline state (mainly the current `UIDValidity`) plus
+      the UID of each message; the caller (the SyncReports use case, WP
+      4) persists `LastUID` after every successfully processed message.
+      See the comment on `sync.MessageSource` in `ports.go`.
+- [x] Backoff on transient errors (3 attempts, exponential) — **only for
+      connection setup**, not for login: a wrong password doesn't
+      become right by retrying, and repeated failed attempts can lock
+      accounts at the provider. Verified with a real transient error
+      (`TestConnect_RetriesTransientDialFailure`: the server only
+      starts during the backoff wait between attempt 1 and 2).
+- [x] Keyring adapter (`internal/infra/keyring.OSStore`), service
       `de.pmoscode.dmarc-analyzer`
-- [x] Typ `Secret` (`internal/domain/account`) mit maskierendem
-      `String()`/`MarshalJSON()` + Tests. **Ein echtes Leck dabei gefunden
-      und behoben:** `%#v` benutzt `fmt.GoStringer`, nicht `fmt.Stringer —
-      ohne eigene `GoString()`-Methode hätte `%#v` die rohen Secret-Bytes
-      hex-kodiert gezeigt, obwohl `%v`/`%+v` bereits korrekt maskierten. Der
-      erste Testentwurf hätte das nicht gemerkt (ASCII-Substring-Suche
-      erkennt Hex-Kodierung nicht) — Test entsprechend verschärft. Siehe
-      AGENTS.md, Abschnitt „Maskierte Typen".
-- [x] Linux-Fallback (`internal/infra/keyring.FileStore`): AES-256-GCM
-      (Standardbibliothek `crypto/aes`/`crypto/cipher`), Schlüssel via
-      `scrypt` (neu gepinnt: `golang.org/x/crypto`, siehe
-      `docs/DEPENDENCIES.md`) aus Master-Passphrase + persistiertem Salt.
-      `keyring.IsAvailable()` prüft den OS-Schlüsselbund per Kanarienwert
-      statt aus einer bestimmten Fehlerklasse zu raten — die Entscheidung
-      *welcher* Store verwendet wird, trifft die Composition Root (AP 4/5),
-      nicht der Adapter selbst.
-- [~] Kontolöschung entfernt Metadaten **und** Keyring-Eintrag — **nur die
-      Keyring-Hälfte ist AP 3**: `CredentialStore.Delete` ist implementiert
-      und getestet (idempotent). Die Metadaten-Hälfte braucht
-      `account.Repository` gegen SQLite (`accountrepo.go`), das bewusst wie
-      in AP 1/2 für `MessageSource` begründet erst in AP 4 entsteht, wenn
-      die Kontoverwaltung (`internal/app/manageaccount`) beide Hälften
-      zusammenführt. Der Port `account.Repository` ist bereits definiert.
-- [x] Tests gegen einen In-Process-IMAP-Server (`imapmemserver`, go-imaps
-      eigene Testserver-Komponente), 11 Tests inkl. UID-Logik,
-      Kontext-Abbruch (vor und während der Iteration), PEEK/kein-\Seen-Flag.
-      **Ein Bug in der Beta-Bibliothek gefunden:**
-      `imapmemserver.User.Append` mit `nil`-Options dereferenziert
-      ungeprüft und panickt — mit `&imap.AppendOptions{}` umgangen,
-      dokumentiert im Test.
+- [x] Type `Secret` (`internal/domain/account`) with masking
+      `String()`/`MarshalJSON()` + tests. **A real leak found and fixed
+      here:** `%#v` uses `fmt.GoStringer`, not `fmt.Stringer` — without
+      a custom `GoString()` method, `%#v` would have shown the raw
+      secret bytes hex-encoded, even though `%v`/`%+v` already masked
+      correctly. The first test draft wouldn't have caught this (an
+      ASCII substring search doesn't detect hex encoding) — the test
+      was tightened accordingly. See AGENTS.md, "Masked types" section.
+- [x] Linux fallback (`internal/infra/keyring.FileStore`): AES-256-GCM
+      (standard library `crypto/aes`/`crypto/cipher`), a key derived via
+      `scrypt` (newly pinned: `golang.org/x/crypto`, see
+      `docs/DEPENDENCIES.md`) from a master passphrase + a persisted
+      salt. `keyring.IsAvailable()` checks the OS keychain via a canary
+      value instead of guessing from a particular error class — the
+      decision of *which* store to use is made by the composition root
+      (WP 4/5), not the adapter itself.
+- [~] Deleting an account removes metadata **and** the keyring entry —
+      **only the keyring half is WP 3**: `CredentialStore.Delete` is
+      implemented and tested (idempotent). The metadata half needs
+      `account.Repository` against SQLite (`accountrepo.go`), which —
+      for the same reason as `MessageSource` in WP 1/2 — deliberately
+      only comes in WP 4, once account management
+      (`internal/app/manageaccount`) brings both halves together. The
+      `account.Repository` port is already defined.
+- [x] Tests against an in-process IMAP server (`imapmemserver`, go-imap's
+      own test server component), 11 tests including UID logic, context
+      cancellation (before and during iteration), PEEK/no-\Seen-flag.
+      **A bug found in the beta library:**
+      `imapmemserver.User.Append` with `nil` options dereferences
+      without checking and panics — worked around with
+      `&imap.AppendOptions{}`, documented in the test.
 
-**Fertig wenn:** Zweiter Sync-Lauf direkt nach dem ersten holt null
-Nachrichten — erreicht, `TestFetchNew_SecondSync_ReturnsNoNewMessages` bildet
-genau das nach. Kein Testlauf enthält ein Passwort in Logs oder
-Fehlertexten — die Testserver-Logs wurden geprüft, `Secret` verhindert es
-strukturell; einzige bekannte Grenze: die an `imapclient.Login` als
-`string` übergebene Kopie des Passworts kann nicht mehr aktiv überschrieben
-werden (Go-Strings sind unveränderlich), siehe Kommentar an `Secret.Zero()`.
+**Done when:** a second sync run right after the first fetches zero
+messages — reached, `TestFetchNew_SecondSync_ReturnsNoNewMessages`
+reproduces exactly that. No test run contains a password in logs or
+error text — the test-server logs were checked, `Secret` prevents it
+structurally; the one known limit: the copy of the password passed to
+`imapclient.Login` as a `string` can no longer be actively overwritten
+(Go strings are immutable), see the comment on `Secret.Zero()`.
 
-### AP 4 — Anwendungsschicht
+### WP 4 — Application layer
 
-**Ziel:** Der komplette Ablauf ist ohne UI nutzbar.
+**Goal:** The complete flow is usable without a UI.
 
-- [x] Use Cases `syncreports`, `queryreports`, `statistics`, `manageaccount`,
-      `exportdata` — plus `importfiles` (siehe nächster Punkt) und, als
-      Nebenprodukt, `internal/infra/mailmime` (MIME-Zerlegung, AP 3 bewusst
-      zurückgestellt) und drei neue SQLite-Repositories (`accountrepo.go`,
-      `syncstaterepo.go`, `failedimportrepo.go`), ebenfalls bewusst aus
-      AP 1–3 hierher verschoben, wo die tatsächlichen Verbraucher entstehen.
-      `statistics` bekam dabei einen `analysis`-Port (Statistics-Typen,
-      `Repository.Compute`) — die in AP 2 zurückgestellte SQL-Aggregation
-      ("Aggregationen für die Kennzahlen") landet hier, zugeschnitten statt
-      als Erweiterung von `report.Query`.
-- [x] Pipeline Abholen/Parsen nebenläufig, Schreiben seriell, `-race` sauber
-      — `syncreports.runPipeline`: eine Fetcher-Goroutine, ein
-      Parser-Worker-Pool (konfigurierbare Größe), ein einzelner Schreiber.
-      **Design-Detail über den Wortlaut hinaus:** da Worker außer der
-      Reihe fertig werden können, verfolgt ein `progressTracker` die
-      lückenlose Fortschrittsgrenze statt einfach die höchste gesehene UID
-      zu übernehmen — sonst könnte `LastUID` bei einem Absturz eine noch
-      nicht gespeicherte Nachricht überspringen. Mit gezielten Tests für
-      genau diesen Out-of-Order-Fall abgesichert.
-- [x] Fortschritts- und Ergebnisberichte (neu / übersprungen / fehlerhaft) —
-      `Result{New, Skipped, Failed, Errors}`, fehlerhafte Anhänge landen in
-      `failed_imports` (neuer `FailedImportRepository`-Port).
-- [x] Datei-Import (Vorschlag 11.1) — **bewusst NICHT** als zweite
-      `MessageSource`: der Port verlangt seit AP 3 `account.MailAccount` +
-      `Secret` für `Connect`, das hat ein lokaler Dateiimport nicht. Eigener
-      Use Case `internal/app/importfiles`, der sich `MessageDecoder` und
-      `ReportParser` mit `syncreports` teilt (dieselbe MIME-Zerlegung für
-      IMAP wie für `.eml`-Dateien) und dieselbe Dedup-Logik nutzt — dafür
-      extrahiert als domain-seitiges `report.SaveIfNew(ctx, repo, r)`
-      (siehe unten), statt in beiden Use Cases dupliziert.
-- [x] CLI: `dmarc-analyzer sync --headless`, `import <pfad>`, `stats` — plus
-      `account add|list|test|delete` (nicht im Wortlaut gefordert, aber ohne
-      irgendeinen Weg, ein Konto anzulegen, wäre `sync` von der CLI aus gar
-      nicht nutzbar; siehe Diskussion unten bei "Fertig wenn"). Composition
-      Root (`cmd/dmarc-analyzer/wire.go`) verdrahtet Adapter **nur für den
-      tatsächlich aufgerufenen Unterbefehl** — `stats`/`import` bauen keinen
-      Credential-Store auf und fassen damit nie den echten OS-Schlüsselbund
-      an, das passiert ausschließlich für `sync`/`account`.
-- [x] Alle Use Cases gegen handgeschriebene Fakes getestet, Abdeckung ≥ 85 %
-      — erreicht: `syncreports` 92,1 %, `manageaccount` 91,7 %,
-      `statistics` 90,9 %, `importfiles` 86,2 %, `exportdata` 87,8 %,
-      `queryreports` 100 %.
-- [x] Abbruch per `context.Cancel` hinterlässt konsistenten Zustand (Test) —
-      `TestSyncAccount_ContextCancelledMidSync_LeavesConsistentState`:
-      `LastUID` überspringt nie eine nicht tatsächlich verarbeitete
-      Nachricht, "neu" gezählte Reports sind immer wirklich gespeichert.
+- [x] Use cases `syncreports`, `queryreports`, `statistics`,
+      `manageaccount`, `exportdata` — plus `importfiles` (see the next
+      point) and, as a byproduct, `internal/infra/mailmime` (MIME
+      splitting, deliberately deferred from WP 3) and three new SQLite
+      repositories (`accountrepo.go`, `syncstaterepo.go`,
+      `failedimportrepo.go`), also deliberately moved here from WP 1–3,
+      to where the actual consumers appear. `statistics` gained an
+      `analysis` port for this (statistics types, `Repository.Compute`)
+      — the SQL aggregation deferred in WP 2 ("aggregations for the
+      metrics") lands here, tailored rather than as an extension of
+      `report.Query`.
+- [x] Fetch/parse pipeline concurrent, writing serial, `-race` clean —
+      `syncreports.runPipeline`: one fetcher goroutine, a parser worker
+      pool (configurable size), a single writer. **A design detail
+      beyond the letter of the plan:** since workers can finish out of
+      order, a `progressTracker` tracks the gapless progress boundary
+      instead of simply adopting the highest UID seen — otherwise
+      `LastUID` could skip a not-yet-saved message on a crash. Backed
+      by targeted tests for exactly this out-of-order case.
+- [x] Progress and result reports (new/skipped/failed) —
+      `Result{New, Skipped, Failed, Errors}`, failed attachments land in
+      `failed_imports` (a new `FailedImportRepository` port).
+- [x] File import (suggestion 11.1) — **deliberately NOT** as a second
+      `MessageSource`: since WP 3 the port requires `account.MailAccount`
+      + `Secret` for `Connect`, which a local file import doesn't have.
+      A dedicated use case `internal/app/importfiles`, which shares
+      `MessageDecoder` and `ReportParser` with `syncreports` (the same
+      MIME splitting for IMAP as for `.eml` files) and uses the same
+      dedup logic — extracted for this as a domain-side
+      `report.SaveIfNew(ctx, repo, r)` (see below), instead of
+      duplicated in both use cases.
+- [x] CLI: `dmarc-analyzer sync --headless`, `import <path>`, `stats` —
+      plus `account add|list|test|delete` (not literally required, but
+      without any way to create an account, `sync` wouldn't be usable
+      from the CLI at all; see the discussion below under "done when").
+      The composition root (`cmd/dmarc-analyzer/wire.go`) wires up
+      adapters **only for the subcommand actually invoked** —
+      `stats`/`import` don't build a credential store and thus never
+      touch the real OS keychain, that happens exclusively for
+      `sync`/`account`.
+- [x] All use cases tested against hand-written fakes, coverage ≥ 85% —
+      reached: `syncreports` 92.1%, `manageaccount` 91.7%, `statistics`
+      90.9%, `importfiles` 86.2%, `exportdata` 87.8%, `queryreports`
+      100%.
+- [x] Cancellation via `context.Cancel` leaves a consistent state (test)
+      — `TestSyncAccount_ContextCancelledMidSync_LeavesConsistentState`:
+      `LastUID` never skips a message that wasn't actually processed,
+      reports counted as "new" are always actually saved.
 
-**Zwei echte Bugs unterwegs gefunden und behoben** (durch fehlschlagende
-Tests entdeckt, nicht nur behauptet):
-1. `ErrDuplicateReport` saß in `internal/infra/sqlite` — `syncreports`
-   hätte es importieren müssen, ein Verstoß gegen DIP (App-Schicht darf nur
-   an Domain-Ports hängen, AGENTS.md). Verschoben nach `report.ErrDuplicate`
-   im Domain-Port, `sqlite.ReportRepository.Save` gibt ihn jetzt (gewrappt)
-   zurück statt eines eigenen Sentinels.
-2. Ein bisher unausgesprochener Vertrag an `account.CredentialStore.Store`:
-   die echten Adapter (`OSStore`, `FileStore`) verwandeln die Secret-Bytes
-   synchron in eine eigene Kopie (String-Konversion bzw. Verschlüsselung),
-   ein Aufrufer darf das übergebene `Secret` direkt danach mit `Zero()`
-   überschreiben. Ein naiver Test-Fake, der nur flach speichert, würde vom
-   selben `Zero()`-Aufruf nachträglich mitgeleert (geteiltes Backing-Array)
-   — beim CLI-Test `account add` tatsächlich aufgetreten. Vertrag jetzt am
-   Port dokumentiert, alle drei Fake-`CredentialStore`-Implementierungen im
-   Repo kopieren jetzt defensiv (`account.NewSecret(s.Expose())`).
+**Two real bugs found and fixed along the way** (discovered by failing
+tests, not just claimed):
+1. `ErrDuplicateReport` sat in `internal/infra/sqlite` — `syncreports`
+   would have had to import it, a DIP violation (the app layer may only
+   depend on domain ports, AGENTS.md). Moved to `report.ErrDuplicate`
+   in the domain port, `sqlite.ReportRepository.Save` now returns it
+   (wrapped) instead of its own sentinel.
+2. A previously unstated contract on `account.CredentialStore.Store`:
+   the real adapters (`OSStore`, `FileStore`) synchronously turn the
+   secret bytes into their own copy (string conversion or encryption),
+   and a caller may overwrite the passed `Secret` with `Zero()`
+   immediately afterward. A naive test fake that just stores it
+   shallowly would get wiped along with it by the same `Zero()` call
+   (shared backing array) — actually occurred in the `account add` CLI
+   test. The contract is now documented on the port, all three fake
+   `CredentialStore` implementations in the repo now copy defensively
+   (`account.NewSecret(s.Expose())`).
 
-**Fertig wenn:** Ein vollständiger Import aus einem Postfach läuft über die
-CLI durch, inklusive Kennzahlenausgabe. — Mit einer ehrlichen Einschränkung
-erreicht: end-to-end über die echte, gebaute Binary verifiziert für
-**Datei-Import** (`dmarc-analyzer import` mit drei echten Provider-Stil-
-Fixtures — RFC-7489-Beispiel, Google-gzip, Microsoft-zip —, danach
-`dmarc-analyzer stats` mit von Hand nachgerechneten Werten, Duplikaterkennung
-bei erneutem Import). **Nicht** end-to-end mit der echten Binary gegen ein
-echtes/simuliertes Postfach getestet — das würde `account add` erfordern,
-was den echten OS-Schlüsselbund dieser Maschine anfassen würde, das wollte
-ich ohne Rückfrage nicht auslösen. Der IMAP-Pfad selbst ist stattdessen
-doppelt abgesichert: AP 3 testet den Adapter gegen einen echten In-Process-
-IMAP-Server, AP 4 testet `syncreports.SyncAccount` (der Use Case, der ihn
-aufruft) umfassend gegen Fakes, inklusive des genauen "zweiter Lauf holt
-nichts"-Kriteriums.
+**Done when:** a complete import from a mailbox runs through via the
+CLI, including a metrics printout. — Reached, with one honest
+limitation: verified end-to-end via the real, built binary for **file
+import** (`dmarc-analyzer import` with three real provider-style
+fixtures — RFC 7489 example, Google gzip, Microsoft zip —, then
+`dmarc-analyzer stats` with hand-checked values, duplicate detection on
+re-import). **Not** tested end-to-end with the real binary against a
+real/simulated mailbox — that would require `account add`, which would
+touch this machine's real OS keychain, and I didn't want to trigger that
+without asking. The IMAP path itself is instead doubly secured: WP 3
+tests the adapter against a real in-process IMAP server, WP 4 tests
+`syncreports.SyncAccount` (the use case that calls it) extensively
+against fakes, including the exact "second run fetches nothing"
+criterion.
 
-### AP 5 — UI-Grundgerüst
+### WP 5 — UI scaffolding
 
-**Ziel:** Bedienbares Programm für den Kern-Use-Case.
+**Goal:** A usable program for the core use case.
 
-- [x] Hauptfenster, seitliche Navigation, eigenes Theme (hell und dunkel)
-- [x] `internal/ui/i18n` — **alle** Texte zentral, kein String im Widget-Code
-- [x] Einstellungen: Konto anlegen, Verbindung testen mit klarer Rückmeldung
-- [x] Ersteinrichtungs-Assistent nach 3.1
-- [x] Berichtstabelle mit Lazy-Datenquelle über `ReportQuery`
-- [x] Detailansicht eines Reports
-- [x] Sync-Knopf mit Fortschritt und Abbruch, I/O nie im UI-Thread,
-      Rückweg über `fyne.Do()`
-- [x] Leerzustände und Klartext-Fehlermeldungen nach 3.1
-- [x] Tests mit `fyne.io/fyne/v2/test`: Aufbau, Navigation, Formularvalidierung
+- [x] Main window, side navigation, its own theme (light and dark)
+- [x] `internal/ui/i18n` — **all** text centralized, no string in widget code
+- [x] Settings: create an account, test the connection with clear feedback
+- [x] First-run wizard per 3.1
+- [x] Report table with a lazy data source via `ReportQuery`
+- [x] Detail view of a report
+- [x] Sync button with progress and cancel, I/O never on the UI thread,
+      returning via `fyne.Do()`
+- [x] Empty states and plain-language error messages per 3.1
+- [x] Tests with `fyne.io/fyne/v2/test`: layout, navigation, form validation
 
-**Fertig wenn:** Ein Nutzer richtet ohne Dokumentation ein Konto ein und sieht
-seine Reports. ✅ Erreicht.
+**Done when:** a user sets up an account with no documentation and sees
+their reports. ✅ Reached.
 
-**Abweichungen / Erkenntnisse:**
-- Eigenes Theme beschränkt sich bewusst auf eine Akzentfarbe
-  (`appTheme.Color` überschreibt nur `ColorNamePrimary`); Light/Dark-Kontrast
-  und -Umschaltung übernimmt unverändert Fynes `ThemeVariant`-System, da
-  dieses bereits geprüft barrierefrei ist — ein eigenes Kontrastsystem hätte
-  hier nur Risiko ohne Nutzen hinzugefügt.
-- Echter Bug gefunden und behoben: `settings.View.refreshContent()` schrieb
-  den neuen Listen-/Leerzustands-Inhalt fälschlich nach
-  `v.container.Objects[len(v.container.Objects)-1]`. Bei
-  `container.NewBorder(top, nil, nil, nil, center)` landet das variadic
-  `objects`-Argument (hier `center`) aber immer an Index 0 — die
-  Top/Bottom/Left/Right-Objekte werden erst danach angehängt. Dadurch wurde
-  bei jedem `Reload()` die Kopfzeile (Titel „Konten" + Hinzufügen-Button)
-  durch die Liste/den Leerzustand überschrieben, statt umgekehrt — sichtbar
-  wurde das erst durch den fehlschlagenden Shell-Navigationstest
-  `TestShell_SelectNav_SwitchesToSettings`. `reports.View` hatte dasselbe
-  Muster bereits korrekt (Index 0). Fix: beide Zweige schreiben jetzt auf
+**Deviations / findings:**
+- The custom theme deliberately limits itself to an accent color
+  (`appTheme.Color` overrides only `ColorNamePrimary`); light/dark
+  contrast and switching are handled unchanged by Fyne's `ThemeVariant`
+  system, since that's already verified accessible — a custom contrast
+  system here would only have added risk with no benefit.
+- Real bug found and fixed: `settings.View.refreshContent()` incorrectly
+  wrote the new list/empty-state content to
+  `v.container.Objects[len(v.container.Objects)-1]`. In
+  `container.NewBorder(top, nil, nil, nil, center)`, the variadic
+  `objects` argument (here `center`) always ends up at index 0 — the
+  top/bottom/left/right objects are appended only after that. This
+  meant every `Reload()` overwrote the header (title "Accounts" + add
+  button) with the list/empty state instead of the other way around —
+  this only became visible through the failing shell navigation test
+  `TestShell_SelectNav_SwitchesToSettings`. `reports.View` already had
+  the same pattern right (index 0). Fix: both branches now write to
   `Objects[0]`.
-- Fyne-Testtreiber führt `fyne.Do()` synchron auf der aufrufenden Goroutine
-  aus (anders als der echte Treiber) — ohne das injizierbare
-  `runBackground`-Feld (Default: echte Goroutine, in Tests synchron ersetzt)
-  hätten Tests unter `-race` echte Data Races gemeldet. Siehe AGENTS.md.
+- The Fyne test driver runs `fyne.Do()` synchronously on the calling
+  goroutine (unlike the real driver) — without the injectable
+  `runBackground` field (default: a real goroutine, replaced
+  synchronously in tests), tests under `-race` would have reported real
+  data races. See AGENTS.md.
 
-### AP 6 — Auswertung und Visualisierung
+### WP 6 — Analysis and visualization
 
-**Ziel:** Die in `FEATURES.md` geforderte Visualisierung steht.
+**Goal:** The visualization required by `FEATURES.md` is in place.
 
-- [x] Dashboard mit Kennzahlen-Kacheln inkl. Trend zur Vorperiode
-- [x] `ChartRenderer`-Port + go-chart-Adapter
-- [x] Zeitreihe, Top-10-Balken, Disposition-Donut, Heatmap Quelle × Tag
-- [x] Sendequellen-Ansicht, aggregiert nach Quell-IP
-- [x] rDNS/PTR-Auflösung mit Cache (Vorschlag 11.2)
-- [x] Erkennung bekannter Dienste über PTR und IP-Bereiche (Vorschlag 11.3)
-- [x] Filter- und Gruppierungsleiste, wirkt auf alle Ansichten
-- [x] Glossar und Tooltips für DMARC-Begriffe
-- [x] Export: gefilterte Ansicht als CSV, Diagramm als PNG (Vorschlag 11.4)
+- [x] Dashboard with metric tiles including trend vs. the previous period
+- [x] `ChartRenderer` port + go-chart adapter
+- [x] Time series, top-10 bars, disposition donut, source × day heatmap
+- [x] Sending-sources view, aggregated by source IP
+- [x] rDNS/PTR resolution with a cache (suggestion 11.2)
+- [x] Detection of known services via PTR and IP ranges (suggestion 11.3)
+- [x] Filter and grouping bar, acts on all views
+- [x] Glossary and tooltips for DMARC terms
+- [x] Export: filtered view as CSV, chart as PNG (suggestion 11.4)
 
-**Fertig wenn:** Aus dem Dashboard ist ohne Zwischenschritt erkennbar, welche
-Sendequelle fehlschlägt und wie viele Nachrichten betroffen sind. ✅ Erreicht.
+**Done when:** from the dashboard, it's clear without an intermediate
+step which sending source is failing and how many messages are
+affected. ✅ Reached.
 
-**Abweichungen / Erkenntnisse:**
-- `analysis.Repository` (AP 2/4) um `DailyVolumes`, `TopSources`, `Heatmap`
-  erweitert statt eines neuen Ports — bleibt der eine Ort für
-  SQL-aggregierte Lesezugriffe auf Kennzahlen, konsistent mit `Compute`.
-  Ein Report wird für die Zeitreihe/Heatmap dem Tag von `date_begin`
-  zugeordnet, nicht anteilig verteilt — DMARC-Aggregate-Reports sind nach
-  RFC 7489 praktisch immer Ein-Tages-Zeiträume, eine anteilige Verteilung
-  hätte keinen belastbaren fachlichen Mehrwert gegenüber dem Aufwand
-  gehabt.
-- Neuer Domänen-Port `domain/sources` (Paketname `sources`, wie
-  `internal/ui/sources` — unterschiedliche Importpfade, im UI-Code per
-  Alias `domainsources` importiert, demselben Muster wie `domainsync`
-  folgend) für die nach Quell-IP aggregierte Sicht plus `Enricher`-Port
-  (PTR + Diensterkennung). SQL-Aggregation (Repository) und
-  Netzwerk-Anreicherung (Enricher) sind bewusst getrennte Ports und laufen
-  in unterschiedlichen Schichten (Repository in `infra/sqlite`, Enrich-Loop
-  in `app/sourcestats`) — zwei grundverschiedene I/O-Arten, die ein
-  gemeinsamer Adapter vermischt hätte.
-- `internal/infra/sourceinfo.Enricher`: nur hostnamenbasierte
-  Diensterkennung (PTR-Suffix), bewusst **ohne** zusätzliche
-  IP-Bereichs-Erkennung trotz FEATURES.md-Wortlaut ("über PTR und
-  IP-Bereiche") — fest einprogrammierte CIDR-Listen großer Anbieter wären
-  nach kurzer Zeit unbemerkt veraltet, ohne einen Pflegeprozess dafür ist
-  das schlechter als gar keine Angabe. Cache ist ein unbegrenzter
-  In-Prozess-`sync.Map` (kein TTL) — für eine Desktop-Anwendung mit kurzen
-  Laufzeiten ausreichend.
-- go-chart/v2 hat keinen Heatmap-Diagrammtyp. Die Heatmap wird deshalb
-  nicht über go-chart, sondern direkt mit `image/draw` gezeichnet
-  (Rechtecke) plus go-charts eigenem `drawing.RasterGraphicContext` für
-  Text (Achsenbeschriftung) — spart eine zusätzliche
-  Font-Rendering-Abhängigkeit nur für dieses eine Diagramm.
-- `ChartRenderer` liefert bei leeren Eingabedaten ein leeres weißes Bild
-  statt eines Fehlers — die aufrufende `dashboard.View` zeigt in diesem
-  Fall ohnehin einen Leerzustand statt eines Diagramms an; ein Fehler wäre
-  hier unnötig streng gewesen.
-- Diagrammbeschriftungen (z. B. "Bestanden"/"Fehlgeschlagen",
-  Disposition-Namen) sind als literale deutsche Zeichenketten direkt in
-  `internal/infra/charts` gehalten, nicht aus `internal/ui/i18n`
-  importiert — `i18n` ist eine UI-Schicht-Abhängigkeit, die `infra` laut
-  Abhängigkeitsrichtung nicht importieren darf. Kleine, bewusst in Kauf
-  genommene Textdopplung.
-- "Tooltips" (Checklistenpunkt) sind kein Hover-Tooltip — Fyne v2.8 hat
-  keinen eingebauten Tooltip-Mechanismus (geprüft: kein Treffer im
-  gesamten Modul). Ersatz: ein kleiner "?"-Knopf neben einzelnen
-  Dashboard-Kacheln bzw. im Hauptfenster-Kopf öffnet denselben
-  Glossar-Text als Dialog (`internal/ui/glossary`).
-- "Gruppierungsleiste" wurde nicht in die gemeinsame `FilterBar`
-  aufgenommen: `analysis.Query` und `sources.Query` kennen kein `GroupBy`
-  (Übersicht/Sendequellen sind bereits aggregiert, eine zusätzliche
-  Gruppierung ergäbe dort keinen Sinn). Stattdessen bekam ausschließlich
-  `reports.View` einen eigenen Gruppierungs-`Select` (Keine/Domain/
-  Organisation), der das seit AP 2 vorhandene `report.Query.GroupBy`
-  endlich an die UI anschließt.
-- Export exportiert die aktuell geladene(n) Seite(n) (`reports.View`/
-  `sources.View`), nicht zwangsläufig jeden Datensatz, der dem Filter
-  insgesamt entspricht — alle Seiten nur für den Export vorab zu laden
-  wäre bei großen Beständen selbst eine Performance-Falle und würde der
-  in AP 2/5 bewusst gewählten Lazy-Datenquelle widersprechen.
-- **Echter Bug gefunden und behoben** (Konstruktionsreihenfolge, kein
-  Testartefakt): `widget.Select.SetSelected()` löst `OnChanged` synchron
-  aus, auch im Konstruktor. Das neue Gruppierungs-`Select` in
-  `reports.View` rief `SetSelected()` auf, bevor `v.container` zugewiesen
-  war — der synchron ausgelöste `OnChanged`-Handler griff über
-  `Reload()`/`setCenter()` auf das noch nil `v.container` zu und
-  panickte direkt beim `NewView()`-Aufruf. Aufgedeckt durch einen simplen
-  Konstruktionstest (`NewView()` + `SetContent`), nicht durch komplexe
-  Fixtures. Fix: `Select` zunächst ohne `OnChanged` aufbauen, `OnChanged`
-  erst zuweisen, nachdem der Rest des Widgets fertig ist — siehe
-  AGENTS.md.
-- **AP-5-Lücke geschlossen:** Es gab bislang keinen Weg, das grafische
-  Programm tatsächlich zu starten — `ui.BuildMainWindow` existierte, aber
-  `main.go` rief es nirgends auf (nur `run()`/Unterbefehle). Jetzt startet
-  `dmarc-analyzer` ohne Argumente die GUI (`cmd_gui.go`, `fyneapp.New()` +
-  `window.ShowAndRun()`); `--help`/`-h` zeigt weiterhin nur die
-  Kommandozeilen-Hilfe. Bewusst **nicht** in `run()` verdrahtet, da
-  `run()` von `cmd_*_test.go` direkt mit leeren Argumenten aufgerufen wird
-  (`TestRun_NoArgs_PrintsUsageWithoutError`) und dabei nie ein echtes
-  Fenster öffnen darf — die GUI-Startentscheidung liegt deshalb
-  ausschließlich in `main()`, das nicht unit-getestet wird. `"gui"` wurde
-  zu `credentialAwareCommands` ergänzt, da sowohl Kontoverwaltung als auch
-  Sync-Knopf im Hauptfenster Zugangsdaten brauchen. Ein echter Start der
-  GUI in einer Desktop-Umgebung wurde in dieser Session **nicht**
-  verifiziert (keine Anzeige im Entwicklungscontainer verfügbar) — nur
-  `--help` und alle bestehenden Unterbefehle wurden am gebauten Binary
-  geprüft; die Fyne-Widget-Ebene selbst ist durchgängig per
-  `fyne.io/fyne/v2/test` (Headless-Treiber) getestet.
+**Deviations / findings:**
+- `analysis.Repository` (WP 2/4) extended with `DailyVolumes`,
+  `TopSources`, `Heatmap` instead of a new port — stays the one place
+  for SQL-aggregated read access to metrics, consistent with `Compute`.
+  A report is assigned to the day of `date_begin` for the time
+  series/heatmap, not spread proportionally — DMARC aggregate reports
+  are, per RFC 7489, practically always single-day periods, and a
+  proportional split wouldn't have delivered meaningful business value
+  relative to the effort.
+- New domain port `domain/sources` (package name `sources`, like
+  `internal/ui/sources` — different import paths, imported in the UI
+  code under the alias `domainsources`, following the same pattern as
+  `domainsync`) for the view aggregated by source IP, plus an
+  `Enricher` port (PTR + service detection). SQL aggregation
+  (repository) and network enrichment (enricher) are deliberately
+  separate ports and run in different layers (repository in
+  `infra/sqlite`, the enrich loop in `app/sourcestats`) — two
+  fundamentally different kinds of I/O that a shared adapter would have
+  conflated.
+- `internal/infra/sourceinfo.Enricher`: only hostname-based service
+  detection (PTR suffix), deliberately **without** additional IP-range
+  detection despite the `FEATURES.md` wording ("via PTR and IP
+  ranges") — hardcoded CIDR lists of big providers would go stale
+  unnoticed after a short time, and without a maintenance process for
+  that, it's worse than no information at all. The cache is an
+  unbounded in-process `sync.Map` (no TTL) — sufficient for a desktop
+  application with short runtimes.
+- go-chart/v2 has no heatmap chart type. The heatmap is therefore drawn
+  not via go-chart, but directly with `image/draw` (rectangles) plus
+  go-chart's own `drawing.RasterGraphicContext` for text (axis labels)
+  — saves an extra font-rendering dependency just for this one chart.
+- `ChartRenderer` returns an empty white image for empty input data
+  instead of an error — the calling `dashboard.View` shows an empty
+  state instead of a chart in that case anyway; an error would have
+  been unnecessarily strict here.
+- Chart labels (e.g. "Passed"/"Failed", disposition names) are kept as
+  literal German strings directly in `internal/infra/charts`, not
+  imported from `internal/ui/i18n` — `i18n` is a UI-layer dependency
+  that `infra` isn't allowed to import per the dependency direction. A
+  small, deliberately accepted text duplication.
+- "Tooltips" (a checklist item) aren't a hover tooltip — Fyne v2.8 has
+  no built-in tooltip mechanism (checked: no match in the entire
+  module). Substitute: a small "?" button next to individual dashboard
+  tiles, or in the main window header, opens the same glossary text as
+  a dialog (`internal/ui/glossary`).
+- The "grouping bar" wasn't added to the shared `FilterBar`:
+  `analysis.Query` and `sources.Query` don't know `GroupBy` (overview/
+  sending sources are already aggregated, an additional grouping
+  wouldn't make sense there). Instead, only `reports.View` got its own
+  grouping `Select` (none/domain/organization), which finally connects
+  `report.Query.GroupBy` — present since WP 2 — to the UI.
+- Export exports the currently loaded page(s) (`reports.View`/
+  `sources.View`), not necessarily every record matching the filter
+  overall — pre-loading every page just for export would itself be a
+  performance trap on large datasets and would contradict the lazy
+  data source deliberately chosen in WP 2/5.
+- **Real bug found and fixed** (construction order, not a test
+  artifact): `widget.Select.SetSelected()` fires `OnChanged`
+  synchronously, even from the constructor. The new grouping `Select`
+  in `reports.View` called `SetSelected()` before `v.container` was
+  assigned — the synchronously fired `OnChanged` handler accessed the
+  still-nil `v.container` via `Reload()`/`setCenter()` and panicked
+  right at the `NewView()` call. Uncovered by a simple construction
+  test (`NewView()` + `SetContent`), not by complex fixtures. Fix:
+  build the `Select` first without `OnChanged`, assign `OnChanged` only
+  after the rest of the widget is done — see AGENTS.md.
+- **A WP 5 gap closed:** there was previously no way to actually launch
+  the graphical program — `ui.BuildMainWindow` existed, but `main.go`
+  never called it (only `run()`/subcommands). Now `dmarc-analyzer` with
+  no arguments starts the GUI (`cmd_gui.go`, `fyneapp.New()` +
+  `window.ShowAndRun()`); `--help`/`-h` still only shows the
+  command-line help. Deliberately **not** wired into `run()`, since
+  `run()` is called directly with empty arguments by `cmd_*_test.go`
+  (`TestRun_NoArgs_PrintsUsageWithoutError`) and must never open a real
+  window there — the GUI startup decision therefore lives exclusively
+  in `main()`, which isn't unit-tested. `"gui"` was added to
+  `credentialAwareCommands`, since both account management and the sync
+  button in the main window need credentials. An actual GUI launch in a
+  desktop environment was **not** verified in this session (no display
+  available in the development container) — only `--help` and all
+  existing subcommands were checked against the built binary; the Fyne
+  widget layer itself is thoroughly tested via `fyne.io/fyne/v2/test`
+  (headless driver).
 
-**Nachträgliche Ergänzung (nach Abschluss von AP 6):** Ordner-Picker fürs
-Kontoformular — DMARC-Berichte landen nicht zwangsläufig im Wurzelpostfach
-(INBOX), sondern können z. B. per Mailregel in einen Unterordner
-einsortiert sein. Das Postfach-Feld selbst unterstützte technisch schon
-immer einen beliebigen Ordnerpfad (freier Text, unverändert an IMAP
-SELECT/EXAMINE durchgereicht), aber ohne Hilfestellung musste der Nutzer
-den exakten Pfad samt serverabhängigem Trennzeichen (z. B. `/` bei
-Dovecot, `.` bei Courier) blind erraten.
-- Neuer, optionaler Port `sync.MailboxLister` (`domain/sync/ports.go`) —
-  bewusst getrennt von `MessageSource` statt einer weiteren Methode dort,
-  da nicht jede denkbare Quelle Postfächer auflisten kann/muss; Aufrufer
-  prüfen per Typassertion. `imap.Adapter` implementiert ihn zusätzlich
-  über `IMAP LIST`, gefiltert auf tatsächlich auswählbare Postfächer
-  (Attribut `\Noselect` ausgeschlossen).
-- `manageaccount.UseCase.ListMailboxes` verbindet probeweise (wie
-  `TestConnection`, ohne zu synchronisieren) und listet auf.
-- `settings.AccountForm.mailbox` ist jetzt ein `widget.SelectEntry` statt
-  `widget.Entry` — weiterhin frei eintippbar (z. B. für Server, bei denen
-  LIST aus irgendeinem Grund nicht das Richtige liefert), zusätzlich mit
-  Dropdown-Optionen befüllbar über den neuen Knopf "Ordner auflisten"
-  (nutzt die aktuell im Formular eingetragenen Zugangsdaten, ohne dass das
-  Konto schon gespeichert sein muss — funktioniert dadurch sowohl beim
-  Anlegen in den Einstellungen als auch im Ersteinrichtungs-Assistenten).
-- Kleine, durch Umstellung auf `SelectEntry` verursachte Testfalle
-  gefunden und behoben: `uitest.FindEntries` erkennt `*widget.SelectEntry`
-  nicht (Typassertion auf den konkreten Typ `*widget.Entry`, `SelectEntry`
-  bettet `Entry` nur ein) — ein index-basierter Testhelfer im
-  Ersteinrichtungs-Assistenten (`fillValidAccountForm`) musste neu
-  durchgezählt werden. Siehe AGENTS.md.
+**Follow-up addition (after WP 6 finished):** a folder picker for the
+account form — DMARC reports don't necessarily land in the root mailbox
+(INBOX), but can, for example, be filed into a subfolder via a mail
+rule. The mailbox field itself always technically supported an arbitrary
+folder path (free text, passed through unchanged to IMAP
+SELECT/EXAMINE), but without help the user had to blindly guess the
+exact path including the server-dependent separator (e.g. `/` for
+Dovecot, `.` for Courier).
+- A new, optional port `sync.MailboxLister` (`domain/sync/ports.go`) —
+  deliberately separate from `MessageSource` instead of another method
+  there, since not every conceivable source can/must list mailboxes;
+  callers check via a type assertion. `imap.Adapter` additionally
+  implements it via `IMAP LIST`, filtered to actually selectable
+  mailboxes (the `\Noselect` attribute excluded).
+- `manageaccount.UseCase.ListMailboxes` connects on a trial basis (like
+  `TestConnection`, without syncing) and lists them.
+- `settings.AccountForm.mailbox` is now a `widget.SelectEntry` instead
+  of `widget.Entry` — still freely typable (e.g. for servers where LIST
+  doesn't return the right thing for some reason), additionally
+  fillable with dropdown options via the new "list folders" button
+  (uses the credentials currently entered in the form, without the
+  account needing to already be saved — this works both when creating
+  one in settings and in the first-run wizard).
+- A small test trap caused by the switch to `SelectEntry`, found and
+  fixed: `uitest.FindEntries` doesn't recognize `*widget.SelectEntry`
+  (a type assertion on the concrete type `*widget.Entry`, `SelectEntry`
+  only embeds `Entry`) — an index-based test helper in the first-run
+  wizard (`fillValidAccountForm`) had to be recounted. See AGENTS.md.
 
-### AP 7 — Feinschliff und Release 1.0.0
+### WP 7 — Polish and release 1.0.0
 
-> **Vor diesem AP eingeschoben:** `MIGRATIONSPLAN.md` (Umstieg von der
-> ursprünglichen Fyne-Desktop-Oberfläche auf eine im Programm eingebettete
-> Web-Oberfläche, Meilensteine M0–M6). Stand hier: M0–M5 umgesetzt, siehe
-> dort Abschnitt 10. Die Punkte unten sind entsprechend angepasst
-> (Desktop-Benachrichtigung → Browser-Benachrichtigung, Packaging ohne
-> `fyne package`) bzw. bereits durch M5 ganz oder teilweise erledigt.
+> **Inserted before this WP:** `MIGRATIONSPLAN.md` (the move from the
+> original Fyne desktop UI to a web UI embedded in the program,
+> milestones M0–M6). Status here: M0–M5 implemented, see section 10
+> there. The items below are adjusted accordingly (desktop notification
+> → browser notification, packaging without `fyne package`) or already
+> fully or partly done via M5.
 
-- [x] ~~Aufbewahrungsrichtlinie, Standard 24 Monate (Vorschlag 11.11)~~ —
-  Einstellungen-Seite (Feld "Aufbewahrungsdauer für Berichte (Monate)",
-  Vorgabe 24, 0 = unbegrenzt), persistiert über
-  `internal/infra/config.Store` (JSON-Datei, `internal/domain/settings`),
-  angewendet über `internal/app/retention` und automatisch im Hintergrund
-  per `internal/app/retentionjob` (einmal beim Start, danach alle 24 h).
-  Löschung über `report.Pruner`/`ReportRepository.DeleteOlderThan`
-  (SQLite `DELETE ... WHERE date_end < ?`, kaskadiert über bestehende
-  Fremdschlüssel).
-- [x] ~~Hintergrund-Sync nach Zeitplan + **Browser-Benachrichtigung bei
-  offenem Tab**~~ (statt der ursprünglich vorgesehenen
-  `fyne.App.SendNotification`-Desktop-Benachrichtigung — es gibt seit dem
-  Umstieg auf die Web-Oberfläche kein Desktop-App-Fenster mehr, das eine
-  systemeigene Benachrichtigung auslösen könnte; die Benachrichtigung
-  läuft daher über die Browser-Notifications-API und setzt einen
-  geöffneten Tab voraus) — Sync-Intervall (Minuten, 0 = aus, Vorgabe 60)
-  ebenfalls auf der Einstellungen-Seite, geplanter Abgleich über
-  `internal/app/syncscheduler` (prüft minütlich anhand der aktuellen
-  Einstellung, ob ein Lauf fällig ist, startet ihn über den bestehenden
-  `syncjob.Runner`). Benachrichtigung in `static/app.js`: Knopf auf der
-  Einstellungen-Seite fragt `Notification.requestPermission()` auf
-  Nutzerklick ab, das bestehende SSE-Skript zeigt bei Übergang von
-  "läuft" zu "fertig"/"abgebrochen"/"fehlgeschlagen" eine
-  Browser-Benachrichtigung, wenn die Berechtigung erteilt ist.
-- [ ] Backup/Restore per `VACUUM INTO` (Vorschlag 11.12)
-- [ ] Barrierefreiheits-Durchgang nach den Kriterien aus 3.1 (siehe auch
+- [x] ~~Retention policy, default 24 months (suggestion 11.11)~~ —
+  a settings page (field "report retention (months)", default 24, 0 =
+  unlimited), persisted via `internal/infra/config.Store` (a JSON file,
+  `internal/domain/settings`), applied via `internal/app/retention` and
+  automatically in the background via `internal/app/retentionjob` (once
+  at startup, then every 24h). Deletion via
+  `report.Pruner`/`ReportRepository.DeleteOlderThan` (SQLite `DELETE
+  ... WHERE date_end < ?`, cascading via existing foreign keys).
+- [x] ~~Scheduled background sync + **browser notification while a tab
+  is open**~~ (instead of the originally planned
+  `fyne.App.SendNotification` desktop notification — since the move to
+  the web UI there's no more desktop app window that could trigger a
+  native notification; the notification therefore runs via the browser
+  Notifications API and requires an open tab) — the sync interval
+  (minutes, 0 = off, default 60) also on the settings page, the
+  scheduled sync via `internal/app/syncscheduler` (checks every minute,
+  based on the current setting, whether a run is due, starts it via the
+  existing `syncjob.Runner`). Notification in `static/app.js`: a button
+  on the settings page requests `Notification.requestPermission()` on a
+  user click, the existing SSE script shows a browser notification on
+  the transition from "running" to "done"/"cancelled"/"failed" if
+  permission was granted.
+- [ ] Backup/restore via `VACUUM INTO` (suggestion 11.12)
+- [ ] Accessibility pass per the criteria from 3.1 (see also
   `MIGRATIONSPLAN.md` M6)
-- [ ] Lasttest mit mehreren Jahren Reportdaten
-- [x] ~~Packaging macOS/Windows/Linux, `task release` mit Checksummen~~ —
-  **in M5 umgesetzt** (`Taskfile.yml`: `release:darwin`/`release:windows`/
-  `release:linux`/`release`, reine `CGO_ENABLED=0`-Cross-Compiles ohne
-  `fyne package`, siehe `MIGRATIONSPLAN.md`). Offen bleibt für ein
-  echtes 1.0.0-Release: macOS-Signierung/Notarisierung (aktuell
-  unsigniert, siehe README „Installation"), ggf. zusätzliche
-  Distributionswege (Homebrew, winget, …) — bewusst nicht Teil von M5.
-- [ ] README final mit Screenshots und Datenschutzhinweis — Text-Teile
-  bereits in M5 aktualisiert (Start/Browserverhalten/Beenden/
-  `--kein-browser`/Sicherheitsmodell), **Screenshots fehlen noch**. ADRs
-  in `docs/adr/` bereits in M5 angelegt (0001 Web-Oberfläche statt Fyne,
-  0002 Chart.js statt `ChartRenderer`-Port).
-- [ ] CHANGELOG-Eintrag `1.0.0`, Tag setzen
+- [ ] Load test with several years of report data
+- [x] ~~Packaging for macOS/Windows/Linux, `task release` with
+  checksums~~ — **implemented in M5** (`Taskfile.yml`:
+  `release:darwin`/`release:windows`/`release:linux`/`release`, plain
+  `CGO_ENABLED=0` cross-compiles without `fyne package`, see
+  `MIGRATIONSPLAN.md`). Still open for a real 1.0.0 release: macOS
+  signing/notarization (currently unsigned, see README "Installation"),
+  possibly additional distribution channels (Homebrew, winget, …) —
+  deliberately not part of M5.
+- [ ] Final README with screenshots and a privacy notice — the text
+  parts were already updated in M5 (start/browser behavior/quit/
+  `--kein-browser`/security model), **screenshots still missing**. ADRs
+  in `docs/adr/` already created in M5 (0001 web UI instead of Fyne,
+  0002 Chart.js instead of a `ChartRenderer` port).
+- [ ] CHANGELOG entry `1.0.0`, set the tag
 
 ---
 
-## 5. Reihenfolge und Abhängigkeiten
+## 5. Order and dependencies
 
 ```
-AP 0 ──▶ AP 1 ──▶ AP 2 ──▶ AP 3 ──▶ AP 4 ──▶ AP 5 ──▶ AP 6 ──▶ AP 7
+WP 0 ──▶ WP 1 ──▶ WP 2 ──▶ WP 3 ──▶ WP 4 ──▶ WP 5 ──▶ WP 6 ──▶ WP 7
                     │                          │
-                    └──── AP 4 braucht 2 + 3 ──┘
+                    └──── WP 4 needs 2 + 3 ────┘
 ```
 
-AP 1 und AP 2 lassen sich teilweise parallel bearbeiten (Parser gegen Fixtures,
-Schema gegen Handdaten), AP 3 braucht beide. Vor AP 5 sollte AP 4 vollständig
-getestet sein — sonst werden UI-Fehler und Logikfehler ununterscheidbar.
+WP 1 and WP 2 can partly run in parallel (the parser against fixtures,
+the schema against hand-built data), WP 3 needs both. WP 4 should be
+fully tested before WP 5 — otherwise UI bugs and logic bugs become
+indistinguishable.
 
 ---
 
-## 6. Vor dem ersten Commit zu entscheiden
+## 6. To decide before the first commit
 
-| Nr. | Frage | Vorbelegung, wenn keine Antwort kommt | Status |
+| No. | Question | Default if no answer comes | Status |
 | --- | --- | --- | --- |
-| E-1 | Modulpfad `github.com/pmoscode/dmarc-analyzer`? | ja | **umgesetzt** (AP 0) |
-| E-2 | Keyring-Service `de.pmoscode.dmarc-analyzer`? | ja | **umgesetzt** (AP 0, in README dokumentiert; Adapter folgt AP 3) |
-| E-3 | Lizenz MIT? | ja | **umgesetzt** (AP 0, `LICENSE`) |
-| E-4 | Echte Beispiel-Reports für die Fixtures verfügbar? | nein → synthetische aus RFC-Beispielen | offen — vor AP 1 klären |
-| E-5 | Umfang v1: APs 0–7 wie oben, oder Schnitt nach AP 5? | voller Umfang bis AP 7 | offen (Vorbelegung gilt vorerst) |
+| E-1 | Module path `github.com/pmoscode/dmarc-analyzer`? | yes | **implemented** (WP 0) |
+| E-2 | Keyring service `de.pmoscode.dmarc-analyzer`? | yes | **implemented** (WP 0, documented in the README; adapter follows in WP 3) |
+| E-3 | MIT license? | yes | **implemented** (WP 0, `LICENSE`) |
+| E-4 | Real sample reports available for the fixtures? | no → synthetic from RFC examples | open — clarify before WP 1 |
+| E-5 | v1 scope: WPs 0–7 as above, or cut after WP 5? | full scope through WP 7 | open (the default applies for now) |
 
-E-1 bis E-3 sind nachträglich nur mit Migrationsaufwand änderbar — sie sind mit
-AP 0 jetzt fixiert.
+E-1 through E-3 can only be changed later with migration effort — they're
+now fixed as of WP 0.

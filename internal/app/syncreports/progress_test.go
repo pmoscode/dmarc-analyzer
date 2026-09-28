@@ -25,8 +25,8 @@ func TestProgressTracker_OutOfOrderCompletion_OnlyAdvancesContiguously(t *testin
 
 	p := newProgressTracker(0)
 
-	// UID 3 kommt vor UID 1 und 2 an (schnellerer Worker) — der Fortschritt
-	// darf trotzdem nicht über die Lücke hinaus vorrücken.
+	// UID 3 arrives before UID 1 and 2 (faster worker) — progress must
+	// still not advance past the gap.
 	last, advanced := p.markDone(3)
 	require.False(t, advanced)
 	require.Equal(t, uint32(0), last)
@@ -35,10 +35,10 @@ func TestProgressTracker_OutOfOrderCompletion_OnlyAdvancesContiguously(t *testin
 	require.True(t, advanced)
 	require.Equal(t, uint32(1), last)
 
-	// UID 2 fehlt weiterhin — Fortschritt bleibt bei 1, obwohl 3 schon da ist.
+	// UID 2 is still missing — progress stays at 1, even though 3 is already there.
 	last, advanced = p.markDone(2)
 	require.True(t, advanced)
-	require.Equal(t, uint32(3), last, "mit UID 2 schließt sich die Lücke bis zur bereits wartenden UID 3")
+	require.Equal(t, uint32(3), last, "with UID 2, the gap closes up to the already-waiting UID 3")
 }
 
 func TestProgressTracker_StartsAfterGivenBaseline(t *testing.T) {

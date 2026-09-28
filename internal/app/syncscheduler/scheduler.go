@@ -1,10 +1,10 @@
-// Package syncscheduler stößt automatische Hintergrund-Abgleiche nach
-// einem festen Zeitplan an (AP 7: "Hintergrund-Sync nach Zeitplan") — der
-// manuell per /abgleich gestartete Lauf (internal/app/syncjob) bleibt
-// davon unberührt und weiterhin jederzeit möglich. Das Intervall kommt aus
-// envconfig.Config.SyncIntervalMinutes und ändert sich nicht zur Laufzeit
-// (12-factor, kein Nachladen nötig — anders als vor dem Umstieg auf reine
-// ENV-Konfiguration, siehe Git-Historie dieser Datei).
+// Package syncscheduler triggers automatic background syncs on a fixed
+// schedule (work package 7: "scheduled background sync") — the run
+// started manually via /abgleich (internal/app/syncjob) remains
+// unaffected and still possible at any time. The interval comes from
+// envconfig.Config.SyncIntervalMinutes and doesn't change at runtime
+// (12-factor, no reload needed — unlike before the switch to pure ENV
+// configuration, see this file's git history).
 package syncscheduler
 
 import (
@@ -16,24 +16,24 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/app/syncjob"
 )
 
-// Starter ist der Ausschnitt von syncjob.Runner, den Scheduler braucht.
+// Starter is the slice of syncjob.Runner that Scheduler needs.
 type Starter interface {
 	Start() error
 }
 
-// Scheduler löst nach jedem interval einen Lauf aus, solange keiner läuft
-// — läuft bereits einer, meldet syncjob.Runner.Start() harmlos
-// ErrAlreadyRunning, das Intervall lässt den nächsten Versuch dann
-// automatisch etwas später greifen.
+// Scheduler triggers a run after every interval, as long as none is
+// running — if one is already running, syncjob.Runner.Start() reports
+// ErrAlreadyRunning harmlessly, and the interval then lets the next
+// attempt take effect automatically a bit later.
 type Scheduler struct {
 	job      Starter
 	interval time.Duration
 	logger   *slog.Logger
 }
 
-// NewScheduler erzeugt einen Scheduler. logger == nil verwendet
-// slog.Default(). interval <= 0 bedeutet: automatischer Abgleich
-// deaktiviert (Run() kehrt dann sofort zurück).
+// NewScheduler creates a Scheduler. logger == nil uses slog.Default().
+// interval <= 0 means: automatic sync disabled (Run() then returns
+// immediately).
 func NewScheduler(job Starter, interval time.Duration, logger *slog.Logger) *Scheduler {
 	if logger == nil {
 		logger = slog.Default()
@@ -41,9 +41,9 @@ func NewScheduler(job Starter, interval time.Duration, logger *slog.Logger) *Sch
 	return &Scheduler{job: job, interval: interval, logger: logger}
 }
 
-// Run blockiert, bis ctx endet — ein erster Lauf sofort beim Start (ein
-// frisch gestarteter Container soll nicht erst ein volles Intervall auf
-// den ersten Abgleich warten), danach alle interval.
+// Run blocks until ctx ends — a first run immediately at startup (a
+// freshly started container shouldn't have to wait a full interval for
+// the first sync), then every interval.
 func (s *Scheduler) Run(ctx context.Context) {
 	if s.interval <= 0 {
 		return
@@ -69,5 +69,5 @@ func (s *Scheduler) trigger() {
 	if err == nil || errors.Is(err, syncjob.ErrAlreadyRunning) {
 		return
 	}
-	s.logger.Warn("geplanter abgleich konnte nicht gestartet werden", "error", err)
+	s.logger.Warn("scheduled sync could not be started", "error", err)
 }

@@ -7,91 +7,90 @@ import (
 	"time"
 )
 
-// SourceIP ist die IP-Adresse einer Sendequelle. Unveränderlich, ohne
-// Identität — ein Value Object im Sinne von DDD.
+// SourceIP is the IP address of a sending source. Immutable, without
+// identity — a value object in the DDD sense.
 type SourceIP struct {
 	addr netip.Addr
 }
 
-// NewSourceIP parst eine IPv4- oder IPv6-Adresse.
+// NewSourceIP parses an IPv4 or IPv6 address.
 func NewSourceIP(s string) (SourceIP, error) {
 	addr, err := netip.ParseAddr(strings.TrimSpace(s))
 	if err != nil {
-		return SourceIP{}, fmt.Errorf("ungültige quell-ip %q: %w", s, err)
+		return SourceIP{}, fmt.Errorf("invalid source IP %q: %w", s, err)
 	}
 	return SourceIP{addr: addr}, nil
 }
 
-// String liefert die textuelle Darstellung der Adresse.
+// String returns the textual representation of the address.
 func (ip SourceIP) String() string {
 	return ip.addr.String()
 }
 
-// IsValid meldet, ob die Adresse gesetzt ist (Nullwert-Erkennung).
+// IsValid reports whether the address is set (zero-value detection).
 func (ip SourceIP) IsValid() bool {
 	return ip.addr.IsValid()
 }
 
-// DomainName ist ein normalisierter Domainname (kleingeschrieben, ohne
-// führende/folgende Leerzeichen). Value Object.
+// DomainName is a normalized domain name (lowercased, without
+// leading/trailing whitespace). Value object.
 type DomainName struct {
 	value string
 }
 
-// NewDomainName normalisiert und validiert einen Domainnamen. Ein leerer
-// Domainname ist fachlich ungültig — Aufrufer mit optionalen Domainangaben
-// (z. B. envelope_from) verzichten bewusst auf diesen Typ und nutzen einen
-// rohen String.
+// NewDomainName normalizes and validates a domain name. An empty domain
+// name is invalid as a business rule — callers with optional domain
+// fields (e.g. envelope_from) deliberately forgo this type and use a raw
+// string.
 func NewDomainName(s string) (DomainName, error) {
 	normalized := strings.ToLower(strings.TrimSpace(s))
 	if normalized == "" {
-		return DomainName{}, fmt.Errorf("domainname darf nicht leer sein")
+		return DomainName{}, fmt.Errorf("domain name must not be empty")
 	}
 	return DomainName{value: normalized}, nil
 }
 
-// String liefert den normalisierten Domainnamen.
+// String returns the normalized domain name.
 func (d DomainName) String() string {
 	return d.value
 }
 
-// DateRange ist ein Zeitraum mit Begin < End, beide in UTC.
+// DateRange is a period with Begin < End, both in UTC.
 type DateRange struct {
 	Begin time.Time
 	End   time.Time
 }
 
-// NewDateRange erzwingt Begin < End und normalisiert beide Zeitpunkte auf UTC.
+// NewDateRange enforces Begin < End and normalizes both points in time to UTC.
 func NewDateRange(begin, end time.Time) (DateRange, error) {
 	if !begin.Before(end) {
-		return DateRange{}, fmt.Errorf("beginn (%s) muss vor ende (%s) liegen", begin, end)
+		return DateRange{}, fmt.Errorf("begin (%s) must be before end (%s)", begin, end)
 	}
 	return DateRange{Begin: begin.UTC(), End: end.UTC()}, nil
 }
 
-// IsZero meldet, ob der Zeitraum unbesetzt ist.
+// IsZero reports whether the period is unset.
 func (r DateRange) IsZero() bool {
 	return r.Begin.IsZero() && r.End.IsZero()
 }
 
-// Disposition ist die vom Empfänger tatsächlich angewendete Maßnahme
-// (RFC 7489 Abschnitt 3.1.2, Feld "disposition" in policy_evaluated).
+// Disposition is the action actually applied by the recipient (RFC 7489
+// section 3.1.2, field "disposition" in policy_evaluated).
 type Disposition string
 
-// Werte für Disposition (RFC 7489 Abschnitt 3.1.2).
+// Values for Disposition (RFC 7489 section 3.1.2).
 const (
 	DispositionNone       Disposition = "none"
 	DispositionQuarantine Disposition = "quarantine"
 	DispositionReject     Disposition = "reject"
-	// DispositionUnknown deckt RFC-abweichende Werte ab — Provider halten
-	// sich nicht immer an den RFC, solche Reports sollen trotzdem
-	// importiert werden können (siehe IMPLEMENTIERUNG.md Abschnitt 6.2).
+	// DispositionUnknown covers values that deviate from the RFC —
+	// providers don't always stick to the RFC, and such reports should
+	// still be importable (see IMPLEMENTIERUNG.md section 6.2).
 	DispositionUnknown Disposition = "unknown"
 )
 
-// ParseDisposition wandelt einen rohen XML-Wert in eine Disposition um.
-// Unbekannte Werte werden nie verworfen, sondern auf DispositionUnknown
-// abgebildet.
+// ParseDisposition converts a raw XML value into a Disposition. Unknown
+// values are never discarded, but mapped to DispositionUnknown.
 func ParseDisposition(s string) Disposition {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case string(DispositionNone):
@@ -105,13 +104,13 @@ func ParseDisposition(s string) Disposition {
 	}
 }
 
-// Policy ist eine veröffentlichte DMARC-Richtlinie (Felder "p"/"sp" in
-// policy_published). Denselben Wertebereich wie Disposition, aber fachlich
-// eine andere Aussage (Absicht statt angewendeter Maßnahme) — deshalb ein
-// eigener Typ.
+// Policy is a published DMARC policy (fields "p"/"sp" in
+// policy_published). Has the same range of values as Disposition, but is
+// a different statement in business terms (intent instead of applied
+// action) — hence its own type.
 type Policy string
 
-// Werte für Policy (RFC 7489, Felder "p"/"sp").
+// Values for Policy (RFC 7489, fields "p"/"sp").
 const (
 	PolicyNone       Policy = "none"
 	PolicyQuarantine Policy = "quarantine"
@@ -119,8 +118,8 @@ const (
 	PolicyUnknown    Policy = "unknown"
 )
 
-// ParsePolicy wandelt einen rohen XML-Wert in eine Policy um. Unbekannte
-// Werte werden auf PolicyUnknown abgebildet, nicht verworfen.
+// ParsePolicy converts a raw XML value into a Policy. Unknown values are
+// mapped to PolicyUnknown, not discarded.
 func ParsePolicy(s string) Policy {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case string(PolicyNone):
@@ -134,20 +133,20 @@ func ParsePolicy(s string) Policy {
 	}
 }
 
-// AlignmentMode ist der Ausrichtungsmodus für DKIM oder SPF: relaxed (r)
-// oder strict (s), Felder "adkim"/"aspf".
+// AlignmentMode is the alignment mode for DKIM or SPF: relaxed (r) or
+// strict (s), fields "adkim"/"aspf".
 type AlignmentMode string
 
-// Werte für AlignmentMode (RFC 7489, Felder "adkim"/"aspf").
+// Values for AlignmentMode (RFC 7489, fields "adkim"/"aspf").
 const (
 	AlignmentRelaxed AlignmentMode = "r"
 	AlignmentStrict  AlignmentMode = "s"
 	AlignmentUnknown AlignmentMode = "unknown"
 )
 
-// ParseAlignmentMode wandelt einen rohen XML-Wert um. Fehlt der Wert (viele
-// Provider lassen adkim/aspf weg), gilt nach RFC 7489 der Default "r" —
-// diesen Default setzt der Aufrufer, nicht ParseAlignmentMode.
+// ParseAlignmentMode converts a raw XML value. If the value is missing
+// (many providers omit adkim/aspf), RFC 7489 mandates the default "r" —
+// the caller sets this default, not ParseAlignmentMode.
 func ParseAlignmentMode(s string) AlignmentMode {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case string(AlignmentRelaxed):
@@ -159,15 +158,15 @@ func ParseAlignmentMode(s string) AlignmentMode {
 	}
 }
 
-// AuthResultValue ist ein Einzelergebnis einer DKIM- oder SPF-Prüfung.
-// Beide RFC-Enums (DKIM: none/pass/fail/policy/neutral/temperror/
-// permerror; SPF: none/neutral/pass/fail/softfail/temperror/permerror)
-// werden in einem gemeinsamen Typ geführt, da sich beide stark
-// überschneiden und getrennte Typen keinen fachlichen Mehrwert hätten.
+// AuthResultValue is a single result of a DKIM or SPF check. Both RFC
+// enums (DKIM: none/pass/fail/policy/neutral/temperror/permerror; SPF:
+// none/neutral/pass/fail/softfail/temperror/permerror) are kept in one
+// shared type, since both overlap heavily and separate types wouldn't add
+// business value.
 type AuthResultValue string
 
-// Werte für AuthResultValue, vereinigt aus den DKIM- und SPF-Enums von
-// RFC 7489.
+// Values for AuthResultValue, unified from the DKIM and SPF enums of RFC
+// 7489.
 const (
 	AuthResultNone      AuthResultValue = "none"
 	AuthResultPass      AuthResultValue = "pass"
@@ -180,8 +179,8 @@ const (
 	AuthResultUnknown   AuthResultValue = "unknown"
 )
 
-// ParseAuthResultValue wandelt einen rohen XML-Wert um. Unbekannte Werte
-// werden auf AuthResultUnknown abgebildet, nicht verworfen.
+// ParseAuthResultValue converts a raw XML value. Unknown values are
+// mapped to AuthResultUnknown, not discarded.
 func ParseAuthResultValue(s string) AuthResultValue {
 	switch strings.ToLower(strings.TrimSpace(s)) {
 	case string(AuthResultNone):
@@ -205,16 +204,16 @@ func ParseAuthResultValue(s string) AuthResultValue {
 	}
 }
 
-// PolicyOverrideReason erklärt, warum die angewendete Disposition von der
-// veröffentlichten Policy abweicht (Element "reason" in policy_evaluated).
+// PolicyOverrideReason explains why the applied disposition deviates from
+// the published policy (element "reason" in policy_evaluated).
 type PolicyOverrideReason struct {
 	Type    string
 	Comment string
 }
 
-// PolicyEvaluation ist das Ergebnis der Policy-Auswertung durch den
-// berichtenden Empfänger: angewendete Disposition, ausgerichtete
-// (aligned) DKIM-/SPF-Ergebnisse und ggf. Gründe für Abweichungen.
+// PolicyEvaluation is the result of the policy evaluation performed by the
+// reporting recipient: applied disposition, aligned DKIM/SPF results, and
+// any reasons for deviations.
 type PolicyEvaluation struct {
 	Disposition Disposition
 	DKIM        AuthResultValue
@@ -222,25 +221,25 @@ type PolicyEvaluation struct {
 	Reasons     []PolicyOverrideReason
 }
 
-// PassesDMARC meldet, ob dieser Record DMARC nach RFC 7489 besteht: DKIM
-// oder SPF bestehen (nach Alignment) — DKIM und SPF hier sind bereits die
-// vom berichtenden Empfänger ausgewerteten (aligned) Ergebnisse aus
-// policy_evaluated, keine rohen Auth-Results. Grundlage der DMARC-Pass-Rate
-// in IMPLEMENTIERUNG.md Abschnitt 10.2.
+// PassesDMARC reports whether this record passes DMARC per RFC 7489: DKIM
+// or SPF passes (after alignment) — DKIM and SPF here are already the
+// aligned results evaluated by the reporting recipient from
+// policy_evaluated, not raw auth results. The basis of the DMARC pass
+// rate in IMPLEMENTIERUNG.md section 10.2.
 func (e PolicyEvaluation) PassesDMARC() bool {
 	return e.DKIM == AuthResultPass || e.SPF == AuthResultPass
 }
 
-// Identifiers sind die für die Alignment-Prüfung relevanten Absenderdaten
-// eines Records. HeaderFrom ist nach RFC 7489 immer vorhanden, EnvelopeFrom
-// und EnvelopeTo sind optional.
+// Identifiers are the sender data of a record relevant to the alignment
+// check. HeaderFrom is always present per RFC 7489, EnvelopeFrom and
+// EnvelopeTo are optional.
 type Identifiers struct {
 	HeaderFrom   DomainName
 	EnvelopeFrom string
 	EnvelopeTo   string
 }
 
-// DKIMAuthResult ist ein einzelnes DKIM-Prüfergebnis (Element "dkim" in
+// DKIMAuthResult is a single DKIM check result (element "dkim" in
 // auth_results).
 type DKIMAuthResult struct {
 	Domain      string
@@ -249,7 +248,7 @@ type DKIMAuthResult struct {
 	HumanResult string
 }
 
-// SPFAuthResult ist ein einzelnes SPF-Prüfergebnis (Element "spf" in
+// SPFAuthResult is a single SPF check result (element "spf" in
 // auth_results).
 type SPFAuthResult struct {
 	Domain string
@@ -257,8 +256,8 @@ type SPFAuthResult struct {
 	Result AuthResultValue
 }
 
-// AuthResults bündelt alle Einzelergebnisse eines Records — ein Record
-// kann mehrere DKIM-Signaturen und SPF-Prüfungen enthalten.
+// AuthResults bundles all individual results of a record — a record can
+// contain multiple DKIM signatures and SPF checks.
 type AuthResults struct {
 	DKIM []DKIMAuthResult
 	SPF  []SPFAuthResult

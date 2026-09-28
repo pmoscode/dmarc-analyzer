@@ -10,28 +10,28 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/report"
 )
 
-// periodDayOptions sind die wählbaren Zeitraum-Voreinstellungen — dieselben
-// wie zuvor internal/ui/components.FilterBar (periodOptions), hier ohne
-// i18n-Label-Konstanten (internal/ui/i18n wandert erst in einem späteren
-// Schritt nach internal/web, siehe MIGRATIONSPLAN.md Abschnitt 2).
+// periodDayOptions are the selectable period presets — the same as
+// formerly internal/ui/components.FilterBar (periodOptions), here without
+// i18n label constants (internal/ui/i18n only moves to internal/web in a
+// later step, see MIGRATIONSPLAN.md section 2).
 var periodDayOptions = []int{7, 30, 90, 365}
 
-// defaultPeriodDays ist die Vorbelegung des Zeitraum-Filters, wenn die
-// Anfrage keinen (gültigen) "zeitraum"-Parameter mitbringt.
+// defaultPeriodDays is the default for the period filter when the
+// request doesn't carry a (valid) "zeitraum" parameter.
 const defaultPeriodDays = 30
 
 func periodLabel(days int) string {
 	switch days {
 	case 7:
-		return "Letzte 7 Tage"
+		return "Last 7 days"
 	case 30:
-		return "Letzte 30 Tage"
+		return "Last 30 days"
 	case 90:
-		return "Letzte 90 Tage"
+		return "Last 90 days"
 	case 365:
-		return "Letztes Jahr"
+		return "Last year"
 	default:
-		return "Letzte " + strconv.Itoa(days) + " Tage"
+		return "Last " + strconv.Itoa(days) + " days"
 	}
 }
 
@@ -44,29 +44,29 @@ func isAllowedPeriodDays(days int) bool {
 	return false
 }
 
-// periodOptionView ist eine Zeitraum-Option, fertig für die
-// <select>-Vorlage aufbereitet (MIGRATIONSPLAN.md Abschnitt 9/
-// AGENTS.md-Nachtrag: Aufbereitung gehört nach Go, nicht in die Vorlage).
+// periodOptionView is a period option, ready-prepared for the <select>
+// template (MIGRATIONSPLAN.md section 9/AGENTS.md addendum: preparation
+// belongs in Go, not in the template).
 type periodOptionView struct {
 	Days     int
 	Label    string
 	Selected bool
 }
 
-// filterParams ist der aus der URL gelesene Filter (MIGRATIONSPLAN.md
-// Abschnitt 4 E-1/Abschnitt 8: "Filter stehen in der URL"). Wirkt gleich
-// auf Übersicht und Diagramm-Endpunkte — dieselbe Anfrage-URL liefert für
-// alle drei denselben Zeitraum/dieselbe Domain.
+// filterParams is the filter read from the URL (MIGRATIONSPLAN.md
+// section 4 E-1/section 8: "filters live in the URL"). Applies equally to
+// overview and chart endpoints — the same request URL yields the same
+// period/domain for all three.
 type filterParams struct {
 	Days   int
 	Domain string
 }
 
-// parseFilterParams liest "zeitraum" (Tage, nur Werte aus
-// periodDayOptions) und "domain" aus der Anfrage. Ein fehlender oder
-// ungültiger "zeitraum"-Wert fällt auf defaultPeriodDays zurück, statt
-// die Anfrage abzulehnen — ein manipulierter/veralteter Link soll
-// weiterhin eine sinnvolle Übersicht zeigen.
+// parseFilterParams reads "zeitraum" (days, only values from
+// periodDayOptions) and "domain" from the request. A missing or invalid
+// "zeitraum" value falls back to defaultPeriodDays instead of rejecting
+// the request — a manipulated/stale link should still show a sensible
+// overview.
 func parseFilterParams(r *http.Request) filterParams {
 	days := defaultPeriodDays
 	if raw := r.URL.Query().Get("zeitraum"); raw != "" {
@@ -78,9 +78,9 @@ func parseFilterParams(r *http.Request) filterParams {
 	return filterParams{Days: days, Domain: domain}
 }
 
-// query baut die für Repository-Abfragen nötige analysis.Query aus dem
-// Filter — Period endet immer "jetzt", nicht beim Seitenaufruf, das sich
-// ein Nutzer merken könnte.
+// query builds the analysis.Query needed for repository queries from the
+// filter — Period always ends "now", not at the time of the page view,
+// which a user might remember.
 func (f filterParams) query() (analysis.Query, error) {
 	end := time.Now().UTC()
 	begin := end.AddDate(0, 0, -f.Days)
@@ -91,8 +91,8 @@ func (f filterParams) query() (analysis.Query, error) {
 	return analysis.Query{Period: period, Domain: f.Domain}, nil
 }
 
-// options liefert die Zeitraum-Auswahlliste mit markierter aktueller
-// Auswahl, fertig für dashboard.html.
+// options returns the period selection list with the current selection
+// marked, ready for dashboard.html.
 func (f filterParams) options() []periodOptionView {
 	out := make([]periodOptionView, len(periodDayOptions))
 	for i, d := range periodDayOptions {

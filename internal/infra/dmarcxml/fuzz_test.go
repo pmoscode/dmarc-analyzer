@@ -10,10 +10,10 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/infra/dmarcxml"
 )
 
-// FuzzParse stellt sicher, dass beliebiger Anhangsinhalt den Parser nie
-// zum Absturz bringt (Panic) — Fehler sind erlaubt und erwartet, ein
-// Absturz nicht (IMPLEMENTIERUNG.md Abschnitt 12.2: "Fuzzing auf dem
-// XML-Parser"). Aufruf: go test -fuzz=FuzzParse ./internal/infra/dmarcxml
+// FuzzParse ensures that arbitrary attachment content never causes the
+// parser to crash (panic) — errors are allowed and expected, a crash is not
+// (IMPLEMENTIERUNG.md section 12.2: "fuzzing the XML parser"). Run with:
+// go test -fuzz=FuzzParse ./internal/infra/dmarcxml
 func FuzzParse(f *testing.F) {
 	seedFiles := []string{
 		filepath.Join("..", "..", "..", "testdata", "reports", "rfc7489", "sample.xml"),
@@ -24,19 +24,19 @@ func FuzzParse(f *testing.F) {
 	for _, path := range seedFiles {
 		data, err := os.ReadFile(path)
 		if err != nil {
-			f.Fatalf("seed %q konnte nicht gelesen werden: %v", path, err)
+			f.Fatalf("failed to read seed %q: %v", path, err)
 		}
 		f.Add(data)
 	}
 	f.Add([]byte(""))
 	f.Add([]byte("<feedback>"))
-	f.Add([]byte("nicht einmal xml"))
+	f.Add([]byte("not even xml"))
 
 	p := dmarcxml.NewParser()
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		attachment := sync.RawAttachment{Filename: "fuzz.xml", Data: data}
-		// Weder Supports noch Parse dürfen bei beliebigem Input abstürzen.
+		// Neither Supports nor Parse may crash on arbitrary input.
 		_ = p.Supports(attachment)
 		_, _ = p.Parse(context.Background(), attachment)
 	})

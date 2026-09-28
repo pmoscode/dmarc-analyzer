@@ -1,36 +1,34 @@
-# Übersicht (Dashboard)
+# Overview (dashboard)
 
-`/` zeigt die zentralen Kennzahlen für einen wählbaren Zeitraum (`internal/app/statistics.UseCase.Dashboard`), gefiltert
-nach Zeitraum und
-Domain (Filterleiste, Werte stehen in der URL).
+`/` shows the central metrics for a selectable time range
+(`internal/app/statistics.UseCase.Dashboard`), filtered by time range and
+domain (filter bar, values live in the URL).
 
-## Kennzahlen
+## Metrics
 
-- **Nachrichten gesamt** — Summe aller `Record.Count` im Zeitraum (ein
-  Record mit Count=50 sind 50 Nachrichten von dieser Quelle, nicht ein
-  Report).
-- **DMARC-Pass-Rate** — Anteil der Nachrichten, die DKIM- oder
-  SPF-aligned sind.
-- **DKIM-/SPF-Alignment-Rate** — getrennt ausgewiesen, weil ein
-  Nachrichtenstrom mit hoher Pass-Rate trotzdem eine schwache Alignment-Rate
-  bei genau einem der beiden Mechanismen haben kann (relevant für die
-  Fehlersuche).
-- **Anzahl unterschiedlicher Quell-IPs**.
-- **Trend gegenüber der Vorperiode** — Pass-Rate der aktuellen Periode
-  minus Pass-Rate der unmittelbar davorliegenden, gleich langen Periode.
+- **Total messages** — sum of all `Record.Count` in the time range (a
+  record with Count=50 is 50 messages from that source, not one report).
+- **DMARC pass rate** — share of messages that are DKIM- or SPF-aligned.
+- **DKIM/SPF alignment rate** — reported separately, because a message
+  stream with a high pass rate can still have a weak alignment rate for
+  exactly one of the two mechanisms (relevant for troubleshooting).
+- **Number of distinct source IPs**.
+- **Trend vs. the previous period** — pass rate of the current period
+  minus the pass rate of the immediately preceding period of equal
+  length.
 
-## Diagramme
+## Charts
 
-Alle vier Diagramme laden ihre Daten selbst per JavaScript von
-`/api/diagramme/*` nach (JSON, aufbereitet in Go — `charts.js` bleibt
-bewusst dünn) und reagieren auf Hell-/Dunkelmodus über CSS-Variablen:
+All four charts load their data themselves via JavaScript from
+`/api/diagramme/*` (JSON, prepared in Go — `charts.js` stays deliberately
+thin) and respond to light/dark mode via CSS variables:
 
-- **Nachrichtenvolumen pro Tag**, gestapelt nach Pass/Fail, mit Zoom.
-- **Verteilung nach Disposition** (none/quarantine/reject).
-- **Top-Sendequellen nach Volumen**, eingefärbt nach Pass-Rate.
-- **Sendequelle × Tag** als Heatmap, Farbe = Pass-Rate, Tooltip mit
-  Quelle, Tag, Pass-Rate und Nachrichtenzahl.
+- **Message volume per day**, stacked by pass/fail, with zoom.
+- **Distribution by disposition** (none/quarantine/reject).
+- **Top sending sources by volume**, colored by pass rate.
+- **Source × day** as a heatmap, color = pass rate, tooltip with
+  source, day, pass rate, and message count.
 
-Jedes Diagramm-Element (Tag, Quelle, Zelle, Segment) ist klickbar und öffnet
-die Berichtstabelle mit passend vorbelegtem Filter (Drill-down). Einzelne
-Diagramme lassen sich außerdem direkt als PNG oder CSV exportieren.
+Every chart element (day, source, cell, segment) is clickable and opens
+the report table with a correspondingly preset filter (drill-down).
+Individual charts can also be exported directly as PNG or CSV.

@@ -17,8 +17,8 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/infra/dmarcxml"
 )
 
-// newTestParser liefert einen Parser mit fester Uhr, damit ImportedAt in
-// Tests deterministisch ist.
+// newTestParser returns a Parser with a fixed clock, so ImportedAt is
+// deterministic in tests.
 func newTestParser() *dmarcxml.Parser {
 	fixed := time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC)
 	return &dmarcxml.Parser{Clock: func() time.Time { return fixed }}
@@ -28,7 +28,7 @@ func loadFixture(t *testing.T, relPath string) sync.RawAttachment {
 	t.Helper()
 
 	data, err := os.ReadFile(filepath.Join("..", "..", "..", "testdata", "reports", relPath))
-	require.NoError(t, err, "fixture %q konnte nicht gelesen werden", relPath)
+	require.NoError(t, err, "failed to read fixture %q", relPath)
 
 	return sync.RawAttachment{
 		Filename: filepath.Base(relPath),
@@ -36,9 +36,8 @@ func loadFixture(t *testing.T, relPath string) sync.RawAttachment {
 	}
 }
 
-// Golden-File-Tests: je Provider-Eigenheit ein Fixture, jedes muss
-// erfolgreich zu einem AggregateReport werden (IMPLEMENTIERUNG.md
-// Abschnitt 12.2).
+// Golden-file tests: one fixture per provider quirk, each must successfully
+// convert to an AggregateReport (IMPLEMENTIERUNG.md section 12.2).
 
 func TestParse_RFC7489CanonicalExample(t *testing.T) {
 	t.Parallel()
@@ -91,13 +90,13 @@ func TestParse_MicrosoftStyle_ZipUppercaseEnumsAndMissingPct(t *testing.T) {
 	r, err := p.Parse(context.Background(), attachment)
 	require.NoError(t, err)
 
-	require.Equal(t, 100, r.Policy.Percentage, "pct fehlt im XML, RFC-Default 100 muss greifen")
-	require.Equal(t, report.PolicyNone, r.Policy.Policy, "Großschreibung 'NONE' muss erkannt werden")
+	require.Equal(t, 100, r.Policy.Percentage, "pct is missing from the XML, the RFC default of 100 must apply")
+	require.Equal(t, report.PolicyNone, r.Policy.Policy, "uppercase 'NONE' must be recognized")
 	require.Equal(t, report.AlignmentStrict, r.Policy.DKIMAlignment)
 
 	require.Len(t, r.Records, 1)
 	require.Equal(t, report.DispositionNone, r.Records[0].Evaluated.Disposition)
-	require.Len(t, r.Records[0].Auth.DKIM, 2, "zwei DKIM-Signaturen müssen beide erhalten bleiben")
+	require.Len(t, r.Records[0].Auth.DKIM, 2, "both DKIM signatures must be preserved")
 	require.Equal(t, report.AuthResultFail, r.Records[0].Auth.DKIM[1].Result)
 }
 
@@ -129,7 +128,7 @@ func TestParse_UnknownEnumValues_AreMappedNotDiscarded(t *testing.T) {
 
 	p := newTestParser()
 	r, err := p.Parse(context.Background(), loadFixture(t, "quirky/unknown_enums.xml"))
-	require.NoError(t, err, "unbekannte Enum-Werte dürfen den Import nicht scheitern lassen")
+	require.NoError(t, err, "unknown enum values must not cause the import to fail")
 
 	require.Equal(t, report.PolicyUnknown, r.Policy.Policy)
 	require.Equal(t, report.PolicyUnknown, r.Policy.SubdomainPolicy)
@@ -163,7 +162,7 @@ func TestSupports_UnsupportedFormat(t *testing.T) {
 	t.Parallel()
 
 	p := newTestParser()
-	require.False(t, p.Supports(sync.RawAttachment{Filename: "readme.txt", Data: []byte("hallo")}))
+	require.False(t, p.Supports(sync.RawAttachment{Filename: "readme.txt", Data: []byte("hello")}))
 }
 
 func TestSupports_MagicBytesFallbackForUnnamedAttachment(t *testing.T) {
@@ -193,7 +192,7 @@ func TestParse_CorruptGzip_ReturnsError(t *testing.T) {
 	p := newTestParser()
 	attachment := sync.RawAttachment{
 		Filename: "broken.xml.gz",
-		Data:     []byte{0x1f, 0x8b, 0x00, 0x00, 0x00}, // Gzip-Magic-Bytes, aber kein gültiges Gzip danach.
+		Data:     []byte{0x1f, 0x8b, 0x00, 0x00, 0x00}, // Gzip magic bytes, but no valid gzip data after.
 	}
 
 	_, err := p.Parse(context.Background(), attachment)
@@ -207,7 +206,7 @@ func TestParse_ZipWithoutXML_ReturnsError(t *testing.T) {
 	zw := zip.NewWriter(&buf)
 	w, err := zw.Create("readme.txt")
 	require.NoError(t, err)
-	_, err = w.Write([]byte("kein xml hier"))
+	_, err = w.Write([]byte("no xml here"))
 	require.NoError(t, err)
 	require.NoError(t, zw.Close())
 
@@ -218,17 +217,17 @@ func TestParse_ZipWithoutXML_ReturnsError(t *testing.T) {
 	require.Error(t, err)
 }
 
-// TestParse_ZipBomb_RejectedByDefaultSizeLimit erzeugt ein Zip, dessen
-// entpackter Inhalt weit über dem 100-MB-Limit liegt, aus hochkomprimierten
-// Nullbytes — die Zip-Datei selbst bleibt dabei klein
-// (IMPLEMENTIERUNG.md Abschnitt 16: "Zip-Bombe im Anhang").
+// TestParse_ZipBomb_RejectedByDefaultSizeLimit creates a zip whose unpacked
+// content is far above the 100 MB limit, from highly compressed zero bytes
+// — the zip file itself stays small
+// (IMPLEMENTIERUNG.md section 16: "zip bomb in attachment").
 func TestParse_ZipBomb_RejectedByDefaultSizeLimit(t *testing.T) {
 	if testing.Short() {
-		t.Skip("erzeugt >100 MB Testdaten, siehe task test:unit")
+		t.Skip("generates >100 MB of test data, see task test:unit")
 	}
 	t.Parallel()
 
-	const oversized = 101 * 1024 * 1024 // 101 MB, > 100-MB-Limit
+	const oversized = 101 * 1024 * 1024 // 101 MB, > 100 MB limit
 
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
@@ -247,7 +246,7 @@ func TestParse_ZipBomb_RejectedByDefaultSizeLimit(t *testing.T) {
 
 func TestParse_GzipBomb_RejectedByDefaultSizeLimit(t *testing.T) {
 	if testing.Short() {
-		t.Skip("erzeugt >100 MB Testdaten, siehe task test:unit")
+		t.Skip("generates >100 MB of test data, see task test:unit")
 	}
 	t.Parallel()
 
@@ -266,18 +265,17 @@ func TestParse_GzipBomb_RejectedByDefaultSizeLimit(t *testing.T) {
 	require.ErrorIs(t, err, dmarcxml.ErrAttachmentTooLarge)
 }
 
-// TestParse_XXEIsNotResolved schreibt fest, dass externe Entities nicht
-// aufgelöst werden. encoding/xml unterstützt grundsätzlich keine
-// DTD-Auflösung — ein Dokument mit einer nicht vordefinierten Entity wird
-// komplett abgelehnt, statt die Entity stillschweigend zu ignorieren oder
-// gar aufzulösen. Dieser Test hält beide Eigenschaften fest, falls sich
-// das Verhalten der Standardbibliothek jemals ändert
-// (IMPLEMENTIERUNG.md Abschnitt 12.3).
+// TestParse_XXEIsNotResolved documents that external entities are not
+// resolved. encoding/xml fundamentally does not support DTD resolution — a
+// document with a non-predefined entity is rejected outright, rather than
+// silently ignoring or even resolving the entity. This test pins down both
+// properties in case the standard library's behavior ever changes
+// (IMPLEMENTIERUNG.md section 12.3).
 func TestParse_XXEIsNotResolved(t *testing.T) {
 	t.Parallel()
 
 	secretFile := filepath.Join(t.TempDir(), "secret.txt")
-	require.NoError(t, os.WriteFile(secretFile, []byte("geheim"), 0o600))
+	require.NoError(t, os.WriteFile(secretFile, []byte("secret"), 0o600))
 
 	xxe := `<?xml version="1.0"?>
 <!DOCTYPE feedback [
@@ -299,8 +297,8 @@ func TestParse_XXEIsNotResolved(t *testing.T) {
 		Data:     []byte(xxe),
 	})
 
-	require.Error(t, err, "ein Dokument mit einer externen Entity muss abgelehnt werden, nicht still verarbeitet")
+	require.Error(t, err, "a document with an external entity must be rejected, not silently processed")
 	require.Nil(t, r)
-	require.NotContains(t, err.Error(), "geheim",
-		"der geheime Dateiinhalt darf nicht einmal in der Fehlermeldung auftauchen")
+	require.NotContains(t, err.Error(), "secret",
+		"the secret file content must not even appear in the error message")
 }

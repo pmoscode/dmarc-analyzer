@@ -1,13 +1,13 @@
-// Package syncreports orchestriert den Use Case "Reports abholen und
-// importieren" (IMPLEMENTIERUNG.md Abschnitt 7): verbinden, neue
-// Nachrichten abholen, MIME zerlegen, parsen, deduplizieren, speichern,
-// Fortschritt sichern. Kennt nur Domänen-Ports, keine konkrete Infra.
+// Package syncreports orchestrates the "fetch and import reports" use
+// case (IMPLEMENTIERUNG.md section 7): connect, fetch new messages,
+// decode MIME, parse, deduplicate, save, persist progress. Only knows
+// domain ports, no concrete infra.
 package syncreports
 
 import (
 	"context"
 	"fmt"
-	stdsync "sync" // aliasiert: internal/domain/sync heißt ebenfalls "sync"
+	stdsync "sync" // aliased: internal/domain/sync is also called "sync"
 	"time"
 
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/account"
@@ -15,54 +15,54 @@ import (
 	domainsync "github.com/pmoscode/dmarc-analyzer/internal/domain/sync"
 )
 
-// defaultConcurrency begrenzt parallele Parser-Worker, wenn UseCase.
-// Concurrency unbesetzt ist. MIME-Zerlegung und XML-Parsen sind
-// CPU-gebunden (IMPLEMENTIERUNG.md Abschnitt 7.3) — mehr als ein paar
-// Worker bringen ohne entsprechend viele Kerne nichts.
+// defaultConcurrency caps parallel parser workers when UseCase.
+// Concurrency is unset. MIME decoding and XML parsing are CPU-bound
+// (IMPLEMENTIERUNG.md section 7.3) — more than a handful of workers
+// achieves nothing without a corresponding number of cores.
 const defaultConcurrency = 4
 
-// UseCase orchestriert SyncAccount. Alle Felder sind Ports — die
-// Composition Root (cmd/dmarc-analyzer) verdrahtet die konkreten Adapter.
+// UseCase orchestrates SyncAccount. All fields are ports — the
+// composition root (cmd/dmarc-analyzer) wires up the concrete adapters.
 type UseCase struct {
 	Accounts account.Repository
-	// Secret ist das aus ENV geladene IMAP-Passwort (siehe
-	// internal/infra/envconfig) — gilt für die gesamte Prozesslaufzeit, es
-	// gibt nur das eine konfigurierte Konto.
+	// Secret is the IMAP password loaded from ENV (see
+	// internal/infra/envconfig) — valid for the entire process lifetime,
+	// there is only the one configured account.
 	Secret        account.Secret
 	States        domainsync.StateRepository
 	Reports       report.Repository
 	FailedImports domainsync.FailedImportRepository
 	Decoder       domainsync.MessageDecoder
-	// Parsers wird der Reihe nach nach dem ersten Supports()-Treffer
-	// durchsucht (Open/Closed: RUF/TLS-RPT-Parser kommen additiv dazu).
+	// Parsers is searched in order for the first Supports() match
+	// (open/closed: RUF/TLS-RPT parsers are added additively).
 	Parsers []domainsync.ReportParser
-	// NewSource liefert je Lauf eine frische, unverbundene MessageSource —
-	// eine Factory statt einer geteilten Instanz, weil jeder Lauf seine
-	// eigene Verbindung aufbaut und danach schließt.
+	// NewSource returns a fresh, unconnected MessageSource for each run —
+	// a factory instead of a shared instance, because each run builds its
+	// own connection and closes it afterward.
 	NewSource func() domainsync.MessageSource
-	// Concurrency begrenzt parallele Parser-Worker. 0 → defaultConcurrency.
+	// Concurrency caps parallel parser workers. 0 → defaultConcurrency.
 	Concurrency int
 }
 
-// Result fasst einen Sync-Lauf zusammen
-// (IMPLEMENTIERUNG.md Abschnitt 7.1, Schritt 7: "neu / übersprungen / fehlerhaft").
+// Result summarizes a sync run
+// (IMPLEMENTIERUNG.md section 7.1, step 7: "new / skipped / failed").
 type Result struct {
 	New     int
 	Skipped int
 	Failed  int
-	// Errors sind Detailfehler zu fehlgeschlagenen Nachrichten/Reports —
-	// gemeinsam mit Failed, nicht statt dessen (mehrere Anhänge einer
-	// Nachricht können unabhängig fehlschlagen).
+	// Errors are detailed errors for failed messages/reports — alongside
+	// Failed, not instead of it (multiple attachments of one message can
+	// fail independently).
 	Errors []error
 }
 
-// Progress ist der Zwischenstand eines laufenden Sync — dieselben
-// Zähler wie Result, aber nach jeder abgeschlossenen Nachricht gemeldet
-// statt erst am Ende (MIGRATIONSPLAN.md Erweiterung 9.1: "Fortschritts-
-// Callback (verarbeitet / neu / übersprungen / fehlerhaft)"). Processed
-// zählt Nachrichten (eine Nachricht kann mehrere Reports als Anhang
-// haben, die einzeln in New/Skipped/Failed einfließen), New/Skipped/
-// Failed zählen wie in Result Reports.
+// Progress is the intermediate state of a running sync — the same
+// counters as Result, but reported after each completed message instead
+// of only at the end (MIGRATIONSPLAN.md extension 9.1: "progress
+// callback (processed / new / skipped / failed)"). Processed counts
+// messages (a message can have multiple reports as attachments, which
+// individually feed into New/Skipped/Failed), New/Skipped/Failed count
+// reports as in Result.
 type Progress struct {
 	Processed int
 	New       int
@@ -70,76 +70,75 @@ type Progress struct {
 	Failed    int
 }
 
-// OnProgress wird — falls nicht nil — nach jeder abgeschlossenen
-// Nachricht mit dem kumulierten Zwischenstand aufgerufen. Läuft auf der
-// seriellen Schreiber-Goroutine (siehe write()), nie nebenläufig — ein
-// Aufrufer braucht keine eigene Synchronisierung, darf aber selbst nicht
-// blockieren (sonst blockiert der gesamte Sync).
+// OnProgress is called — if not nil — after every completed message with
+// the cumulative intermediate state. Runs on the serial writer goroutine
+// (see write()), never concurrently — a caller needs no synchronization
+// of its own, but must not block itself (otherwise it blocks the entire
+// sync).
 type OnProgress func(Progress)
 
-// SyncAccount führt einen inkrementellen Sync für accountID durch.
-// onProgress ist optional (nil: kein Fortschritt gemeldet) — die
-// Web-Oberfläche hängt hier den SSE-Sender ein (internal/app/syncjob),
-// die CLI und die Fyne-Oberfläche übergeben nil (MIGRATIONSPLAN.md
-// Erweiterung 9.1).
+// SyncAccount performs an incremental sync for accountID. onProgress is
+// optional (nil: no progress reported) — the web UI hooks in the SSE
+// sender here (internal/app/syncjob), the CLI and the Fyne UI pass nil
+// (MIGRATIONSPLAN.md extension 9.1).
 func (uc *UseCase) SyncAccount(ctx context.Context, accountID account.AccountID, onProgress OnProgress) (Result, error) {
 	acc, err := uc.Accounts.FindByID(ctx, accountID)
 	if err != nil {
-		return Result{}, fmt.Errorf("konto %q konnte nicht geladen werden: %w", accountID, err)
+		return Result{}, fmt.Errorf("account %q could not be loaded: %w", accountID, err)
 	}
 
 	source := uc.NewSource()
 	defer func() { _ = source.Close() }()
 
 	if err := source.Connect(ctx, *acc, uc.Secret); err != nil {
-		return Result{}, fmt.Errorf("verbindung zu konto %q konnte nicht aufgebaut werden: %w", accountID, err)
+		return Result{}, fmt.Errorf("could not connect to account %q: %w", accountID, err)
 	}
 
 	state, err := uc.States.Load(ctx, accountID, acc.Mailbox)
 	if err != nil {
-		return Result{}, fmt.Errorf("sync-fortschritt für konto %q konnte nicht geladen werden: %w", accountID, err)
+		return Result{}, fmt.Errorf("sync progress for account %q could not be loaded: %w", accountID, err)
 	}
 
 	seq, baseline, err := source.FetchNew(ctx, state)
 	if err != nil {
-		return Result{}, fmt.Errorf("neue nachrichten für konto %q konnten nicht abgerufen werden: %w", accountID, err)
+		return Result{}, fmt.Errorf("could not fetch new messages for account %q: %w", accountID, err)
 	}
 
-	// Baseline sofort sichern: auch bei null verarbeiteten Nachrichten
-	// kann sich z. B. UIDValidity geändert haben — das muss vermerkt sein,
-	// bevor überhaupt eine Nachricht verarbeitet wurde.
+	// Persist the baseline immediately: even with zero processed
+	// messages, e.g. UIDValidity may have changed — that must be
+	// recorded before any message has been processed at all.
 	if err := uc.States.Save(ctx, baseline); err != nil {
-		return Result{}, fmt.Errorf("sync-fortschritt für konto %q konnte nicht gespeichert werden: %w", accountID, err)
+		return Result{}, fmt.Errorf("sync progress for account %q could not be saved: %w", accountID, err)
 	}
 
 	return uc.runPipeline(ctx, baseline, seq, onProgress)
 }
 
-// fetchResult transportiert entweder eine abgeholte Nachricht oder den
-// (einmaligen, abschließenden) Fehler des Iterators zum Worker-Pool.
+// fetchResult carries either a fetched message or the (one-time, final)
+// error of the iterator to the worker pool.
 type fetchResult struct {
 	msg domainsync.RawMessage
 	err error
 }
 
-// parseResult transportiert das Ergebnis eines Parser-Workers zurück zum
-// seriellen Schreiber.
+// parseResult carries the result of a parser worker back to the serial
+// writer.
 type parseResult struct {
 	msg     domainsync.RawMessage
 	reports []*report.AggregateReport
 	err     error
-	// isFetchErr unterscheidet einen Fetch-/Iterator-Fehler (kein Bezug zu
-	// einer bestimmten Nachricht) von einem Verarbeitungsfehler einer
-	// tatsächlich abgeholten Nachricht.
+	// isFetchErr distinguishes a fetch/iterator error (not tied to a
+	// specific message) from a processing error of an actually fetched
+	// message.
 	isFetchErr bool
 }
 
-// runPipeline implementiert Abholen/Parsen nebenläufig, Schreiben seriell
-// (IMPLEMENTIERUNG.md Abschnitt 7.3): eine Fetcher-Goroutine liest aus
-// seq, ein Worker-Pool dekodiert und parst parallel (Reihenfolge nicht
-// garantiert), der Aufrufer selbst schreibt seriell und schreibt den
-// Fortschritt nur über eine lückenlose Grenze fort (progressTracker) —
-// das bleibt auch bei außer der Reihe abgeschlossenen Nachrichten korrekt.
+// runPipeline implements fetching/parsing concurrently, writing serially
+// (IMPLEMENTIERUNG.md section 7.3): a fetcher goroutine reads from seq, a
+// worker pool decodes and parses in parallel (order not guaranteed), the
+// caller itself writes serially and only persists progress via a gapless
+// boundary (progressTracker) — this stays correct even with messages
+// completed out of order.
 func (uc *UseCase) runPipeline(ctx context.Context, baseline domainsync.State, seq func(func(domainsync.RawMessage, error) bool), onProgress OnProgress) (Result, error) {
 	jobs := make(chan fetchResult)
 	results := make(chan parseResult)
@@ -176,7 +175,7 @@ func (uc *UseCase) fetch(ctx context.Context, seq func(func(domainsync.RawMessag
 			return
 		}
 		if err != nil {
-			return // Iterator-Fehler ist abschließend, siehe fetch.go in internal/infra/imap.
+			return // Iterator error is final, see fetch.go in internal/infra/imap.
 		}
 	}
 }
@@ -199,14 +198,14 @@ func (uc *UseCase) parseWorker(ctx context.Context, jobs <-chan fetchResult, res
 	}
 }
 
-// decodeAndParse zerlegt eine Nachricht in Anhänge und parst jeden
-// unterstützten Anhang. Nicht unterstützte Anhänge (Supports() == false,
-// z. B. der Textkörper oder ein Logo im Anhang) werden übersprungen, nicht
-// als Fehler gewertet.
+// decodeAndParse splits a message into attachments and parses each
+// supported attachment. Unsupported attachments (Supports() == false,
+// e.g. the text body or an embedded logo) are skipped, not treated as an
+// error.
 func (uc *UseCase) decodeAndParse(ctx context.Context, msg domainsync.RawMessage) ([]*report.AggregateReport, error) {
 	attachments, err := uc.Decoder.Decode(msg.Data)
 	if err != nil {
-		return nil, fmt.Errorf("nachricht konnte nicht zerlegt werden: %w", err)
+		return nil, fmt.Errorf("message could not be decoded: %w", err)
 	}
 
 	var reports []*report.AggregateReport
@@ -216,13 +215,14 @@ func (uc *UseCase) decodeAndParse(ctx context.Context, msg domainsync.RawMessage
 			continue
 		}
 
-		// ParseAttachment nutzt ParseAll, falls der Parser das zusätzlich
-		// implementiert (z. B. dmarcxml.Parser bei einem .zip-Anhang mit
-		// mehreren XML-Dateien) — ein einzelner Anhang kann so mehrere
-		// Reports liefern (siehe domainsync.ParseAttachment-Dokumentation).
+		// ParseAttachment uses ParseAll if the parser additionally
+		// implements it (e.g. dmarcxml.Parser for a .zip attachment with
+		// multiple XML files) — a single attachment can thus yield
+		// multiple reports (see domainsync.ParseAttachment
+		// documentation).
 		parsed, err := domainsync.ParseAttachment(ctx, parser, att)
 		if err != nil {
-			return reports, fmt.Errorf("anhang %q konnte nicht geparst werden: %w", att.Filename, err)
+			return reports, fmt.Errorf("attachment %q could not be parsed: %w", att.Filename, err)
 		}
 		reports = append(reports, parsed...)
 	}
@@ -238,9 +238,9 @@ func (uc *UseCase) findParser(att domainsync.RawAttachment) domainsync.ReportPar
 	return nil
 }
 
-// write ist die einzige Goroutine, die Reports speichert und den
-// Fortschritt fortschreibt — seriell, wie von IMPLEMENTIERUNG.md
-// Abschnitt 7.3 gefordert ("SQLite mag keine konkurrierenden Schreiber").
+// write is the only goroutine that saves reports and persists progress —
+// serially, as required by IMPLEMENTIERUNG.md section 7.3 ("SQLite
+// doesn't like concurrent writers").
 func (uc *UseCase) write(ctx context.Context, baseline domainsync.State, results <-chan parseResult, onProgress OnProgress) (Result, error) {
 	result := Result{}
 	state := baseline
@@ -293,7 +293,7 @@ func (uc *UseCase) saveReports(ctx context.Context, reports []*report.AggregateR
 		imported, err := report.SaveIfNew(ctx, uc.Reports, rep)
 		if err != nil {
 			result.Failed++
-			result.Errors = append(result.Errors, fmt.Errorf("report konnte nicht gespeichert werden: %w", err))
+			result.Errors = append(result.Errors, fmt.Errorf("report could not be saved: %w", err))
 			continue
 		}
 		if imported {
@@ -304,8 +304,8 @@ func (uc *UseCase) saveReports(ctx context.Context, reports []*report.AggregateR
 	}
 }
 
-// advanceProgress vermerkt uid als abgeschlossen und persistiert state,
-// falls sich die lückenlose Fortschrittsgrenze dadurch verändert hat.
+// advanceProgress marks uid as completed and persists state if the
+// gapless progress boundary changed as a result.
 func (uc *UseCase) advanceProgress(ctx context.Context, tracker *progressTracker, state *domainsync.State, uid uint32) error {
 	lastUID, advanced := tracker.markDone(uid)
 	if !advanced {
@@ -315,12 +315,12 @@ func (uc *UseCase) advanceProgress(ctx context.Context, tracker *progressTracker
 	state.LastUID = lastUID
 	state.LastSyncAt = time.Now()
 	if err := uc.States.Save(ctx, *state); err != nil {
-		// Fortschritt konnte nicht gesichert werden — im nächsten Lauf
-		// werden einzelne Nachrichten höchstens erneut verarbeitet, der
-		// UNIQUE-Index fängt dabei entstehende Duplikate ab
-		// (IMPLEMENTIERUNG.md Abschnitt 7.2). Kein Abbruch des Laufs
-		// deswegen, aber im Result sichtbar (siehe write()).
-		return fmt.Errorf("sync-fortschritt konnte nicht gespeichert werden: %w", err)
+		// Progress could not be saved — in the next run, individual
+		// messages will at most be reprocessed, the UNIQUE index catches
+		// any resulting duplicates (IMPLEMENTIERUNG.md section 7.2). This
+		// doesn't abort the run, but is visible in the Result (see
+		// write()).
+		return fmt.Errorf("sync progress could not be saved: %w", err)
 	}
 	return nil
 }

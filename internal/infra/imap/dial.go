@@ -11,27 +11,27 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/account"
 )
 
-// dial baut die Netzwerkverbindung zum IMAP-Server auf und reicht sie an
-// imapclient.New weiter. Die Dial*-Funktionen von imapclient sind nicht
-// context-aware; deshalb wird hier selbst über net.Dialer/tls.Dialer mit
-// DialContext verbunden — das respektiert ctx (Abbruch, Deadline) bereits
-// beim Verbindungsaufbau.
+// dial establishes the network connection to the IMAP server and hands it
+// off to imapclient.New. imapclient's Dial* functions are not
+// context-aware; that's why we connect here ourselves via
+// net.Dialer/tls.Dialer with DialContext — this already honors ctx
+// (cancellation, deadline) during connection setup.
 func dial(ctx context.Context, acc account.MailAccount) (*imapclient.Client, error) {
 	address := fmt.Sprintf("%s:%d", acc.Host, acc.Port)
 
 	var conn net.Conn
 	var err error
 	if acc.UseTLS {
-		// IMPLEMENTIERUNG.md Abschnitt 9: reguläre Zertifikatsprüfung
-		// gegen den System-Trust-Store, InsecureSkipVerify wird an keiner
-		// Stelle gesetzt.
+		// IMPLEMENTIERUNG.md section 9: regular certificate verification
+		// against the system trust store, InsecureSkipVerify is never set
+		// anywhere.
 		tlsDialer := &tls.Dialer{NetDialer: &net.Dialer{}}
 		conn, err = tlsDialer.DialContext(ctx, "tcp", address)
 	} else {
 		conn, err = (&net.Dialer{}).DialContext(ctx, "tcp", address)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("verbindung zu %s konnte nicht aufgebaut werden: %w", address, err)
+		return nil, fmt.Errorf("failed to establish connection to %s: %w", address, err)
 	}
 
 	return imapclient.New(conn, &imapclient.Options{}), nil

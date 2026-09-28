@@ -1,12 +1,12 @@
-// Package syncjob orchestriert einen Sync-Lauf über alle konfigurierten
-// Konten als serverseitiger Hintergrund-Auftrag: höchstens ein Lauf
-// gleichzeitig, Abbruch per Kontext, Fortschritt für beliebig viele
-// Zuhörer (MIGRATIONSPLAN.md Erweiterung 9.2). Derselbe Ablauf wie zuvor
-// internal/ui/app.go (shell.startSync): alle Konten nacheinander,
-// Ergebnisse aufsummiert, ein gemeinsamer Abbruch — hier serverseitig,
-// weil der Sync über die eine HTTP-Anfrage hinaus weiterlaufen muss, die
-// ihn angestoßen hat (Seitenwechsel, mehrere Browser-Tabs,
-// MIGRATIONSPLAN.md Abschnitt 8: "Sync läuft serverseitig weiter").
+// Package syncjob orchestrates a sync run across all configured accounts
+// as a server-side background job: at most one run at a time, cancelable
+// via context, progress for any number of listeners (MIGRATIONSPLAN.md
+// extension 9.2). Same flow as previously internal/ui/app.go
+// (shell.startSync): all accounts one after another, results summed up,
+// one shared cancellation — here server-side, because the sync must keep
+// running beyond the single HTTP request that triggered it (page
+// navigation, multiple browser tabs, MIGRATIONSPLAN.md section 8: "sync
+// keeps running server-side").
 package syncjob
 
 import (
@@ -19,23 +19,22 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/account"
 )
 
-// Syncer ist der Ausschnitt von syncreports.UseCase, den Runner braucht —
-// als eigene Schnittstelle statt einer konkreten Struct-Abhängigkeit,
-// damit Tests einen Fake statt eines vollständig verdrahteten UseCase
-// (mit IMAP-/Decoder-/Parser-Fakes) einsetzen können.
+// Syncer is the slice of syncreports.UseCase that Runner needs — its own
+// interface instead of a concrete struct dependency, so tests can use a
+// fake instead of a fully wired UseCase (with IMAP/decoder/parser fakes).
 type Syncer interface {
 	SyncAccount(ctx context.Context, id account.AccountID, onProgress syncreports.OnProgress) (syncreports.Result, error)
 }
 
 var _ Syncer = (*syncreports.UseCase)(nil)
 
-// ErrAlreadyRunning meldet Start(), wenn bereits ein Lauf aktiv ist.
-var ErrAlreadyRunning = errors.New("es läuft bereits ein abgleich")
+// ErrAlreadyRunning is reported by Start() when a run is already active.
+var ErrAlreadyRunning = errors.New("a sync is already running")
 
-// Status ist der grobe Zustand eines Sync-Laufs.
+// Status is the coarse state of a sync run.
 type Status string
 
-// Werte für Status.
+// Values for Status.
 const (
 	StatusIdle      Status = "idle"
 	StatusRunning   Status = "running"
@@ -44,35 +43,35 @@ const (
 	StatusFailed    Status = "failed"
 )
 
-// State ist eine Momentaufnahme des aktuellen bzw. letzten Sync-Laufs —
-// wird an jeden Zuhörer (Subscribe) verteilt.
+// State is a snapshot of the current or last sync run — distributed to
+// every listener (Subscribe).
 type State struct {
 	Status Status
 
 	TotalAccounts  int
-	AccountIndex   int    // 1-basiert, 0 außerhalb eines Laufs
-	CurrentAccount string // DisplayName des gerade laufenden Kontos, leer außerhalb eines Laufs
+	AccountIndex   int    // 1-based, 0 outside a run
+	CurrentAccount string // DisplayName of the currently running account, empty outside a run
 
-	// Progress ist der Zwischenstand des gerade laufenden Kontos — wird
-	// bei jedem neuen Konto zurückgesetzt (kein kumulativer Zähler über
-	// mehrere Konten hinweg, siehe Total dafür).
+	// Progress is the intermediate state of the currently running account
+	// — reset for every new account (not a cumulative counter across
+	// multiple accounts, see Total for that).
 	Progress syncreports.Progress
-	// Total ist erst gesetzt, sobald der gesamte Lauf beendet ist (Done/
-	// Cancelled/Failed) — die Summe über alle abgeschlossenen Konten.
+	// Total is only set once the entire run has ended (Done/Cancelled/
+	// Failed) — the sum across all completed accounts.
 	Total syncreports.Result
 
-	// Err ist gesetzt, wenn Status Failed ist (z. B. Kontenliste konnte
-	// nicht geladen werden). Ein Fehler bei einem EINZELNEN Konto führt
-	// nicht zu Failed — der Lauf macht mit den restlichen Konten weiter,
-	// wie zuvor internal/ui/app.go (dort "firstErr" genannt) — der erste
-	// Kontofehler landet hier trotzdem, zur Anzeige nach Laufende.
+	// Err is set when Status is Failed (e.g. the account list couldn't be
+	// loaded). An error on a SINGLE account doesn't lead to Failed — the
+	// run continues with the remaining accounts, as previously in
+	// internal/ui/app.go (called "firstErr" there) — the first account
+	// error still ends up here, for display after the run ends.
 	Err error
 
 	StartedAt time.Time
 	EndedAt   time.Time
 }
 
-// Runner führt höchstens einen Sync-Lauf gleichzeitig aus.
+// Runner runs at most one sync run at a time.
 type Runner struct {
 	baseCtx  context.Context
 	accounts account.Repository
@@ -85,10 +84,10 @@ type Runner struct {
 	subscribers map[chan State]struct{}
 }
 
-// NewRunner erzeugt einen Runner. baseCtx bestimmt die maximale
-// Lebensdauer eines Laufs (im Produktivbetrieb der Serverlebenszyklus,
-// siehe cmd_web.go) — NICHT der Kontext der einzelnen HTTP-Anfrage, die
-// den Lauf per Start() anstößt.
+// NewRunner creates a Runner. baseCtx determines the maximum lifetime of
+// a run (in production the server lifecycle, see cmd_web.go) — NOT the
+// context of the individual HTTP request that triggers the run via
+// Start().
 func NewRunner(baseCtx context.Context, accounts account.Repository, sync Syncer) *Runner {
 	return &Runner{
 		baseCtx:     baseCtx,
@@ -99,8 +98,8 @@ func NewRunner(baseCtx context.Context, accounts account.Repository, sync Syncer
 	}
 }
 
-// Start stößt einen neuen Lauf über alle konfigurierten Konten an.
-// ErrAlreadyRunning, wenn schon einer läuft.
+// Start triggers a new run across all configured accounts.
+// ErrAlreadyRunning if one is already running.
 func (r *Runner) Start() error {
 	r.mu.Lock()
 	if r.running {
@@ -119,7 +118,7 @@ func (r *Runner) Start() error {
 	return nil
 }
 
-// Cancel bricht einen laufenden Sync ab — kein Fehler, wenn keiner läuft.
+// Cancel aborts a running sync — not an error if none is running.
 func (r *Runner) Cancel() {
 	r.mu.Lock()
 	cancel := r.cancel
@@ -129,20 +128,19 @@ func (r *Runner) Cancel() {
 	}
 }
 
-// Snapshot liefert den aktuellen Stand, ohne zu abonnieren.
+// Snapshot returns the current state without subscribing.
 func (r *Runner) Snapshot() State {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.state
 }
 
-// Subscribe liefert einen Kanal, der ab sofort jede Zustandsänderung
-// erhält — beginnend mit dem aktuellen Stand, damit ein neu
-// hinzukommender Zuhörer (z. B. ein zweiter Browser-Tab) nicht erst auf
-// die nächste Änderung warten muss. Der Kanal ist gepuffert (Größe 1)
-// und verwirft bei einem noch nicht gelesenen, veralteten Stand diesen
-// zugunsten des neuesten — ein langsamer oder getrennter Zuhörer darf
-// den Sync selbst nie ausbremsen.
+// Subscribe returns a channel that receives every state change from now
+// on — starting with the current state, so a newly joining listener
+// (e.g. a second browser tab) doesn't have to wait for the next change
+// first. The channel is buffered (size 1) and, on a not-yet-read, stale
+// state, discards it in favor of the newest — a slow or disconnected
+// listener must never throttle the sync itself.
 func (r *Runner) Subscribe() (<-chan State, func()) {
 	ch := make(chan State, 1)
 
@@ -159,15 +157,15 @@ func (r *Runner) Subscribe() (<-chan State, func()) {
 	return ch, unsubscribe
 }
 
-// broadcastLocked verteilt r.state an alle Zuhörer — muss mit
-// gehaltenem r.mu aufgerufen werden.
+// broadcastLocked distributes r.state to all listeners — must be called
+// with r.mu held.
 func (r *Runner) broadcastLocked() {
 	for ch := range r.subscribers {
 		select {
 		case ch <- r.state:
 		default:
-			// Kanal ist voll: ältesten, noch nicht gelesenen Stand
-			// verwerfen und den neuesten nachreichen, statt zu blockieren.
+			// Channel is full: discard the oldest, not-yet-read state and
+			// deliver the newest instead, rather than blocking.
 			select {
 			case <-ch:
 			default:
@@ -238,18 +236,18 @@ func (r *Runner) run(ctx context.Context) {
 	}
 
 	status := StatusDone
-	// ctx.Err() zusätzlich zu "cancelled" prüfen: cancelled wird nur vor
-	// dem NÄCHSTEN Konto gesetzt (Zeile oben) — bricht der Kontext genau
-	// während des letzten (oder einzigen) Kontos ab, verlässt die
-	// Schleife danach ganz regulär, ohne dass "cancelled" je gesetzt
-	// wurde. Ohne diese zweite Prüfung würde ein mitten im einzigen Konto
-	// abgebrochener Lauf fälschlich als "done" gemeldet.
+	// Check ctx.Err() in addition to "cancelled": cancelled is only set
+	// before the NEXT account (line above) — if the context is canceled
+	// exactly during the last (or only) account, the loop exits
+	// afterward completely normally, without "cancelled" ever being set.
+	// Without this second check, a run canceled in the middle of the
+	// only account would be wrongly reported as "done".
 	if cancelled || ctx.Err() != nil {
 		status = StatusCancelled
-		// Ein durch Cancel() ausgelöster ctx.Canceled/DeadlineExceeded ist
-		// die ERWARTETE Ursache für den Abbruch, kein eigenständiger
-		// Fehler — sonst zeigte die Oberfläche "abgebrochen" UND einen
-		// Fehlertext gleichzeitig für denselben, gewollten Vorgang an.
+		// A ctx.Canceled/DeadlineExceeded triggered by Cancel() is the
+		// EXPECTED cause of the cancellation, not a standalone error —
+		// otherwise the UI would show "cancelled" AND an error message at
+		// the same time for the same, intentional action.
 		firstErr = nil
 	}
 	r.setState(func(s *State) {

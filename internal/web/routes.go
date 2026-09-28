@@ -2,19 +2,18 @@ package web
 
 import "net/http"
 
-// routes baut den vollständigen Handler-Baum. Middleware-Reihenfolge
-// (außen nach innen): Panic-Sicherung, Sicherheits-Header, dann erst
-// /gesund (siehe unten) bzw. Host-Prüfung + Routing für alles andere.
+// routes builds the full handler tree. Middleware order (outer to
+// inner): panic recovery, security headers, then either /gesund (see
+// below) or host check + routing for everything else.
 //
-// /gesund liegt bewusst VOR requireHost, nicht nur vor requireSession:
-// Dockers HEALTHCHECK (siehe cmd_healthcheck.go) verbindet sich
-// containerintern über "127.0.0.1:<port>", der Host-Header trägt also nie
-// den öffentlichen Hostnamen aus DMARC_OIDC_REDIRECT_URL — mit
-// requireHost davor wäre der Container dauerhaft "unhealthy" (per
-// "docker run" tatsächlich reproduziert). Ein Healthcheck ist außerdem
-// nicht sicherheitskritisch (liefert nur "läuft der Prozess", keine
-// Daten), die DNS-Rebinding-Schutzwirkung von requireHost wird hier nicht
-// gebraucht.
+// /gesund is deliberately BEFORE requireHost, not just before
+// requireSession: Docker's HEALTHCHECK (see cmd_healthcheck.go) connects
+// within the container via "127.0.0.1:<port>", so the Host header never
+// carries the public hostname from DMARC_OIDC_REDIRECT_URL — with
+// requireHost in front of it, the container would be permanently
+// "unhealthy" (actually reproduced via "docker run"). A healthcheck is
+// also not security-critical (only reports "is the process running", no
+// data), so requireHost's DNS-rebinding protection isn't needed here.
 func (s *Server) routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /gesund", s.handleHealthz)
@@ -53,11 +52,11 @@ func (s *Server) routes() http.Handler {
 
 	hostChecked.Handle("/", requireSession(s.auth, requireCSRF(s.auth, protected)))
 
-	// /static/ bewusst außerhalb von requireSession: CSS/JS sind nicht
-	// schützenswert, und die Anmeldeseite selbst braucht sie, bevor eine
-	// Sitzung existiert. Trotzdem hinter requireHost, anders als /gesund
-	// oben — anders als der Healthcheck kommt eine Anfrage hierfür immer
-	// über den Browser mit echtem Host-Header.
+	// /static/ is deliberately outside requireSession: CSS/JS aren't
+	// sensitive, and the login page itself needs them before a session
+	// exists. Still behind requireHost, unlike /gesund above — unlike the
+	// healthcheck, a request here always comes through the browser with a
+	// real Host header.
 	hostChecked.Handle("/static/", http.StripPrefix("/static/", s.staticHandler()))
 
 	mux.Handle("/", requireHost(s.allowedHost, hostChecked))

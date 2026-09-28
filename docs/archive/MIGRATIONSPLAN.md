@@ -1,723 +1,722 @@
-# Migrationsplan — Fyne-Oberfläche → eingebettete Web-Oberfläche
+# Migration plan — Fyne UI → embedded web UI
 
-> Stand: 2026-09-17. Ergänzt `UMSETZUNGSPLAN.md` und ist dort **vor AP 7**
-> einzuordnen (Packaging und Feinschliff hängen vom Ergebnis ab).
-> Fortschritt: M0–M5 umgesetzt (siehe Abschnitt 10), M6 offen.
+> As of: 2026-09-17. Complements `UMSETZUNGSPLAN.md` and belongs **before
+> WP 7** there (packaging and polish depend on the outcome).
+> Progress: M0–M5 implemented (see section 10), M6 open.
 
-## 1. Anlass und Ziel
+## 1. Reason and goal
 
-Die Fyne-Oberfläche wirkt trotz Überarbeitung schwerfällig („klobig"). Ziel ist
-eine **Web-Oberfläche, die vollständig in der Binärdatei steckt**: Beim Start
-läuft ein lokaler HTTP-Server, der Standardbrowser öffnet automatisch die
-Hauptseite. Keine Installation eines Webservers, keine externen Dateien, kein
-Internetzugriff für die Oberfläche.
+The Fyne UI still feels heavy ("clunky") despite rework. The goal is a
+**web UI that lives entirely inside the binary**: on startup, a local
+HTTP server runs, and the default browser automatically opens the main
+page. No web server to install, no external files, no internet access
+for the UI.
 
-**Vorgabe, die sich dadurch ändert:** `FEATURES.md` nennt unter „Non features"
-ausdrücklich Fyne als UI-Framework und „Fyne framework best practices";
-`IMPLEMENTIERUNG.md` Abschnitt 1.2 hat das als verbindlich behandelt. Diese
-Migration ersetzt die Vorgabe bewusst — `FEATURES.md` wird in M5 entsprechend
-angepasst (siehe Abschnitt 12).
+**Requirement this changes:** `FEATURES.md` explicitly names Fyne as the
+UI framework and "Fyne framework best practices" under "Non features";
+`IMPLEMENTIERUNG.md` section 1.2 treated that as binding. This migration
+deliberately replaces that requirement — `FEATURES.md` is updated
+accordingly in M5 (see section 12).
 
-### Was die Migration zusätzlich bringt
+### What the migration additionally brings
 
-| Gewinn                                            | Warum                                                                                                                                                                                                                                                                                                                                                  |
-|---------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Kein CGO mehr**                                 | Fyne ist die einzige CGO-Abhängigkeit. Geprüft am 2026-09-17: alle Pakete außer `internal/ui` bauen mit `CGO_ENABLED=0` für `linux/amd64`, `windows/amd64` und `darwin/arm64`. Releases entstehen dann per Cross-Compile auf einem Rechner.                                                                                                            |
-| **Interaktive Diagramme statt statischer Bilder** | Heute sind Diagramme vom Server gerenderte PNGs: kein Tooltip, kein Ein-/Ausblenden, kein Zoom, kein Klick. Künftig zeichnet Chart.js im Browser — mit Tooltips, Legende zum Umschalten, Zoom in der Zeitreihe und **Drill-down**: ein Klick auf einen Tag, eine Sendequelle, eine Heatmap-Zelle oder ein Donut-Segment öffnet die passenden Berichte. |
-| **Diagramme passen sich hell/dunkel an**          | Heute haben die PNGs einen fest weißen Hintergrund (`flattenOnWhite`) — im dunklen Modus helle Kästen. Chart.js liest die Farben aus CSS-Variablen und zeichnet beim Wechsel des Farbschemas neu.                                                                                                                                                      |
-| **Echte Tooltips**                                | Fyne v2.8 hat keine; heute ersetzt ein „?"-Knopf sie. Im Browser: Hover-Tooltips auf Diagrammen und Begriffen.                                                                                                                                                                                                                                         |
-| **Weniger Umgehungslösungen**                     | `internal/infra/charts` enthält mehrere go-chart-Workarounds (Textumbruch, Ein-Wert-Donut, transparente Ränder), `internal/ui` mehrere Fyne-Fallen (siehe `AGENTS.md`). Beides entfällt.                                                                                                                                                               |
-| **Lesezeichen und Zurück-Knopf**                  | Filter stehen in der URL (`?zeitraum=30&domain=…`).                                                                                                                                                                                                                                                                                                    |
+| Benefit | Why |
+| --- | --- |
+| **No more CGO** | Fyne is the only CGO dependency. Checked on 2026-09-17: all packages except `internal/ui` build with `CGO_ENABLED=0` for `linux/amd64`, `windows/amd64`, and `darwin/arm64`. Releases then become cross-compiles on one machine. |
+| **Interactive charts instead of static images** | Today charts are server-rendered PNGs: no tooltip, no show/hide, no zoom, no click. Going forward, Chart.js draws in the browser — with tooltips, a toggleable legend, zoom in the time series, and **drill-down**: clicking a day, a sending source, a heatmap cell, or a donut segment opens the matching reports. |
+| **Charts adapt to light/dark** | Today the PNGs have a fixed white background (`flattenOnWhite`) — bright boxes in dark mode. Chart.js reads colors from CSS variables and redraws on a color-scheme change. |
+| **Real tooltips** | Fyne v2.8 has none; today a "?" button substitutes. In the browser: hover tooltips on charts and terms. |
+| **Fewer workarounds** | `internal/infra/charts` contains several go-chart workarounds (text wrapping, single-value donut, transparent borders), `internal/ui` several Fyne traps (see `AGENTS.md`). Both go away. |
+| **Bookmarks and back button** | Filters live in the URL (`?zeitraum=30&domain=…`). |
 
-## 2. Was bleibt, was sich ändert
+## 2. What stays, what changes
 
-Die Clean Architecture trägt die Migration: **nur die Präsentationsschicht wird
-ausgetauscht.** Domäne, Use Cases und Adapter bleiben, mit vier kleinen,
-gezielten Erweiterungen (Abschnitt 9).
+Clean Architecture carries the migration: **only the presentation layer
+is swapped.** Domain, use cases, and adapters stay, with four small,
+targeted extensions (section 9).
 
 ```
-                 heute                                   nach der Migration
+                 today                                   after the migration
 cmd/dmarc-analyzer ──▶ internal/ui (Fyne)      cmd/dmarc-analyzer ──▶ internal/web (net/http)
                           │                                                 │
                           ▼                                                 ▼
-                   internal/app/*        (unverändert, + Sync-Fortschritt, Import aus Bytes)
+                   internal/app/*        (unchanged, + sync progress, import from bytes)
                           │
                           ▼
-            internal/domain/*  ◀──  internal/infra/*   (unverändert, + sperrbarer Schlüsselspeicher)
+            internal/domain/*  ◀──  internal/infra/*   (unchanged, + lockable key store)
 ```
 
-| Bereich                                                                                       | Umgang                                                  |
-|-----------------------------------------------------------------------------------------------|---------------------------------------------------------|
-| `internal/domain/*`, `internal/app/*`, `internal/infra/*`                                     | bleiben; Erweiterungen siehe Abschnitt 9                |
-| CLI-Unterbefehle (`sync`, `import`, `stats`, `account`)                                       | bleiben unverändert                                     |
-| `internal/ui/i18n` (reine Konstanten)                                                         | wird nach `internal/web/i18n` verschoben, Inhalt bleibt |
-| `internal/ui/glossary/terms.go` (reine Daten)                                                 | wird nach `internal/web/glossary` verschoben            |
-| Farbwerte aus `internal/ui/theme.go`                                                          | werden zu CSS-Variablen (hell/dunkel), Werte bleiben    |
-| restliches `internal/ui/*` (~4.900 Zeilen inkl. Tests)                                        | wird in M5 gelöscht                                     |
-| `internal/infra/charts` (go-chart), Port `analysis.ChartRenderer`, `exportdata.WriteChartPNG` | entfallen — Diagramme entstehen im Browser (E-2)        |
+| Area | Treatment |
+| --- | --- |
+| `internal/domain/*`, `internal/app/*`, `internal/infra/*` | stay; extensions see section 9 |
+| CLI subcommands (`sync`, `import`, `stats`, `account`) | stay unchanged |
+| `internal/ui/i18n` (plain constants) | moves to `internal/web/i18n`, content stays |
+| `internal/ui/glossary/terms.go` (plain data) | moves to `internal/web/glossary` |
+| Color values from `internal/ui/theme.go` | become CSS variables (light/dark), values stay |
+| the rest of `internal/ui/*` (~4,900 lines including tests) | deleted in M5 |
+| `internal/infra/charts` (go-chart), port `analysis.ChartRenderer`, `exportdata.WriteChartPNG` | go away — charts are produced in the browser (E-2) |
 
-## 3. Zielbild im Betrieb
+## 3. Target picture in operation
 
-| Situation                                                      | Verhalten                                                                                                                                                  |
-|----------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `dmarc-analyzer` ohne Argumente (auch Doppelklick)             | Server auf `127.0.0.1` mit zufälligem freiem Port starten, Browser mit Einmal-Anmeldelink öffnen, Adresse zusätzlich auf der Konsole ausgeben              |
-| Programm läuft bereits                                         | Zweiter Start erkennt die laufende Instanz, lässt sie einen neuen Einmal-Link erzeugen, öffnet ihn im Browser und beendet sich sofort                      |
-| Keine Konten vorhanden                                         | `/` leitet auf die Ersteinrichtung um                                                                                                                      |
-| `dmarc-analyzer serve --adresse 127.0.0.1:8080 --kein-browser` | fester Port, kein Browserstart (Entwicklung, SSH-Sitzung)                                                                                                  |
-| Beenden                                                        | Strg+C / SIGTERM (siehe E-3) — kein Auto-Ende, kein Knopf in der Oberfläche |
-| Kein Betriebssystem-Schlüsselbund (Linux ohne Secret Service)  | Oberfläche zeigt zuerst eine Entsperr-Seite für die Master-Passphrase — heute fragt das Programm auf der Konsole, die es beim Doppelklick-Start nicht gibt |
-| CLI-Unterbefehle                                               | unverändert, kein Server                                                                                                                                   |
+| Situation | Behavior |
+| --- | --- |
+| `dmarc-analyzer` with no arguments (also double-click) | start a server on `127.0.0.1` on a random free port, open the browser with a one-time login link, also print the address to the console |
+| Program already running | a second launch detects the running instance, has it generate a fresh one-time link, opens it in the browser, and exits immediately |
+| No accounts present | `/` redirects to first-run setup |
+| `dmarc-analyzer serve --adresse 127.0.0.1:8080 --kein-browser` | fixed port, no browser launch (development, SSH session) |
+| Quit | Ctrl+C / SIGTERM (see E-3) — no auto-exit, no button in the UI |
+| No OS keychain (Linux without a secret service) | the UI first shows an unlock page for the master passphrase — today the program asks on the console, which doesn't exist on a double-click launch |
+| CLI subcommands | unchanged, no server |
 
-**Browser öffnen** ohne zusätzliche Abhängigkeit per `os/exec`: `open` (macOS),
-`xdg-open` (Linux), `rundll32 url.dll,FileProtocolHandler` (Windows). Schlägt
-das fehl, bleibt die Adresse auf der Konsole — kein Abbruch.
+**Opening the browser** with no extra dependency via `os/exec`: `open`
+(macOS), `xdg-open` (Linux), `rundll32 url.dll,FileProtocolHandler`
+(Windows). If that fails, the address stays on the console — no abort.
 
-## 4. Entscheidungen
+## 4. Decisions
 
-Vorbelegt ist jeweils die Empfehlung. Bitte bestätigen oder ändern, bevor M0
-beginnt.
+The recommendation is preselected in each row. Please confirm or change
+before M0 begins.
 
-| Nr. | Frage                                  | Empfehlung                                                                                                                                                                                                                                                                                                    | Alternative                                                                                   | Begründung                                                                                                                                                                                                                                                                                                                                     |
-|-----|----------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| E-1 | Frontend-Technik                       | **`html/template` (Standardbibliothek) + htmx** für Seiten, Tabellen und Formulare; eigenes JavaScript nur für die Diagramme (Abschnitt 6a); alles eingebettet, **ohne Bundler**                                                                                                                              | SPA (Svelte/Vue/React) mit Vite-Build                                                         | Kein Node-Werkzeug in Entwicklung und CI, `go build` bleibt der einzige Build-Schritt. Tabellen und Formulare deckt serverseitiges Rendern gut ab; die Interaktivität, die wirklich zählt, liefern die Diagramme. Ein SPA verdoppelt Ökosysteme und Tests.                                                                                     |
-| E-2 | Diagramme                              | **Festgelegt: Chart.js im Browser** (Vorgabe), ergänzt um das Plugin `chartjs-chart-matrix` für die Heatmap und `chartjs-plugin-zoom` für die Zeitreihe. Der Server liefert nur Daten als JSON. go-chart, `internal/infra/charts` und `analysis.ChartRenderer` entfallen.                                     | Apache ECharts (Heatmap, Zoom und Bild-Export eingebaut, aber ≈1 MB und eigenes Theme-System) | Chart.js ist klein, verbreitet und bringt Tooltips, umschaltbare Legenden und Klick-Ereignisse mit. Die Heatmap ist kein Kerntyp von Chart.js — dafür das Matrix-Plugin. **Rückfallebene:** Zeigt der Durchstich (M0), dass die Plugin-Kombination nicht trägt, wird auf ECharts gewechselt; nur `charts.js` und die JSON-Form sind betroffen. |
-| E-3 | Lebenszyklus                           | **Nur Strg+C / SIGTERM** (`context.Context` mit `signal.NotifyContext`, sauberes Herunterfahren über `http.Server.Shutdown`) — kein Auto-Ende, kein „Beenden"-Knopf, kein Tray-Icon | „Beenden"-Knopf + Auto-Ende nach Leerlauf · Tray-Icon | Der Prozess soll sich wie ein gewöhnlicher Server-Dienst verhalten, nicht wie eine Desktop-App mit eigenem Fenster — geplanter Einsatz auch als Docker-Image (siehe unten), wo der Lebenszyklus vom Container-Orchestrator kommt (`docker stop` sendet SIGTERM) und "offene Browser-Tabs zählen" keine sinnvolle Grundlage ist. Vereinfacht nebenbei den Server erheblich: keine SSE-Verbindungszählung, kein Timer, kein `--dauerhaft`-Flag nötig — das ist ab jetzt einfach der einzige Modus. AP 7 (Hintergrund-Sync) profitiert direkt: der Prozess läuft ohnehin, bis er gestoppt wird. |
-| E-4 | Port                                   | **zufällig** (`127.0.0.1:0`), fest nur per Flag                                                                                                                                                                                                                                                               | fester Standardport                                                                           | Keine Konflikte; Lesezeichen funktionieren über die Einzelinstanz-Erkennung trotzdem, weil jeder Start die richtige Adresse öffnet.                                                                                                                                                                                                            |
-| E-5 | Übergang                               | **Web-Oberfläche parallel in `internal/web` aufbauen**, Fyne bleibt Standard bis zur Funktionsgleichheit (M3), dann umschalten und Fyne in M5 löschen                                                                                                                                                         | sofort umschalten                                                                             | Das Programm ist jederzeit benutzbar. Vor 1.0 gibt es keine Nutzer, die ein Parallelangebot bräuchten — Fyne bleibt deshalb nicht dauerhaft als Option.                                                                                                                                                                                        |
-| E-6 | Neue Möglichkeiten in dieser Migration | **Datei-Import per Upload/Drag & Drop mit aufnehmen** (Vorschlag 11.1 war bisher nur per CLI möglich); Filter in der URL; sortierbare Tabellenköpfe                                                                                                                                                           | nur 1:1-Übertrag                                                                              | Der Import-Dialog ersetzt ohnehin den Fyne-Dateidialog; der Mehraufwand ist klein.                                                                                                                                                                                                                                                             |
-| E-7 | Bezug von htmx, Chart.js und Plugins   | **Minifizierte UMD-Dateien im Repository ablegen** (`internal/web/static/vendor/`), Versionen und Lizenzen (alle MIT) in `docs/DEPENDENCIES.md` pinnen; die genauen Versionen und die Kompatibilität der Plugins zur Chart.js-Hauptversion bei Einbindung recherchieren                                       | CDN                                                                                           | Funktioniert offline, passt zur Content-Security-Policy `default-src 'self'`.                                                                                                                                                                                                                                                                  |
-| E-8 | Browser-Tests                          | **Ein schlanker Rauchtest mit `chromedp`** (Go, kein Node): Übersicht laden, prüfen, dass alle vier Diagramme gezeichnet sind und die Konsole keine Fehler meldet, einen Drill-down-Klick auslösen. Läuft lokal und auf dem Linux-Runner der CI; Handler-Tests mit `httptest` decken Logik und Sicherheit ab. | keine Browser-Tests · Playwright (braucht Node)                                               | Mit Chart.js steckt echte Logik im JavaScript (Datenzuordnung, Farben, Klickziele), die `httptest` nicht sieht. Ob Chrome auf dem CI-Runner vorhanden ist oder installiert werden muss, wird in M2 geprüft.                                                                                                                                    |
+| No. | Question | Recommendation | Alternative | Rationale |
+| --- | --- | --- | --- | --- |
+| E-1 | Frontend technology | **`html/template` (standard library) + htmx** for pages, tables, and forms; custom JavaScript only for the charts (section 6a); everything embedded, **no bundler** | SPA (Svelte/Vue/React) with a Vite build | No Node tooling in development and CI, `go build` stays the only build step. Server-side rendering covers tables and forms well; the interactivity that actually matters comes from the charts. An SPA doubles up ecosystems and tests. |
+| E-2 | Charts | **Fixed: Chart.js in the browser** (requirement), augmented with the plugin `chartjs-chart-matrix` for the heatmap and `chartjs-plugin-zoom` for the time series. The server only delivers data as JSON. go-chart, `internal/infra/charts`, and `analysis.ChartRenderer` go away. | Apache ECharts (heatmap, zoom, and image export built in, but ≈1 MB and its own theming system) | Chart.js is small, widespread, and brings tooltips, toggleable legends, and click events. The heatmap isn't a core Chart.js type — hence the matrix plugin. **Fallback:** if the spike (M0) shows the plugin combination doesn't hold up, switch to ECharts; only `charts.js` and the JSON shape are affected. |
+| E-3 | Lifecycle | **Only Ctrl+C / SIGTERM** (`context.Context` with `signal.NotifyContext`, clean shutdown via `http.Server.Shutdown`) — no auto-exit, no "quit" button, no tray icon | "quit" button + auto-exit after idle · tray icon | The process should behave like an ordinary server service, not like a desktop app with its own window — planned use also as a Docker image (see below), where the lifecycle comes from the container orchestrator (`docker stop` sends SIGTERM) and "count open browser tabs" isn't a sensible basis. Also simplifies the server considerably along the way: no SSE connection counting, no timer, no `--dauerhaft` flag needed — this is just the only mode from now on. WP 7 (background sync) benefits directly: the process runs anyway until it's stopped. |
+| E-4 | Port | **random** (`127.0.0.1:0`), fixed only via a flag | a fixed default port | No conflicts; bookmarks still work via single-instance detection, because every launch opens the correct address. |
+| E-5 | Transition | **Build the web UI in parallel in `internal/web`**, Fyne stays the default until feature parity (M3), then switch over and delete Fyne in M5 | switch over immediately | The program stays usable at all times. There are no users before 1.0 who'd need a parallel offering — Fyne therefore doesn't stay around as a permanent option. |
+| E-6 | New possibilities in this migration | **Include file import via upload/drag & drop** (suggestion 11.1 was previously CLI-only); filters in the URL; sortable table headers | 1:1 transfer only | The import dialog replaces the Fyne file dialog anyway; the extra effort is small. |
+| E-7 | Sourcing htmx, Chart.js, and plugins | **Keep minified UMD files in the repository** (`internal/web/static/vendor/`), pin versions and licenses (all MIT) in `docs/DEPENDENCIES.md`; research the exact versions and plugin compatibility with the Chart.js major version when integrating | CDN | Works offline, fits the Content Security Policy `default-src 'self'`. |
+| E-8 | Browser tests | **A lean smoke test with `chromedp`** (Go, no Node): load the overview, check that all four charts are drawn and the console reports no errors, trigger one drill-down click. Runs locally and on the CI's Linux runner; handler tests with `httptest` cover logic and security. | no browser tests · Playwright (needs Node) | With Chart.js, real logic lives in JavaScript (data mapping, colors, click targets) that `httptest` can't see. Whether Chrome is present on the CI runner or needs installing is checked in M2. |
 
-## 5. Sicherheit des lokalen Servers
+## 5. Security of the local server
 
-Ein Server auf `127.0.0.1` ist **nicht automatisch privat**: andere Benutzer
-desselben Rechners können sich verbinden, und jede geöffnete Webseite kann
-Anfragen an `127.0.0.1` schicken (CSRF, DNS-Rebinding). Die Oberfläche
-verwaltet Zugangsdaten — daher:
+A server on `127.0.0.1` is **not automatically private**: other users of
+the same machine can connect, and any open web page can send requests to
+`127.0.0.1` (CSRF, DNS rebinding). The UI manages credentials — hence:
 
-| Maßnahme                     | Umsetzung                                                                                                                                                                                                                                                                                                                                   |
-|------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Nur Loopback                 | Bindung ausschließlich an `127.0.0.1`; andere Adressen werden abgelehnt. **Spannung mit dem geplanten Docker-Einsatz (E-3):** Ein Prozess, der in einem Container nur an `127.0.0.1` bindet, ist über `docker run -p …` von außen **nicht** erreichbar — Docker leitet an die Container-Schnittstelle weiter, nicht an deren Loopback. Für den Docker-Fall wird also eine andere Bindung (`0.0.0.0` im Container, oder `--network=host`) und damit ein anderes Bedrohungsmodell nötig, sobald das Docker-Image ansteht: Der Server wäre dann potenziell von anderen Rechnern im Netz erreichbar, nicht mehr nur von Prozessen auf derselben Maschine. Diese Migration hier baut nur das lokale (Loopback-)Modell; **eine spätere Docker-Verpackung braucht einen eigenen Sicherheits-Nachtrag** (u. a.: reicht das Einmal-Link-Verfahren noch, oder braucht es dann ein echtes Login mit Passwort und TLS?) — bewusst nicht Teil dieses Plans, siehe offene Frage 4. |
-| Instanz-Geheimnis            | Beim Start 32 Zufallsbytes (`crypto/rand`), abgelegt in `instance.json` im Konfigurationsverzeichnis mit Rechten `0600`, zusammen mit Port und PID                                                                                                                                                                                          |
-| Einmal-Anmeldelink           | Der Browser bekommt nicht das Geheimnis, sondern einen **einmal gültigen Code** (60 s gültig). `/anmelden?code=…` tauscht ihn gegen ein Sitzungs-Cookie (`HttpOnly`, `SameSite=Strict`) und leitet weiter — im Verlauf bleibt nur ein verbrauchter Code. Ein zweiter Programmstart holt sich mit dem Instanz-Geheimnis einen frischen Code. |
-| Jede Anfrage authentifiziert | Ohne gültiges Sitzungs-Cookie: 401 und Hinweisseite „Bitte über das Programm öffnen"                                                                                                                                                                                                                                                        |
-| DNS-Rebinding                | `Host`-Header muss exakt `127.0.0.1:<port>` oder `localhost:<port>` sein                                                                                                                                                                                                                                                                    |
-| CSRF                         | Zustandsändernde Anfragen nur per POST, mit CSRF-Token (Formularfeld bzw. `hx-headers`) **und** Prüfung von `Origin` bzw. `Sec-Fetch-Site`                                                                                                                                                                                                  |
-| Content-Security-Policy      | `default-src 'self'; frame-ancestors 'none'; form-action 'self'` — kein Inline-JavaScript, keine externen Quellen. Ob Chart.js und die Plugins ohne `'unsafe-inline'` bei `style-src` auskommen, wird im Durchstich (M0) geprüft, nicht vorausgesetzt.                                                                                      |
-| JSON-Endpunkte               | Gleiche Sitzungs- und `Host`-Prüfung wie Seiten; nur GET, keine Zustandsänderung; `Content-Type: application/json` und `X-Content-Type-Options: nosniff`                                                                                                                                                                                    |
-| Zugangsdaten                 | Passwörter nur per POST, nie zurück an den Browser, nie geloggt; `account.Secret` wie bisher direkt nach Gebrauch mit `Zero()` überschreiben                                                                                                                                                                                                |
-| Uploads                      | Größenbegrenzung per `http.MaxBytesReader` (Vorschlag: 50 MB je Datei); das 100-MB-Entpacklimit aus AP 1 greift zusätzlich                                                                                                                                                                                                                  |
-| Aufräumen                    | `instance.json` beim Beenden löschen; ein verwaister Eintrag (Prozess tot) wird beim nächsten Start übernommen                                                                                                                                                                                                                              |
+| Measure | Implementation |
+| --- | --- |
+| Loopback only | Bind exclusively to `127.0.0.1`; other addresses are rejected. **Tension with the planned Docker deployment (E-3):** a process that only binds to `127.0.0.1` inside a container is **not** reachable from outside via `docker run -p …` — Docker forwards to the container's network interface, not to its loopback. For the Docker case, a different binding (`0.0.0.0` in the container, or `--network=host`) and thus a different threat model will be needed once the Docker image comes up: the server would then potentially be reachable from other machines on the network, not just from processes on the same machine. This migration only builds the local (loopback) model; **a later Docker packaging needs its own security addendum** (among other things: is the one-time-link approach still enough, or does it then need a real login with password and TLS?) — deliberately not part of this plan, see open question 4. |
+| Instance secret | 32 random bytes (`crypto/rand`) at startup, stored in `instance.json` in the config directory with permissions `0600`, together with port and PID |
+| One-time login link | The browser doesn't get the secret, but a **one-time-valid code** (valid for 60s). `/anmelden?code=…` exchanges it for a session cookie (`HttpOnly`, `SameSite=Strict`) and redirects — history keeps only a used-up code. A second program launch fetches a fresh code using the instance secret. |
+| Every request authenticated | Without a valid session cookie: 401 and a notice page "please open via the program" |
+| DNS rebinding | The `Host` header must be exactly `127.0.0.1:<port>` or `localhost:<port>` |
+| CSRF | State-changing requests only via POST, with a CSRF token (form field or `hx-headers`) **and** checking `Origin`/`Sec-Fetch-Site` |
+| Content Security Policy | `default-src 'self'; frame-ancestors 'none'; form-action 'self'` — no inline JavaScript, no external sources. Whether Chart.js and the plugins can do without `'unsafe-inline'` in `style-src` is checked in the spike (M0), not assumed. |
+| JSON endpoints | Same session and `Host` checks as pages; GET only, no state change; `Content-Type: application/json` and `X-Content-Type-Options: nosniff` |
+| Credentials | Passwords only via POST, never sent back to the browser, never logged; overwrite `account.Secret` with `Zero()` right after use, as before |
+| Uploads | Size limit via `http.MaxBytesReader` (suggestion: 50 MB per file); the 100 MB unpack limit from WP 1 also applies |
+| Cleanup | Delete `instance.json` on exit; an orphaned entry (dead process) is taken over on the next launch |
 
-## 6. Paketstruktur
+## 6. Package structure
 
 ```
 internal/web/
-├── server.go          # http.Server, Start/Stop über signal.NotifyContext, Einzelinstanz
-├── browser.go         # Browser öffnen je Betriebssystem
-├── auth.go            # Instanz-Geheimnis, Einmal-Codes, Sitzung, CSRF
-├── middleware.go      # Host-Prüfung, Sicherheits-Header, Recover, Logging
-├── routes.go          # Routing (net/http ServeMux mit Methoden-Mustern)
-├── handlers_*.go      # je Ansicht: dashboard, reports, sources, accounts, onboarding, sync, import, export
-├── api_charts.go      # JSON-Daten für die Diagramme (Abschnitt 6a)
-├── views.go           # Template-Laden (eingebettet; mit --entwicklung von der Festplatte)
-├── i18n/              # verschoben aus internal/ui/i18n
-├── glossary/          # verschoben aus internal/ui/glossary (nur Daten)
-├── templates/         # layout.html, partials/*.html, pages/*.html
+├── server.go          # http.Server, start/stop via signal.NotifyContext, single instance
+├── browser.go         # open the browser per OS
+├── auth.go            # instance secret, one-time codes, session, CSRF
+├── middleware.go      # host check, security headers, recover, logging
+├── routes.go          # routing (net/http ServeMux with method patterns)
+├── handlers_*.go       # one per view: dashboard, reports, sources, accounts, onboarding, sync, import, export
+├── api_charts.go       # JSON data for the charts (section 6a)
+├── views.go            # template loading (embedded; from disk with --entwicklung)
+├── i18n/                # moved from internal/ui/i18n
+├── glossary/            # moved from internal/ui/glossary (data only)
+├── templates/           # layout.html, partials/*.html, pages/*.html
 └── static/
-    ├── app.css        # Theme-Variablen hell/dunkel
-    ├── app.js         # Tooltips für Begriffe, SSE (Sync-Fortschritt), Dialoge
-    ├── charts.js      # Chart.js-Konfiguration, Farben aus CSS-Variablen, Drill-down
-    └── vendor/        # htmx, chart.js, chartjs-chart-matrix, chartjs-plugin-zoom (jeweils .min.js + LICENSE)
+    ├── app.css          # theme variables light/dark
+    ├── app.js           # tooltips for terms, SSE (sync progress), dialogs
+    ├── charts.js         # Chart.js config, colors from CSS variables, drill-down
+    └── vendor/           # htmx, chart.js, chartjs-chart-matrix, chartjs-plugin-zoom (each .min.js + LICENSE)
 ```
 
-`templates/` und `static/` werden per `//go:embed` eingebettet. Mit
-`--entwicklung` liest der Server sie stattdessen von der Festplatte — Änderungen
-an HTML/CSS/JS sind dann ohne Neubau sichtbar.
+`templates/` and `static/` are embedded via `//go:embed`. With
+`--entwicklung`, the server instead reads them from disk — changes to
+HTML/CSS/JS become visible without a rebuild.
 
-## 6a. Diagramme mit Chart.js
+## 6a. Charts with Chart.js
 
-**Aufgabenteilung:** Der Server liefert fertig aufbereitete Daten; der Browser
-zeichnet. Aggregation, Filter und Anreicherung (PTR, Dienstname) bleiben in Go
-und damit testbar — `charts.js` ordnet nur zu und reagiert auf Klicks.
+**Division of labor:** the server delivers already-prepared data; the
+browser draws. Aggregation, filtering, and enrichment (PTR, service
+name) stay in Go and thus testable — `charts.js` only maps data and
+reacts to clicks.
 
-| Diagramm                                        | Chart.js-Typ                                                     | Interaktion                                                                                                             | Drill-down beim Klick                                                          |
-|-------------------------------------------------|------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------|
-| Nachrichtenvolumen pro Tag, gestapelt Pass/Fail | `bar` (gestapelt)                                                | Tooltip mit Anzahl und Anteil je Tag; Legende blendet Pass/Fail ein und aus; Zoom und Verschieben bei langen Zeiträumen | Berichte dieses Tages                                                          |
-| Top-Sendequellen                                | `bar` (horizontal, damit lange Dienst-/Hostnamen lesbar bleiben) | Tooltip mit IP, Hostname, Dienst, Volumen, Pass-Rate                                                                    | Sendequellen-Ansicht bzw. Berichte, gefiltert auf diese IP                     |
-| Verteilung nach Disposition                     | `doughnut`                                                       | Tooltip mit Anzahl und Anteil; Segmente per Legende ausblendbar                                                         | Berichte mit dieser Disposition (`report.Query.Disposition` existiert bereits) |
-| Sendequelle × Tag                               | `matrix` (Plugin)                                                | Tooltip mit Quelle, Tag, Pass-Rate **und Nachrichtenzahl**; leere Tage deutlich als „keine Daten"                       | Berichte dieser Quelle an diesem Tag                                           |
+| Chart | Chart.js type | Interaction | Drill-down on click |
+| --- | --- | --- | --- |
+| Message volume per day, stacked pass/fail | `bar` (stacked) | Tooltip with count and share per day; legend toggles pass/fail on and off; zoom and pan for long periods | Reports of that day |
+| Top sending sources | `bar` (horizontal, so long service/hostnames stay readable) | Tooltip with IP, hostname, service, volume, pass rate | Sending-sources view, or reports filtered to that IP |
+| Distribution by disposition | `doughnut` | Tooltip with count and share; segments hideable via the legend | Reports with that disposition (`report.Query.Disposition` already exists) |
+| Sending source × day | `matrix` (plugin) | Tooltip with source, day, pass rate **and message count**; empty days clearly marked as "no data" | Reports from that source on that day |
 
-**JSON-Endpunkte** (gleiche Filterparameter wie die Seite, z. B.
+**JSON endpoints** (same filter parameters as the page, e.g.
 `?zeitraum=30&domain=example.com`):
 
-| Pfad                         | Inhalt                                                   |
-|------------------------------|----------------------------------------------------------|
-| `/api/diagramme/verlauf`     | Tage mit `pass`, `fail`                                  |
-| `/api/diagramme/quellen`     | Quellen mit `ip`, `label`, `total`, `passRate`           |
-| `/api/diagramme/disposition` | Anteile je Disposition                                   |
-| `/api/diagramme/heatmap`     | Quellen, Tage, Zellen mit `passRate`, `total`, `hasData` |
+| Path | Content |
+| --- | --- |
+| `/api/diagramme/verlauf` | Days with `pass`, `fail` |
+| `/api/diagramme/quellen` | Sources with `ip`, `label`, `total`, `passRate` |
+| `/api/diagramme/disposition` | Shares per disposition |
+| `/api/diagramme/heatmap` | Sources, days, cells with `passRate`, `total`, `hasData` |
 
-Jede Antwort enthält zu jedem Punkt bereits die **Ziel-URL für den Drill-down**
-(vom Server gebaut) — `charts.js` muss keine Filterlogik kennen.
+Every response already includes, for every data point, the **drill-down
+target URL** (built by the server) — `charts.js` doesn't need to know any
+filter logic.
 
-**Gestaltung nach der `dataviz`-Skill:**
+**Design following the `dataviz` skill:**
 
-- Farben kommen aus denselben CSS-Variablen wie die Oberfläche (validierte
-  Referenzpalette: Statusfarben für Pass/Fail/Disposition, Primärblau).
-  `charts.js` liest sie per `getComputedStyle` und zeichnet bei
-  `prefers-color-scheme`-Wechsel neu.
-- Pass-Rate-Farbskala für Top-Quellen und Heatmap als Verlauf zwischen den
-  Statusfarben „kritisch" und „gut"; „keine Daten" neutral grau.
-- Schlanke Balken mit abgerundeten Enden, dezente Gitterlinien, Legende ab zwei
-  Reihen, Beschriftungen in Textfarbe statt Reihenfarbe.
-- **Barrierefreiheit:** Ein `<canvas>` ist für Screenreader leer. Jedes
-  Diagramm bekommt eine Kurzbeschreibung (`aria-label`) und eine umschaltbare **Tabellenansicht** mit denselben Daten;
-  Drill-down-Ziele sind dort normale
-  Links und damit per Tastatur erreichbar.
-- Leere Zeiträume zeigen den bestehenden Leerzustand statt eines leeren
-  Diagramms.
+- Colors come from the same CSS variables as the UI (validated reference
+  palette: status colors for pass/fail/disposition, primary blue).
+  `charts.js` reads them via `getComputedStyle` and redraws on a
+  `prefers-color-scheme` change.
+- Pass-rate color scale for top sources and heatmap as a gradient
+  between the "critical" and "good" status colors; "no data" neutral
+  gray.
+- Slim bars with rounded ends, subtle gridlines, legend from two series
+  on, labels in text color rather than series color.
+- **Accessibility:** a `<canvas>` is empty to screen readers. Every chart
+  gets a short description (`aria-label`) and a toggleable **table view**
+  with the same data; drill-down targets there are regular links and
+  thus reachable by keyboard.
+- Empty periods show the existing empty state instead of an empty chart.
 
-**Export:** PNG über `chart.toBase64Image()` im Browser, CSV der
-Diagrammdaten aus der Tabellenansicht. Serverseitiger Bild-Export entfällt.
+**Export:** PNG via `chart.toBase64Image()` in the browser, CSV of the
+chart data from the table view. Server-side image export goes away.
 
-**Domänen-Ergänzung:** `analysis.HeatmapCell` bekommt zusätzlich die
-Nachrichtenzahl (`Total`), damit der Tooltip sie zeigen kann — die
-SQL-Aggregation berechnet sie bereits, sie wird nur bisher verworfen.
+**Domain addition:** `analysis.HeatmapCell` additionally gets the
+message count (`Total`), so the tooltip can show it — the SQL
+aggregation already computes it, it was just discarded so far.
 
-## 7. Routen
+## 7. Routes
 
-| Methode  | Pfad                                                                                          | Zweck                                                                                                                                 |
-|----------|-----------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------|
-| GET      | `/anmelden`                                                                                   | Einmal-Code gegen Sitzung tauschen                                                                                                    |
-| POST     | `/intern/code`                                                                                | Neuen Einmal-Code ausstellen (nur mit Instanz-Geheimnis, für den zweiten Programmstart)                                               |
-| GET      | `/`                                                                                           | Übersicht (bzw. Weiterleitung zur Ersteinrichtung)                                                                                    |
-| GET      | `/api/diagramme/{verlauf,quellen,disposition,heatmap}`                                        | Diagrammdaten als JSON (Abschnitt 6a)                                                                                                 |
-| GET      | `/berichte`                                                                                   | Berichtstabelle; Filter (auch Quell-IP, Disposition, einzelner Tag — für den Drill-down), Sortierung, Gruppierung als Query-Parameter |
-| GET      | `/berichte/seite`                                                                             | nächste Seite (htmx, Keyset-Cursor)                                                                                                   |
-| GET      | `/berichte/{id}`                                                                              | Detailansicht (als Dialog per htmx und als eigene Seite)                                                                              |
-| GET      | `/quellen`, `/quellen/seite`                                                                  | Sendequellen                                                                                                                          |
-| GET      | `/glossar`                                                                                    | Glossar                                                                                                                               |
-| GET      | `/einstellungen`                                                                              | Kontenliste                                                                                                                           |
-| POST     | `/konten` · `/konten/test` · `/konten/ordner` · `/konten/{id}/test` · `/konten/{id}/loeschen` | Anlegen, Verbindung testen, Ordner auflisten, Test gespeichertes Konto, Löschen                                                       |
-| GET/POST | `/einrichtung`                                                                                | Ersteinrichtung in drei Schritten                                                                                                     |
-| POST     | `/abgleich` · `/abgleich/abbrechen`                                                           | Sync starten/abbrechen                                                                                                                |
-| GET      | `/ereignisse`                                                                                 | Server-Sent Events: Sync-Fortschritt, Ergebnis                                                      |
-| POST     | `/import`                                                                                     | Datei-Upload                                                                                                                          |
-| GET      | `/export/berichte.csv` · `/export/quellen.csv`                                                | Downloads (Diagramm-Export läuft im Browser)                                                                                          |
-| GET/POST | `/entsperren`                                                                                 | Master-Passphrase für den Datei-Schlüsselspeicher                                                                                     |
-| POST     | `/beenden`                                                                                    | Programm beenden                                                                                                                      |
-| GET      | `/static/…`                                                                                   | eingebettete Dateien mit Cache-Headern                                                                                                |
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/anmelden` | Exchange a one-time code for a session |
+| POST | `/intern/code` | Issue a new one-time code (only with the instance secret, for the second program launch) |
+| GET | `/` | Overview (or redirect to first-run setup) |
+| GET | `/api/diagramme/{verlauf,quellen,disposition,heatmap}` | Chart data as JSON (section 6a) |
+| GET | `/berichte` | Report table; filters (also source IP, disposition, single day — for drill-down), sort, group as query parameters |
+| GET | `/berichte/seite` | next page (htmx, keyset cursor) |
+| GET | `/berichte/{id}` | Detail view (as a dialog via htmx and as its own page) |
+| GET | `/quellen`, `/quellen/seite` | Sending sources |
+| GET | `/glossar` | Glossary |
+| GET | `/einstellungen` | Account list |
+| POST | `/konten` · `/konten/test` · `/konten/ordner` · `/konten/{id}/test` · `/konten/{id}/loeschen` | Create, test connection, list folders, test a saved account, delete |
+| GET/POST | `/einrichtung` | First-run setup in three steps |
+| POST | `/abgleich` · `/abgleich/abbrechen` | Start/cancel sync |
+| GET | `/ereignisse` | Server-Sent Events: sync progress, result |
+| POST | `/import` | File upload |
+| GET | `/export/berichte.csv` · `/export/quellen.csv` | Downloads (chart export runs in the browser) |
+| GET/POST | `/entsperren` | Master passphrase for the file key store |
+| POST | `/beenden` | Quit the program |
+| GET | `/static/…` | Embedded files with cache headers |
 
-## 8. Funktionsgleichheit — Übertrag der bestehenden Oberfläche
+## 8. Feature parity — transferring the existing UI
 
-| Heute (Fyne)                                           | Künftig (Web)                                                               | Anmerkung                                                                                                     |
-|--------------------------------------------------------|-----------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------|
-| Hauptfenster, Seitennavigation mit Symbolen, Kopfzeile | `layout.html` mit Navigationsleiste, Kopfzeile                              | Symbole als eingebettete SVG                                                                                  |
-| Theme hell/dunkel (`appTheme`)                         | CSS-Variablen, `prefers-color-scheme`                                       | dieselben Farbwerte (dataviz-Referenzpalette)                                                                 |
-| Filterleiste (Zeitraum, Domain)                        | GET-Formular, Werte in der URL                                              | wirkt weiter auf Übersicht, Berichte, Quellen                                                                 |
-| Übersicht: 5 Kennzahlen-Kacheln, Trend                 | Kacheln als Karten, Trendpfeil als SVG-Symbol                               | Werte formatiert wie heute                                                                                    |
-| 4 statische Diagramme (PNG), Gruppierung 2 + 1 + 1     | 4 Chart.js-Diagramme, gleiche Gruppierung                                   | neu: Tooltips, umschaltbare Legende, Zoom in der Zeitreihe, Drill-down per Klick, Tabellenansicht je Diagramm |
-| Diagramm als PNG exportieren                           | PNG-Export im Browser, CSV aus der Tabellenansicht                          |                                                                                                               |
-| Berichtstabelle, „Weitere laden", Gruppierung          | HTML-Tabelle, „Weitere laden" per htmx, sortierbare Spalten                 | Keyset-Pagination bleibt                                                                                      |
-| Bericht-Detaildialog                                   | `<dialog>`-Element mit Schließen-Knopf **und** Esc                          | der Fehler „lässt sich nicht schließen" kann nicht wieder auftreten                                           |
-| CSV-Export (nur geladene Seiten)                       | CSV-Export des **gesamten** gefilterten Bestands, seitenweise gestreamt     | Verbesserung: kein Speicherproblem, weil gestreamt                                                            |
-| Sendequellen mit PTR/Dienst                            | HTML-Tabelle                                                                |                                                                                                               |
-| Einstellungen: Konten anlegen/testen/löschen           | Formular + Liste                                                            | Validierung serverseitig (Logik aus `AccountForm.Validate` übernehmen)                                        |
-| Ordner-Picker (`SelectEntry`)                          | `<input list>` mit `<datalist>`, Knopf „Ordner auflisten"                   |                                                                                                               |
-| Ersteinrichtung (3 Schritte)                           | `/einrichtung`                                                              |                                                                                                               |
-| Sync-Knopf mit Fortschritt und Abbruch                 | Knopf + Fortschrittsanzeige über SSE                                        | Sync läuft serverseitig weiter, auch beim Seitenwechsel                                                       |
-| Leerzustände, Fehlerbanner mit technischen Details     | Partials, Details in `<details>`                                            |                                                                                                               |
-| Glossar-Dialog, „?"-Knöpfe                             | Glossarseite + echte Tooltips (`popover`-Attribut, per Tastatur erreichbar) |                                                                                                               |
-| —                                                      | **neu:** Datei-Import per Upload/Drag & Drop (E-6)                          |                                                                                                               |
+| Today (Fyne) | Going forward (web) | Note |
+| --- | --- | --- |
+| Main window, side navigation with icons, header | `layout.html` with a nav bar, header | icons as embedded SVG |
+| Light/dark theme (`appTheme`) | CSS variables, `prefers-color-scheme` | same color values (dataviz reference palette) |
+| Filter bar (time range, domain) | GET form, values in the URL | continues to act on the overview, reports, sources |
+| Overview: 5 metric tiles, trend | Tiles as cards, trend arrow as an SVG icon | values formatted as today |
+| 4 static charts (PNG), grouping 2 + 1 + 1 | 4 Chart.js charts, same grouping | new: tooltips, toggleable legend, zoom in the time series, click drill-down, table view per chart |
+| Export a chart as PNG | PNG export in the browser, CSV from the table view | |
+| Report table, "load more", grouping | HTML table, "load more" via htmx, sortable columns | keyset pagination stays |
+| Report detail dialog | `<dialog>` element with a close button **and** Esc | the "can't be closed" bug can't recur |
+| CSV export (loaded pages only) | CSV export of the **entire** filtered dataset, streamed page by page | improvement: no memory problem, since streamed |
+| Sending sources with PTR/service | HTML table | |
+| Settings: create/test/delete accounts | Form + list | validation server-side (logic taken over from `AccountForm.Validate`) |
+| Folder picker (`SelectEntry`) | `<input list>` with `<datalist>`, a "list folders" button | |
+| First-run setup (3 steps) | `/einrichtung` | |
+| Sync button with progress and cancel | Button + progress display via SSE | sync keeps running server-side, even across page changes |
+| Empty states, error banners with technical detail | Partials, detail in `<details>` | |
+| Glossary dialog, "?" buttons | Glossary page + real tooltips (`popover` attribute, keyboard-reachable) | |
+| — | **new:** file import via upload/drag & drop (E-6) | |
 
-## 9. Nötige Erweiterungen außerhalb der Präsentationsschicht
+## 9. Extensions needed outside the presentation layer
 
-1. **Sync-Fortschritt** — `syncreports.UseCase.SyncAccount` liefert heute nur ein
-   Endergebnis. Ergänzung: optionaler Fortschritts-Callback (verarbeitet /
-   neu / übersprungen / fehlerhaft).
-2. **Sync als serverseitiger Auftrag** — neues Paket `internal/app/syncjob`:
-   höchstens ein Lauf gleichzeitig, Abbruch per Kontext, Fortschritt für
-   mehrere Zuhörer. Liegt in der Anwendungsschicht, weil der geplante
-   Hintergrund-Sync aus AP 7 dieselbe Sperre braucht.
-3. **Import aus Bytes** — `importfiles.UseCase` arbeitet heute mit Dateipfaden.
-   Ergänzung `ImportData(ctx, filename, data)`; die interne Zerlegung (`extractAttachments`) arbeitet bereits mit Bytes.
-4. **Sperrbarer Schlüsselspeicher** — `newCredentialStore()` fragt heute beim
-   Start auf der Konsole nach der Master-Passphrase. Ergänzung: ein
-   `account.CredentialStore`, der bis zum Entsperren
-   `account.ErrCredentialStoreLocked` liefert; die Oberfläche leitet dann auf
-   `/entsperren`.
-5. **Diagramm-Port zurückbauen** — `analysis.ChartRenderer`,
-   `internal/infra/charts`, `exportdata.WriteChartPNG` und go-chart entfallen.
-   `analysis.DailyVolume/SourceVolume/Heatmap` bleiben als Daten für die
-   JSON-Endpunkte; `HeatmapCell` bekommt `Total` (Abschnitt 6a). Eine ADR in
-   `docs/` hält fest, warum der in `IMPLEMENTIERUNG.md` 8.2 vorgesehene
-   „Adapter-Tausch" hier zum Rückbau wird: Diagramme sind im Web reine
-   Darstellung im Browser, der Server liefert nur Daten.
-6. **Drill-down-Filter** — `report.Query` kennt bereits Zeitraum, Domain,
-   Quell-IP und Disposition. Zu prüfen in M2: ob „Berichte einer Quelle an
-   einem Tag" allein mit Zeitraum + Quell-IP korrekt abgebildet ist (Zuordnung
-   über `date_begin`, siehe AP 6).
+1. **Sync progress** — `syncreports.UseCase.SyncAccount` today only
+   returns a final result. Addition: an optional progress callback
+   (processed/new/skipped/failed).
+2. **Sync as a server-side job** — new package `internal/app/syncjob`:
+   at most one run at a time, cancellable via context, progress for
+   several listeners. Lives in the application layer because the
+   background sync planned in WP 7 needs the same lock.
+3. **Import from bytes** — `importfiles.UseCase` currently works with
+   file paths. Addition `ImportData(ctx, filename, data)`; the internal
+   splitting (`extractAttachments`) already works with bytes.
+4. **Lockable key store** — `newCredentialStore()` currently prompts for
+   the master passphrase on the console at startup. Addition: an
+   `account.CredentialStore` that returns
+   `account.ErrCredentialStoreLocked` until unlocked; the UI then
+   redirects to `/entsperren`.
+5. **Dismantle the chart port** — `analysis.ChartRenderer`,
+   `internal/infra/charts`, `exportdata.WriteChartPNG`, and go-chart go
+   away. `analysis.DailyVolume/SourceVolume/Heatmap` stay as data for the
+   JSON endpoints; `HeatmapCell` gets `Total` (section 6a). An ADR in
+   `docs/` records why the "adapter swap" planned in `IMPLEMENTIERUNG.md`
+   8.2 becomes a dismantling here: on the web, charts are pure browser
+   presentation, the server only delivers data.
+6. **Drill-down filters** — `report.Query` already knows time range,
+   domain, source IP, and disposition. To check in M2: whether "reports
+   from one source on one day" is correctly captured with just time
+   range + source IP (mapping via `date_begin`, see WP 6).
 
-## 10. Arbeitspakete
+## 10. Work packages
 
-Größenangaben relativ: S (klein), M (mittel), L (groß).
+Relative sizes: S (small), M (medium), L (large).
 
-### M0 — Entscheidungen und Durchstich (S)
+### M0 — Decisions and spike (S)
 
-- [x] Entscheidungen E-1 bis E-8 bestätigt — implizit durch Umsetzung der
-  jeweiligen Empfehlung bestätigt (Chart.js, Strg+C/SIGTERM,
-  zufälliger Port, Datei-Import folgt M4, vendorierte JS-Bündel,
-  `chromedp`-Rauchtest folgt M2); nicht einzeln nachverhandelt.
-- [x] `internal/web` mit Server, Einmal-Anmeldung, Host-Prüfung, Browserstart
-- [x] Eine Seite: Übersicht mit Kennzahlen-Kacheln aus `statistics.UseCase`
-- [x] **Chart.js-Durchstich:** Heatmap (Matrix-Plugin) und Zeitreihe mit Zoom
-  aus echten Daten, Tooltip, ein Drill-down-Klick — unter der geplanten
-  Content-Security-Policy ohne `'unsafe-inline'`
-- [x] Startpfad hinter Flag (`dmarc-analyzer web`), Fyne bleibt Standard
+- [x] Decisions E-1 through E-8 confirmed — implicitly confirmed by
+  implementing the respective recommendation (Chart.js, Ctrl+C/SIGTERM,
+  random port, file import follows in M4, vendored JS bundles,
+  `chromedp` smoke test follows in M2); not individually renegotiated.
+- [x] `internal/web` with server, one-time login, host check, browser launch
+- [x] One page: overview with metric tiles from `statistics.UseCase`
+- [x] **Chart.js spike:** heatmap (matrix plugin) and time series with
+  zoom from real data, tooltip, one drill-down click — under the
+  planned Content Security Policy without `'unsafe-inline'`
+- [x] Startup path behind a flag (`dmarc-analyzer web`), Fyne stays the default
 
-**Fertig wenn:** Ein Start öffnet den Browser, zeigt echte Kennzahlen und zwei
-interaktive Diagramme, und eine Anfrage ohne Sitzung oder mit fremdem `Host`
-wird abgewiesen. Trägt die Chart.js-Plugin-Kombination nicht, fällt hier die
-Entscheidung für die Rückfallebene ECharts (E-2). — **Erreicht.**
+**Done when:** a launch opens the browser, shows real metrics and two
+interactive charts, and a request without a session or with a foreign
+`Host` is rejected. If the Chart.js plugin combination doesn't hold up,
+the decision falls here for the ECharts fallback (E-2). — **Reached.**
 
-### M1 — Grundgerüst (M)
+### M1 — Scaffolding (M)
 
-- [x] Layout, Navigation, Kopfzeile, Theme hell/dunkel als CSS-Variablen —
-  Navigation aktuell mit vier Platzhalter-Seiten (Berichte, Sendequellen,
-  Glossar, Einstellungen; Inhalt folgt M2/M3), Theme aus M0 unverändert.
-- [x] Filterleiste mit Werten in der URL — wirkt auf Übersicht
-  (Kennzahlen, beide Diagramme inkl. Drill-down-Ziele); Berichte/Quellen
-  übernehmen denselben Filter, sobald sie in M2 echten Inhalt bekommen.
-- [x] Sicherheits-Middleware vollständig (Abschnitt 5), CSRF, CSP —
-  `requireCSRF` (Origin/Sec-Fetch-Site + Token) ist bereits um den
-  gesamten geschützten Routenbaum gelegt, auch wenn noch kein Formular
-  es braucht (erster Verbraucher: Konten-Formular in M3).
-- [x] Einzelinstanz (`instance.json`), zweiter Start öffnet bestehende Instanz
-- [x] Sauberes Herunterfahren per Strg+C/SIGTERM (E-3, `signal.NotifyContext` + `http.Server.Shutdown`), `--kein-browser`, `--adresse`, `--entwicklung`
-- [ ] `i18n` und Glossar-Daten verschoben; Leerzustand- und Fehler-Partials —
-  **zurückgestellt auf M5.** Ein echter Verschub jetzt würde
-  `internal/ui` (bis M3 Standard-Oberfläche, siehe E-5) die Pakete unter
-  den Füßen wegziehen; ein `internal/ui` → `internal/web`-Import wäre
-  zudem eine verbotene Abhängigkeitsrichtung (AGENTS.md). Bis dahin
-  bleiben die wenigen bisher gebrauchten Texte (Navigation,
-  Filterleiste) direkt in `internal/web` als deutsche Literale — reale
-  Doppelpflege beginnt erst, wenn tatsächlich beide Oberflächen aus
-  derselben i18n-Quelle laufen müssten, und das ist nicht der Plan
-  (E-5: Umschalten, nicht Parallelbetrieb). Leerzustand-/Fehler-Partials
-  ebenfalls zurückgestellt: die einzige bisherige "leere" Situation sind
-  die M1-Platzhalterseiten selbst.
-- [x] htmx, Chart.js und Plugins eingebunden, Versionen und Lizenzen in `docs/DEPENDENCIES.md` gepinnt
+- [x] Layout, navigation, header, light/dark theme as CSS variables —
+  navigation currently has four placeholder pages (reports, sending
+  sources, glossary, settings; content follows in M2/M3), theme
+  unchanged from M0.
+- [x] Filter bar with values in the URL — acts on the overview (metrics,
+  both charts including drill-down targets); reports/sources adopt the
+  same filter once they get real content in M2.
+- [x] Security middleware complete (section 5), CSRF, CSP —
+  `requireCSRF` (Origin/Sec-Fetch-Site + token) is already wrapped
+  around the entire protected route tree, even though no form needs it
+  yet (first consumer: the account form in M3).
+- [x] Single instance (`instance.json`), a second launch opens the existing instance
+- [x] Clean shutdown via Ctrl+C/SIGTERM (E-3, `signal.NotifyContext` +
+  `http.Server.Shutdown`), `--kein-browser`, `--adresse`, `--entwicklung`
+- [ ] `i18n` and glossary data moved; empty-state and error partials —
+  **deferred to M5.** Actually moving them now would pull the packages
+  out from under `internal/ui` (the default UI until M3, see E-5); an
+  `internal/ui` → `internal/web` import would also be a forbidden
+  dependency direction (AGENTS.md). Until then, the few texts already
+  in use (navigation, filter bar) stay directly in `internal/web` as
+  German literals — real double maintenance only starts once both UIs
+  would actually need to run from the same i18n source, and that isn't
+  the plan (E-5: switch over, not run in parallel). Empty-state/error
+  partials also deferred: the only "empty" situation so far is the M1
+  placeholder pages themselves.
+- [x] htmx, Chart.js, and plugins integrated, versions and licenses
+  pinned in `docs/DEPENDENCIES.md`
 
-**Fertig wenn:** Navigation zwischen leeren Seiten funktioniert in hell und
-dunkel, ein zweiter Start öffnet nur einen weiteren Tab, und Strg+C/SIGTERM
-beendet den Prozess sauber (offene Anfragen fertig, `instance.json` entfernt).
-— **Erreicht** (Sichtprüfung in echten Browsern gemäß M6 steht noch aus,
-siehe dortiger Vorbehalt zu fehlendem Display in dieser Umgebung).
+**Done when:** navigation between empty pages works in light and dark, a
+second launch just opens another tab, and Ctrl+C/SIGTERM shuts the
+process down cleanly (open requests finish, `instance.json` removed). —
+**Reached** (visual verification in real browsers per M6 is still
+outstanding, see the caveat there about no display in this environment).
 
-### M2 — Lesende Ansichten (L)
+### M2 — Read-only views (L)
 
-- [x] JSON-Endpunkte für alle vier Diagramme inkl. Drill-down-URLs; `HeatmapCell.Total`
-- [x] `charts.js`: vier Diagramme nach Abschnitt 6a, Farben aus CSS-Variablen,
-  Neuzeichnen bei Wechsel hell/dunkel; Palette **nicht** gegen
-  `scripts/validate_palette.js` der `dataviz`-Skill geprüft — die Skill
-  war in dieser Session nicht verfügbar (nur `customize-opencode`
-  geladen). Wiederverwendet wurden ausschließlich die bereits in M0/M1
-  validierten CSS-Variablen (`--status-good/-warning/-critical`,
-  `--primary`); keine neuen Farbwerte erfunden. Vor einem Release: Skill
-  laden und Validierung nachholen.
-- [x] Übersicht vollständig: Kacheln, Trend, vier Diagramme in der bestehenden
-  Gruppierung (Zeitreihe+Donut nebeneinander, Top-Sendequellen und Heatmap
-  je volle Zeile), Tooltips, Legende, Zoom, Drill-down, Tabellenansicht je
-  Diagramm
-- [x] Berichtstabelle mit Sortierung (Organisation/Domain/Zeitraum, klickbare
-  Spaltenköpfe), Gruppierung (keine/Domain/Organisation), „Weitere laden"
-  (htmx, Keyset-Cursor), Detailansicht (Metadaten/Richtlinie/Sendequellen)
-  und den Drill-down-Filtern (Quell-IP, Disposition, Tag als von/bis);
-  Erweiterung 9.6 geprüft — Überlappungs-Semantik (`date_begin < bis AND
-  date_end > von`) bestätigt am realen Adapter, kein Anpassungsbedarf.
-  **Nicht umgesetzt:** Detailansicht ist eine eigene Seite, kein
-  `<dialog>`-Overlay per htmx (Abschnitt 8 sah ein Dialog-Element vor) —
-  bewusste Scope-Entscheidung dieser Session, um M2 in vertretbarer Zeit
-  abzuschließen; funktional vollständig (Zurück-Link, eigene URL,
-  Tastatur-/Screenreader-freundlich), nur ohne Modal-Politur. Kann in M6
-  nachgerüstet werden.
-- [x] Sendequellen-Tabelle (Quell-IP, Nachrichten, Pass-Rate, PTR-Hostname,
-  erkannter Dienst; sortierbar nach Quell-IP/Nachrichten; „Weitere laden")
-- [x] Glossarseite und Begriffs-Tooltips — Daten liegen als
-  `internal/web/glossary` (Kopie aus `internal/ui/glossary/terms.go`,
-  siehe M1-Begründung zu i18n/Glossar-Verschub); "?"-Links auf der
-  Übersicht neben Kacheln/Diagrammtiteln verweisen auf `/glossar#<slug>`.
-- [ ] `chromedp`-Rauchtest (E-8) — **zurückgestellt.** In dieser
-  Sandbox ist kein Chrome/Chromium installiert (`which google-chrome
-  chromium chromium-browser` liefert nichts, keine Chrome-Installation
-  unter `/Applications`); ein Rauchtest ließe sich hier nicht schreiben
-  UND verifizieren. Alles, was der Rauchtest zusätzlich zu den
-  bestehenden `httptest`-Handlertests geprüft hätte (Chart.js zeichnet
-  wirklich, keine Konsolenfehler, ein echter Klick navigiert), ist
-  stattdessen manuell mit dem gebauten Binary + `curl` gegen importierte
-  Testreports verifiziert worden (Login, Übersicht, Berichte inkl.
-  Sortierung/Filter/Paginierung, Sendequellen, Detailansicht) — das
-  ersetzt aber keinen echten Browser-Test. Nachholen, sobald eine
-  Umgebung mit Chrome verfügbar ist (lokale Entwicklungsmaschine oder
-  CI-Runner mit `chromium`/`google-chrome` vorinstalliert).
+- [x] JSON endpoints for all four charts including drill-down URLs; `HeatmapCell.Total`
+- [x] `charts.js`: four charts per section 6a, colors from CSS variables,
+  redraw on light/dark switch; palette **not** checked against the
+  `dataviz` skill's `scripts/validate_palette.js` — the skill wasn't
+  available in this session (only `customize-opencode` was loaded).
+  Only the CSS variables already validated in M0/M1
+  (`--status-good/-warning/-critical`, `--primary`) were reused; no new
+  color values invented. Before a release: load the skill and catch up
+  on validation.
+- [x] Overview complete: tiles, trend, four charts in the existing
+  grouping (time series+donut side by side, top sending sources and
+  heatmap each a full row), tooltips, legend, zoom, drill-down, table
+  view per chart
+- [x] Report table with sorting (organization/domain/period, clickable
+  column headers), grouping (none/domain/organization), "load more"
+  (htmx, keyset cursor), detail view (metadata/policy/sending sources),
+  and the drill-down filters (source IP, disposition, day as from/to);
+  extension 9.6 checked — overlap semantics (`date_begin < to AND
+  date_end > from`) confirmed against the real adapter, no adjustment
+  needed. **Not implemented:** the detail view is its own page, not a
+  `<dialog>` overlay via htmx (section 8 envisioned a dialog element) —
+  a deliberate scope decision this session, to finish M2 in a
+  reasonable time; functionally complete (back link, own URL,
+  keyboard-/screen-reader-friendly), just without the modal polish. Can
+  be retrofitted in M6.
+- [x] Sending-sources table (source IP, messages, pass rate, PTR
+  hostname, detected service; sortable by source IP/messages; "load more")
+- [x] Glossary page and term tooltips — data lives as
+  `internal/web/glossary` (a copy of `internal/ui/glossary/terms.go`,
+  see the M1 rationale on the i18n/glossary move); "?" links on the
+  overview next to tiles/chart titles point to `/glossar#<slug>`.
+- [ ] `chromedp` smoke test (E-8) — **deferred.** No Chrome/Chromium is
+  installed in this sandbox (`which google-chrome chromium
+  chromium-browser` returns nothing, no Chrome install under
+  `/Applications`); a smoke test couldn't be written AND verified here.
+  Everything the smoke test would additionally have checked beyond the
+  existing `httptest` handler tests (Chart.js actually draws, no
+  console errors, a real click navigates) has instead been verified
+  manually with the built binary + `curl` against imported test
+  reports (login, overview, reports including sort/filter/pagination,
+  sending sources, detail view) — that doesn't replace a real browser
+  test, though. Catch up once an environment with Chrome is available
+  (a local dev machine or a CI runner with `chromium`/`google-chrome`
+  preinstalled).
 
-**Fertig wenn:** Alle lesenden Funktionen der Fyne-Oberfläche sind im Browser
-vorhanden (Tabelle in Abschnitt 8), jeder Klick auf ein Diagramm führt zu den
-passenden Berichten, und bei 100.000 Records bleiben Berichtstabelle und
-Diagramme flüssig (Heatmap über ein Jahr: 10 Quellen × 365 Tage). —
-**Funktional erreicht**, manuell mit importierten Testreports verifiziert
-(kein Fyne-Feature aus Abschnitt 8 fehlt mehr außer dem Dialog-Overlay,
-siehe oben). **Nicht verifiziert:** Performance bei 100.000 Records —
-Berichts-/Sendequellen-Abfragen laufen über dieselben, bereits in AP 2/4
-mit realistischen Datenmengen getesteten Keyset-Repositories
-(`internal/infra/sqlite`, siehe `reportperf_test.go`), die Web-Handler
-selbst laden nie mehr als eine Seite (`Limit: 50`) — ein eigener
-Lasttest auf HTTP-Ebene stand in dieser Session nicht an. Echter
-Browser-Rauchtest fehlt (siehe chromedp-Punkt oben).
+**Done when:** all read-only functions of the Fyne UI exist in the
+browser (table in section 8), every chart click leads to the matching
+reports, and with 100,000 records the report table and charts stay
+smooth (a year-long heatmap: 10 sources × 365 days). — **Functionally
+reached**, manually verified with imported test reports (no Fyne feature
+from section 8 is missing anymore except the dialog overlay, see above).
+**Not verified:** performance at 100,000 records — report/sending-source
+queries go through the same keyset repositories already tested with
+realistic data volumes in WP 2/4 (`internal/infra/sqlite`, see
+`reportperf_test.go`); the web handlers themselves never load more than
+one page (`Limit: 50`) — a dedicated HTTP-level load test wasn't due in
+this session. A real browser smoke test is missing (see the chromedp
+point above).
 
-### M3 — Schreibende Abläufe (L)
+### M3 — Write flows (L)
 
-- [x] Erweiterungen 9.1, 9.2, 9.4 umgesetzt und getestet:
-  - 9.1: `syncreports.UseCase.SyncAccount` bekommt einen zusätzlichen
-    `onProgress`-Parameter (`OnProgress func(Progress)`, nil erlaubt) —
-    Parameter statt Struct-Feld, damit der geteilte `*syncreports.UseCase`
-    nicht durch parallele Aufrufe verschiedener Fortschritts-Callbacks
-    verwechselt werden kann. Bestehende Aufrufer (CLI, Fyne, Onboarding)
-    übergeben `nil`.
-  - 9.2: neues Paket `internal/app/syncjob` (`Runner`) — höchstens ein
-    Lauf gleichzeitig (`Start`/`ErrAlreadyRunning`), Abbruch per
-    `context.CancelFunc` (`Cancel`), Fortschritt für beliebig viele
-    Zuhörer (`Subscribe`, gepufferter Kanal mit "neuesten Stand
-    behalten"-Semantik). Hängt über eine eigene `Syncer`-Schnittstelle an
-    `syncreports.UseCase` statt an der konkreten Struct — vereinfacht
-    Tests erheblich (Fake statt vollständig verdrahtetem IMAP-Stack).
-    Ein echter, beim Schreiben dieses Plans nicht vorhergesehener Bug
-    wurde dabei gefunden und mit Regressionstest behoben: Cancel()
-    während des LETZTEN (oder einzigen) Kontos wurde fälschlich als
-    `done` statt `cancelled` gemeldet (die Abbruch-Prüfung saß nur vor
-    dem jeweils NÄCHSTEN Konto).
-  - 9.4: `account.ErrCredentialStoreLocked` (neuer Sentinel) +
-    `internal/infra/keyring.LockableFileStore` — startet gesperrt,
-    liefert bis `Unlock(passphrase)` diesen Fehler; `newCredentialStore`
-    in `cmd/dmarc-analyzer/wire.go` verwendet ihn nur für `cmd == "web"`
-    ohne OS-Schlüsselbund (CLI-Befehle fragen weiterhin blockierend auf
-    der Konsole, das ist dort unverändert richtig). In dieser Sandbox
-    tatsächlich beobachtet (kein Schlüsselbund verfügbar) und den
-    kompletten Entsperren→Einrichtung-Weg damit real durchlaufen, nicht
-    nur mit Fakes getestet.
-- [x] Einstellungen (`/einstellungen`): Konten anlegen (`POST /konten`),
-  testen (`POST /konten/{id}/test`), löschen
-  (`POST /konten/{id}/loeschen`), Ordner auflisten
-  (`POST /konten/ordner`, füllt ein `<datalist>` fürs Postfach-Feld).
-  Kein Verbindungstest vor dem Speichern (Parität zu
-  `internal/ui/settings.View` — nur die Ersteinrichtung testet vorher,
-  siehe unten). Passwort wird im erneut angezeigten Formular nie
-  echot (Validierungsfehler, Ordner-Liste) — Standardkonvention gegen
-  Klartext-Passwörter im HTML-Quelltext, auch wenn das erneutes
-  Eintippen nach "Ordner auflisten" verlangt.
-- [x] Ersteinrichtung in drei Schritten (`/einrichtung`, serverseitiger
-  Zustand zwischen den Schritten über `onboardingState` — bewusst nicht
-  über versteckte Formularfelder, aus demselben Passwort-Grund):
-  1. Konto eingeben, 2. Verbindung testen (Speichern erst bei Erfolg,
-  Parität zu `internal/ui/onboarding.Wizard`), 3. ersten Abgleich
-  anstoßen oder überspringen. `/` leitet auf `/einrichtung` um, solange
-  keine Konten existieren.
-- [x] Sync mit Fortschritt (SSE, `GET /ereignisse`) und Abbruch
-  (`POST /abgleich/abbrechen`) — Sync-Knopf samt Fortschrittsanzeige sitzt
-  in `layout.html` (jede Seite), nicht nur auf der Übersicht: der Abgleich
-  betrifft alle Konten gleichzeitig und soll beim Seitenwechsel sichtbar
-  bleiben (`static/app.js`, kein Framework, reines `EventSource`).
-  **Vereinfacht gegenüber der Fyne-Oberfläche:** kein eigener
-  Zwischenschritt "Ergebnis des ersten Abgleichs anzeigen" nach der
-  Ersteinrichtung (`showDoneStep`-Äquivalent) — die SSE-Anzeige im Header
-  übernimmt das durchgängig, auch über den Redirect zur Übersicht hinweg.
-- [x] Entsperr-Seite für den Datei-Schlüsselspeicher (`/entsperren`) —
-  verifiziert eine eingegebene Passphrase zusätzlich gegen ein
-  tatsächlich gespeichertes Secret, falls schon ein Konto existiert
-  (`Unlock()` selbst prüft das nicht aktiv, siehe Store-Dokumentation);
-  bei Fehlschlag wird wieder gesperrt statt eine falsche Passphrase
-  stillschweigend zu akzeptieren — ein echter Bug dieser Art (jede
-  Passphrase wurde akzeptiert, wenn noch kein Secret existierte) wurde
-  beim Testen gefunden und behoben (`account.ErrCredentialNotFound` ist
-  kein Beweis für eine falsche Passphrase, jeder andere Fehler schon).
-- [x] **Umschalten:** `dmarc-analyzer` ohne Argumente startet die
-  Web-Oberfläche (`main.go` reicht `["web"]` an `run()` durch). Die
-  alte Fyne-Oberfläche bleibt bis zum Rückbau in M5 über den
-  nicht mehr beworbenen Unterbefehl `gui` erreichbar (manueller
-  Vergleichs-/Rückfallpfad, siehe `cmd_gui.go`).
+- [x] Extensions 9.1, 9.2, 9.4 implemented and tested:
+  - 9.1: `syncreports.UseCase.SyncAccount` gets an additional
+    `onProgress` parameter (`OnProgress func(Progress)`, nil allowed) —
+    a parameter rather than a struct field, so the shared
+    `*syncreports.UseCase` can't be confused by parallel calls with
+    different progress callbacks. Existing callers (CLI, Fyne,
+    onboarding) pass `nil`.
+  - 9.2: new package `internal/app/syncjob` (`Runner`) — at most one run
+    at a time (`Start`/`ErrAlreadyRunning`), cancellation via
+    `context.CancelFunc` (`Cancel`), progress for any number of
+    listeners (`Subscribe`, a buffered channel with "keep the latest
+    state" semantics). Attaches to `syncreports.UseCase` via a dedicated
+    `Syncer` interface rather than the concrete struct — simplifies
+    tests considerably (a fake instead of a fully wired IMAP stack). A
+    real bug not foreseen when writing this plan was found here and
+    fixed with a regression test: Cancel() during the LAST (or only)
+    account was incorrectly reported as `done` instead of `cancelled`
+    (the cancellation check only sat before the NEXT account each
+    time).
+  - 9.4: `account.ErrCredentialStoreLocked` (new sentinel) +
+    `internal/infra/keyring.LockableFileStore` — starts locked, returns
+    this error until `Unlock(passphrase)`; `newCredentialStore` in
+    `cmd/dmarc-analyzer/wire.go` uses it only for `cmd == "web"` without
+    an OS keychain (CLI commands still prompt blockingly on the
+    console, which remains correct there). Actually observed in this
+    sandbox (no keychain available) and the complete
+    unlock→setup path was thus run for real, not just tested with fakes.
+- [x] Settings (`/einstellungen`): create accounts (`POST /konten`),
+  test (`POST /konten/{id}/test`), delete
+  (`POST /konten/{id}/loeschen`), list folders
+  (`POST /konten/ordner`, fills a `<datalist>` for the mailbox field).
+  No connection test before saving (parity with
+  `internal/ui/settings.View` — only first-run setup tests beforehand,
+  see below). The password is never echoed in the re-shown form
+  (validation errors, folder list) — standard convention against
+  plaintext passwords in the HTML source, even though that requires
+  retyping after "list folders".
+- [x] First-run setup in three steps (`/einrichtung`, server-side state
+  between steps via `onboardingState` — deliberately not via hidden
+  form fields, for the same password reason):
+  1. enter account, 2. test connection (save only on success, parity
+  with `internal/ui/onboarding.Wizard`), 3. trigger the first sync or
+  skip it. `/` redirects to `/einrichtung` as long as no accounts exist.
+- [x] Sync with progress (SSE, `GET /ereignisse`) and cancel
+  (`POST /abgleich/abbrechen`) — the sync button plus progress display
+  sits in `layout.html` (every page), not just on the overview: the
+  sync affects all accounts at once and should stay visible across page
+  changes (`static/app.js`, no framework, plain `EventSource`).
+  **Simplified compared to the Fyne UI:** no separate "show first sync
+  result" step after first-run setup (`showDoneStep` equivalent) — the
+  SSE display in the header handles that continuously, even across the
+  redirect to the overview.
+- [x] Unlock page for the file key store (`/entsperren`) — additionally
+  verifies an entered passphrase against an actually stored secret, if
+  an account already exists (`Unlock()` itself doesn't actively check
+  this, see the store documentation); on failure it locks again instead
+  of silently accepting a wrong passphrase — a real bug of this kind
+  (any passphrase was accepted if no secret existed yet) was found and
+  fixed while testing (`account.ErrCredentialNotFound` isn't proof of a
+  wrong passphrase, any other error is).
+- [x] **Switchover:** `dmarc-analyzer` with no arguments starts the web
+  UI (`main.go` passes `["web"]` through to `run()`). The old Fyne UI
+  stays reachable until the removal in M5 via the no-longer-advertised
+  `gui` subcommand (a manual comparison/fallback path, see
+  `cmd_gui.go`).
 
-**Fertig wenn:** Ein Nutzer richtet ohne Dokumentation im Browser ein Konto ein,
-wählt einen Unterordner, gleicht ab und sieht seine Reports — derselbe
-Abnahmesatz wie AP 5. **Erreicht** (manuell mit dem gebauten Binary
-durchgespielt: Entsperren → Ersteinrichtung → Konto → Verbindungstest →
-Abgleich anstoßen → Einstellungen → Konto testen/löschen, jeweils mit
-den erwarteten Ergebnissen inklusive echter, aussagekräftiger
-Fehlermeldungen bei nicht erreichbaren Test-Hostnamen). Ordner-Picker
-selbst nicht gegen einen echten IMAP-Server verifiziert (keiner in dieser
-Sandbox verfügbar) — die zugrundeliegende
-`manageaccount.UseCase.ListMailboxes` ist aus AP 3/4 bereits gegen einen
-echten Server getestet, hier neu ist nur die Formular-Anbindung
-(`POST /konten/ordner`), die mit einem Fake-`MessageSource` abgedeckt ist.
+**Done when:** a user sets up an account in the browser without
+documentation, picks a subfolder, syncs, and sees their reports — the
+same acceptance criterion as WP 5. **Reached** (manually walked through
+with the built binary: unlock → first-run setup → account → connection
+test → trigger sync → settings → test/delete account, each with the
+expected results including real, meaningful error messages for
+unreachable test hostnames). The folder picker itself wasn't verified
+against a real IMAP server (none available in this sandbox) — the
+underlying `manageaccount.UseCase.ListMailboxes` was already tested
+against a real server in WP 3/4; new here is only the form wiring
+(`POST /konten/ordner`), which is covered with a fake `MessageSource`.
 
-### M4 — Import und Export (M)
+### M4 — Import and export (M)
 
-- [x] Erweiterung 9.3: `importfiles.UseCase.ImportData(ctx, filename,
-  data)` — dieselbe Logik wie `ImportFile`, nur ohne Umweg über die
-  Festplatte (`ImportFile` ruft jetzt selbst `ImportData` auf). Web-Route
-  `POST /import` (Multipart-Upload, mehrere Dateien auf einmal), Seite
-  `GET /import` mit Drag-&-Drop-Bereich (natives `<input type="file">`,
-  JS nur für optisches Feedback beim Ziehen und zur Dateinamen-Anzeige,
-  siehe `static/app.js`) und Ergebnis-Anzeige (neu/übersprungen/
-  fehlerhaft) nach dem Hochladen. Größenbegrenzung wie im Plan notiert:
-  50 MB je Datei, dazu eine Obergrenze für die gesamte Anfrage
+- [x] Extension 9.3: `importfiles.UseCase.ImportData(ctx, filename,
+  data)` — same logic as `ImportFile`, just without the detour through
+  disk (`ImportFile` now calls `ImportData` itself). Web route
+  `POST /import` (multipart upload, multiple files at once), page
+  `GET /import` with a drag-and-drop area (native `<input
+  type="file">`, JS only for visual feedback while dragging and for
+  filename display, see `static/app.js`) and a result display
+  (new/skipped/failed) after uploading. Size limit as noted in the plan:
+  50 MB per file, plus an overall cap on the whole request
   (`http.MaxBytesReader`).
-  **Dabei gefundener und behobener Bug (nicht Teil der ursprünglichen
-  Erweiterung 9.3, aber vom "Fertig wenn"-Kriterium unten direkt
-  gefordert):** `.zip`-Anhänge mit mehreren enthaltenen Reports wurden
-  sowohl von `importfiles.UseCase` als auch von `syncreports.UseCase`
-  nur zu einem Bruchteil importiert — beide riefen ausschließlich
-  `ReportParser.Parse()` auf, das laut eigener Dokumentation nur den
-  *ersten* Report liefert (`internal/infra/dmarcxml.Parser.ParseAll`
-  wäre für mehrere nötig gewesen). Ein Kommentar in
-  `importfiles/usecase.go` deutete das sogar schon an ("bei .zip ggf.
-  mehrere Reports"), ohne dass der Code das tatsächlich einlöste. Fix:
-  neue optionale Schnittstelle `domainsync.MultiReportParser` (gleiches
-  Muster wie das bereits bestehende `MailboxLister`) plus
-  `domainsync.ParseAttachment()`, das sie per Typ-Assertion nutzt, sonst
-  auf `Parse()` zurückfällt — von beiden Use Cases jetzt gemeinsam
-  benutzt. Gefunden durch einen neuen Test mit einer echten
-  Mehrfach-Report-Zip-Datei (`testdata/reports/multi/two_reports.zip`),
-  der ohne den Fix fehlschlug; Regressionstests in allen drei
-  betroffenen Paketen (`importfiles`, `syncreports`, `internal/web`).
-- [x] CSV-Export des gesamten gefilterten Bestands, gestreamt —
-  `GET /export/berichte.csv` und `GET /export/quellen.csv`, jeweils mit
-  demselben Filter wie die gerade angezeigte Tabelle. Lädt intern
-  seitenweise nach (`exportPageSize` 500, Keyset-Cursor wie die
-  Tabellenansicht selbst) und schreibt/flusht jede Seite direkt in die
-  HTTP-Antwort — der gesamte gefilterte Bestand liegt nie komplett im
-  Speicher. `exportdata.WriteReportsCSV`/`WriteSourceStatsCSV` dafür in
-  Kopfzeile/Zeile-Bausteine zerlegt (`WriteReportsCSVHeader`/
-  `WriteReportCSVRow` usw.), die bestehenden Funktionen bleiben als
-  Bequemlichkeits-Wrapper für den (weiterhin ungestreamten) Fall
-  "eine bereits geladene Seite exportieren" erhalten.
-- [x] Diagramm-Export als PNG (Browser) und CSV (Tabellenansicht) — pro
-  Diagramm zwei Knöpfe ("PNG exportieren"/"CSV exportieren") in
-  `dashboard.html`; `charts.js` hält dafür eine kleine Registry
-  (`chartExports`) von Diagrammschlüssel → Chart.js-Objekt + CSV-Zeilen-
-  Funktion, PNG über `chart.toBase64Image()`, CSV rein clientseitig aus
-  denselben Daten, die auch die Tabellenansicht zeigt. Kein
-  serverseitiger Bild-Export (wie im Plan vorgesehen).
+  **A bug found and fixed along the way (not part of the original
+  extension 9.3, but directly required by the "done when" criterion
+  below):** `.zip` attachments containing multiple reports were only
+  partially imported by both `importfiles.UseCase` and
+  `syncreports.UseCase` — both called only `ReportParser.Parse()`,
+  which by its own documentation returns only the *first* report
+  (`internal/infra/dmarcxml.Parser.ParseAll` would have been needed for
+  multiple). A comment in `importfiles/usecase.go` even hinted at this
+  ("possibly several reports for .zip") without the code actually
+  delivering on it. Fix: a new optional interface
+  `domainsync.MultiReportParser` (same pattern as the already-existing
+  `MailboxLister`) plus `domainsync.ParseAttachment()`, which uses it
+  via a type assertion, falling back to `Parse()` otherwise — now used
+  by both use cases. Found via a new test with a real multi-report zip
+  file (`testdata/reports/multi/two_reports.zip`), which failed without
+  the fix; regression tests in all three affected packages
+  (`importfiles`, `syncreports`, `internal/web`).
+- [x] CSV export of the entire filtered dataset, streamed —
+  `GET /export/berichte.csv` and `GET /export/quellen.csv`, each with
+  the same filter as the currently displayed table. Internally lazy-
+  loads page by page (`exportPageSize` 500, keyset cursor like the
+  table view itself) and writes/flushes each page directly into the
+  HTTP response — the entire filtered dataset is never held fully in
+  memory. `exportdata.WriteReportsCSV`/`WriteSourceStatsCSV` were split
+  into header/row building blocks
+  (`WriteReportsCSVHeader`/`WriteReportCSVRow` etc.) for this; the
+  existing functions remain as convenience wrappers for the (still
+  unstreamed) case "export a page already loaded".
+- [x] Chart export as PNG (browser) and CSV (table view) — two buttons
+  per chart ("export PNG"/"export CSV") in `dashboard.html`; `charts.js`
+  keeps a small registry for this (`chartExports`) of chart key →
+  Chart.js object + CSV row function, PNG via
+  `chart.toBase64Image()`, CSV purely client-side from the same data
+  the table view also shows. No server-side image export (as the plan
+  envisioned).
 
-**Fertig wenn:** Eine `.zip` mit mehreren Reports lässt sich per Drag & Drop
-importieren, und ein Export von 100.000 Records läuft ohne spürbaren
-Speicheranstieg. **Erreicht:**
-Zip-Mehrfach-Import mit dem echten CLI-Binary gegen
-`testdata/reports/multi/two_reports.zip` verifiziert (2 neu, vorher —
-vor dem oben beschriebenen Bugfix — nur 1). CSV-Export-Streaming mit
-einem Fake-Repository verifiziert, das die angeforderten Seiten erst
-bei Abruf nacheinander liefert (`TestHandleExportReportsCSV_StreamsAllPages`)
-— ein echter 100.000-Zeilen-Lasttest lief in dieser Sitzung nicht (siehe
-dieselbe Einschränkung wie bei M2: die zugrundeliegenden
-Keyset-Repositories sind bereits in AP 2/4 mit realistischen
-Datenmengen getestet, die Streaming-Schicht selbst lädt nachweislich
-nie mehr als eine Seite gleichzeitig).
-**Nicht mit dem echten Binary im Browser verifiziert:** Web-Upload
-(`POST /import`) und Diagramm-Export-Knöpfe — in dieser Sandbox hängt
-`dmarc-analyzer web` beim Start unbestimmt lange in
-`keyring.IsAvailable()` (OS-Keychain-Zugriff eines neu kompilierten,
-ad-hoc-signierten Binarys ohne grafische Sitzung, die einen
-Berechtigungsdialog beantworten könnte — bestätigt: `go test` gegen
-dieselbe Funktion antwortet in <100 ms, das kompilierte `bin/dmarc-
-analyzer` nicht innerhalb von mehreren Minuten). Reines Sandbox-/
-Session-Artefakt, keine Änderung an produktivem Code — die komplette
-HTTP-Schicht (Multipart-Upload inkl. echtem `dmarcxml`/`mailmime`,
-Größenlimits, CSRF, CSV-Streaming) ist stattdessen über `httptest`
-abgedeckt (siehe `internal/web/handlers_import_test.go`,
-`handlers_export_test.go`); die Chart.js-Export-Knöpfe sind reines
-Browser-JavaScript ohne Server-Gegenstück und damit ohnehin nur per
-echtem Browser prüfbar (derselbe, bereits in M2 dokumentierte
-`chromedp`-Vorbehalt).
+**Done when:** a `.zip` with several reports can be imported via drag &
+drop, and exporting 100,000 records runs without noticeable memory
+growth. **Reached:** zip multi-import verified with the real CLI binary
+against `testdata/reports/multi/two_reports.zip` (2 new, previously —
+before the bugfix described above — only 1). CSV export streaming
+verified with a fake repository that delivers requested pages one by
+one only on demand (`TestHandleExportReportsCSV_StreamsAllPages`) — a
+real 100,000-row load test didn't run in this session (same limitation
+as with M2: the underlying keyset repositories were already tested with
+realistic data volumes in WP 2/4, the streaming layer itself provably
+never loads more than one page at a time).
+**Not verified with the real binary in a browser:** web upload
+(`POST /import`) and chart export buttons — in this sandbox,
+`dmarc-analyzer web` hangs indefinitely at startup in
+`keyring.IsAvailable()` (OS keychain access from a freshly compiled,
+ad-hoc-signed binary with no graphical session that could answer a
+permission dialog — confirmed: `go test` against the same function
+responds in <100ms, the compiled `bin/dmarc-analyzer` doesn't within
+several minutes). A pure sandbox/session artifact, no change to
+production code — the complete HTTP layer (multipart upload including
+real `dmarcxml`/`mailmime`, size limits, CSRF, CSV streaming) is instead
+covered via `httptest` (see `internal/web/handlers_import_test.go`,
+`handlers_export_test.go`); the Chart.js export buttons are pure browser
+JavaScript with no server counterpart and thus only checkable via a real
+browser anyway (the same `chromedp` caveat already documented in M2).
 
-### M5 — Umstellung und Rückbau (M)
+### M5 — Switchover and removal (M)
 
-- [x] `internal/ui` und `cmd/dmarc-analyzer/cmd_gui.go` gelöscht; Fyne aus
-  `go.mod` — 40 Dateien/4916 Zeilen `internal/ui` entfernt, `main.go`s
-  `subcommands`-Map um den (ohnehin nirgends dokumentierten) Eintrag
-  `"gui"` bereinigt. `go mod tidy` hat danach automatisch `fyne.io/*` und
-  alle nur dafür nötigen transitiven Abhängigkeiten (u. a. `go-gl/*`,
+- [x] `internal/ui` and `cmd/dmarc-analyzer/cmd_gui.go` deleted; Fyne out
+  of `go.mod` — 40 files/4,916 lines of `internal/ui` removed, `main.go`'s
+  `subcommands` map cleaned of the (already nowhere-documented) entry
+  `"gui"`. `go mod tidy` then automatically removed `fyne.io/*` and all
+  transitive dependencies only needed for it (among others `go-gl/*`,
   `go-text/*`, `srwiley/*`, `nfnt/resize`, `rymdport/portal`,
-  `fyne-io/*`) aus `go.mod` entfernt.
-- [x] Erweiterung 9.5 (Diagramm-Port, `internal/infra/charts`, go-chart
-  entfernt) — `analysis.ChartRenderer`-Interface aus
-  `internal/domain/analysis/charts.go` entfernt (die reinen Datentypen
-  `DailyVolume`/`SourceVolume`/`Heatmap`/`HeatmapCell` bleiben, `Total`
-  war bereits vorhanden); `internal/infra/charts` (4 Dateien, go-chart-
-  Implementierung inkl. manueller Heatmap-Zeichnung mit `image/draw`)
-  sowie `internal/app/exportdata/png.go`+`png_test.go`
-  (`WriteChartPNG`, einziger Aufrufer war das jetzt gelöschte Fyne-
-  Dashboard) gelöscht. `github.com/wcharczuk/go-chart/v2` damit
-  ebenfalls durch `go mod tidy` entfernt. Begründung:
+  `fyne-io/*`) from `go.mod`.
+- [x] Extension 9.5 (chart port, `internal/infra/charts`, go-chart
+  removed) — the `analysis.ChartRenderer` interface removed from
+  `internal/domain/analysis/charts.go` (the plain data types
+  `DailyVolume`/`SourceVolume`/`Heatmap`/`HeatmapCell` stay, `Total` was
+  already present); `internal/infra/charts` (4 files, the go-chart
+  implementation including manual heatmap drawing with `image/draw`) as
+  well as `internal/app/exportdata/png.go`+`png_test.go`
+  (`WriteChartPNG`, whose only caller was the now-deleted Fyne
+  dashboard) deleted. `github.com/wcharczuk/go-chart/v2` thus also
+  removed via `go mod tidy`. Rationale:
   `docs/adr/0002-chartjs-statt-chartrenderer-port.md`.
-- [x] Build mit `CGO_ENABLED=0`; `task release` als Cross-Compile für
-  macOS (arm64, amd64), Windows (amd64), Linux (amd64, arm64) mit
-  Checksummen — `Taskfile.yml` hat jetzt `release:darwin`/
-  `release:windows`/`release:linux`/`release`, alle als reine
-  `CGO_ENABLED=0 go build`-Cross-Compiles (kein `fyne package`,
-  keine plattformspezifische Toolchain nötig — bereits vorher war
-  `modernc.org/sqlite` CGO-frei, Fyne war die einzige CGO-Abhängigkeit
-  im gesamten Modul). Lokal auf einem einzigen (macOS-)Rechner
-  verifiziert: alle fünf Artefakte (`darwin-arm64.app.zip`,
-  `darwin-amd64.app.zip`, `windows-amd64.zip`, `linux-amd64.tar.gz`,
-  `linux-arm64.tar.gz`) bauen fehlerfrei, `checksums.txt` entsteht; der
-  native `darwin-arm64`-Build wurde zusätzlich tatsächlich ausgeführt
-  (`--help`, `stats` gegen ein frisches `HOME`) und funktioniert.
-- [x] Windows-Build ohne Konsolenfenster (`-H windowsgui`), Log in Datei —
-  `release:windows` linkt mit `-H windowsgui`. Da `os.Stderr` unter einem
-  GUI-Subsystem-Build ohne Konsolenfenster ins Leere schreibt, wurde
-  `internal/platform/logging` um eine `WithWriter`-Option erweitert und
-  `internal/platform/paths` um `LogFilePath()` (`~/Library/Logs/
-  dmarc-analyzer/dmarc-analyzer.log` unter macOS, sonst analog zu
-  `ConfigDir()`); `cmd_web.go` (`attachLogFile`) schreibt beim Start des
-  `web`-Unterbefehls zusätzlich in diese Datei (`io.MultiWriter` mit
-  `os.Stderr` — im normalen Terminal-Betrieb bleibt die bisherige
-  Ausgabe unverändert sichtbar), inklusive Anmeldelink/Adresse als
-  strukturierte `slog`-Einträge. **Nicht auf echtem Windows getestet**
-  (keine Windows-Maschine in dieser Sandbox verfügbar) — nur der
-  Cross-Compile selbst (`GOOS=windows GOARCH=amd64`) und die Logik der
-  neuen `logging`-/`paths`-Funktionen sind durch Unit-Tests abgesichert.
-- [x] macOS: Verhalten einer Nicht-Cocoa-Binärdatei im `.app`-Bündel
-  geprüft, soweit ohne Display möglich — `packaging/darwin/
-  Info.plist.tmpl` (neu, ersetzt das von `fyne package` erzeugte
-  Manifest) setzt `LSUIElement=true`: das Programm hat keine eigene
-  Cocoa-Ereignisschleife mehr (reiner HTTP-Server-Prozess), ohne
-  `LSUIElement` bekäme es trotzdem ein Dock-Symbol, das macOS
-  möglicherweise als „reagiert nicht" markiert. **Nicht in einer echten
-  grafischen Sitzung verifiziert** (kein Display in dieser
-  Entwicklungsumgebung) — im Info.plist-Kommentar ausdrücklich als
-  offener Prüfpunkt vor einem echten Release vermerkt (tatsächlicher
-  Doppelklick-Start, Dock-Verhalten von Hand beobachten).
-- [x] Taskfile: `package:*` und `fyne`-Installation entfernt, `run` öffnet
-  den Browser — `task setup` ohne `fyne`-CLI-Installation mehr;
-  `package:darwin`/`package:windows`/`package:linux`/altes `release`
-  durch die neuen `release:*`-Tasks ersetzt; `task run`-Beschreibung
-  ergänzt („öffnet sich der Standardbrowser").
-- [x] CI: Cross-Compile-Schritt ergänzt — `.github/workflows/ci.yml`
-  existierte bereits seit dem allerersten Commit (`check`-Job: `task
-  fmt`-Drift-Prüfung, `lint`, `test`, `build`, als Matrix über
-  `ubuntu-latest`/`macos-latest`/`windows-latest`, mit gepinnten
-  Versionen für Go/Task/golangci-lint). Ergänzt um einen neuen Job
-  `release` (nur bei einem `v*`-Tag, nach erfolgreichem `check`):
-  `task release` (Cross-Compile aller Zielplattformen) plus
-  GitHub-Release mit Binärdateien/Checksummen via
-  `softprops/action-gh-release`, auf `macos-latest` (`task release`
-  ruft `zip`/`shasum` direkt auf — auf macOS ohne Zusatzinstallation
-  vorhanden, auf dem Ubuntu-Runner nicht garantiert). **Korrektur
-  während dieser Sitzung:** eine erste Fassung hatte die bestehende
-  `ci.yml` versehentlich komplett überschrieben (fälschliche Annahme,
-  es gäbe noch keine CI) — der bestehende `check`-Job wurde daraufhin
-  unverändert wiederhergestellt und nur der neue `release`-Job ergänzt.
-- [x] Dokumentation nach Abschnitt 12 angepasst — `FEATURES.md`
-  (Fyne-Vorgabe ersetzt), `IMPLEMENTIERUNG.md` Abschnitte 3/5/8.2/10/12/13
-  (plus die Architektur-Diagramme in 4.1, die sonst der eigenen
-  Aktualisierung in 5 widersprochen hätten), `UMSETZUNGSPLAN.md`
-  (Verweis vor AP 7, AP-7-Punkte angepasst: Browser- statt
-  Desktop-Benachrichtigung, Packaging als in M5 bereits erledigt markiert),
-  `docs/DEPENDENCIES.md` (Fyne/go-chart als „Entfernt" dokumentiert,
-  htmx/Chart.js/Plugins waren schon vorher erfasst), zwei neue ADRs
+- [x] Build with `CGO_ENABLED=0`; `task release` as a cross-compile for
+  macOS (arm64, amd64), Windows (amd64), Linux (amd64, arm64) with
+  checksums — `Taskfile.yml` now has `release:darwin`/
+  `release:windows`/`release:linux`/`release`, all as plain
+  `CGO_ENABLED=0 go build` cross-compiles (no `fyne package`, no
+  platform-specific toolchain needed — `modernc.org/sqlite` was already
+  CGO-free before, Fyne was the only CGO dependency in the entire
+  module). Verified locally on a single (macOS) machine: all five
+  artifacts (`darwin-arm64.app.zip`, `darwin-amd64.app.zip`,
+  `windows-amd64.zip`, `linux-amd64.tar.gz`, `linux-arm64.tar.gz`) build
+  without errors, `checksums.txt` is produced; the native
+  `darwin-arm64` build was additionally actually run (`--help`, `stats`
+  against a fresh `HOME`) and works.
+- [x] Windows build without a console window (`-H windowsgui`), log to a
+  file — `release:windows` links with `-H windowsgui`. Since
+  `os.Stderr` writes into the void on a GUI-subsystem build with no
+  console window, `internal/platform/logging` was extended with a
+  `WithWriter` option and `internal/platform/paths` with
+  `LogFilePath()` (`~/Library/Logs/dmarc-analyzer/dmarc-analyzer.log`
+  on macOS, otherwise analogous to `ConfigDir()`); `cmd_web.go`
+  (`attachLogFile`) additionally writes to this file when starting the
+  `web` subcommand (`io.MultiWriter` with `os.Stderr` — in normal
+  terminal use, the previous output stays visible unchanged), including
+  the login link/address as structured `slog` entries. **Not tested on
+  real Windows** (no Windows machine available in this sandbox) — only
+  the cross-compile itself (`GOOS=windows GOARCH=amd64`) and the logic
+  of the new `logging`/`paths` functions are backed by unit tests.
+- [x] macOS: behavior of a non-Cocoa binary inside the `.app` bundle
+  checked, as far as possible without a display — `packaging/darwin/
+  Info.plist.tmpl` (new, replaces the manifest generated by `fyne
+  package`) sets `LSUIElement=true`: the program no longer has its own
+  Cocoa event loop (a pure HTTP server process), and without
+  `LSUIElement` it would still get a Dock icon, which macOS might mark
+  as "not responding". **Not verified in a real graphical session** (no
+  display in this development environment) — noted explicitly in the
+  Info.plist comment as an open check-point before a real release
+  (actual double-click launch, observe Dock behavior by hand).
+- [x] Taskfile: `package:*` and the `fyne` install removed, `run` opens
+  the browser — `task setup` no longer installs the `fyne` CLI;
+  `package:darwin`/`package:windows`/`package:linux`/the old `release`
+  replaced by the new `release:*` tasks; `task run` description
+  extended ("opens the default browser").
+- [x] CI: cross-compile step added — `.github/workflows/ci.yml` already
+  existed since the very first commit (`check` job: `task fmt` drift
+  check, `lint`, `test`, `build`, as a matrix over
+  `ubuntu-latest`/`macos-latest`/`windows-latest`, with pinned versions
+  for Go/Task/golangci-lint). Extended with a new `release` job (only
+  on a `v*` tag, after `check` succeeds): `task release` (cross-compile
+  all target platforms) plus a GitHub release with binaries/checksums
+  via `softprops/action-gh-release`, on `macos-latest` (`task release`
+  calls `zip`/`shasum` directly — present without extra install on
+  macOS, not guaranteed on the Ubuntu runner). **Correction during this
+  session:** an early version accidentally overwrote the existing
+  `ci.yml` entirely (a wrong assumption that there was no CI yet) — the
+  existing `check` job was then restored unchanged and only the new
+  `release` job was added.
+- [x] Documentation updated per section 12 — `FEATURES.md` (Fyne
+  requirement replaced), `IMPLEMENTIERUNG.md` sections 3/5/8.2/10/12/13
+  (plus the architecture diagrams in 4.1, which otherwise would have
+  contradicted their own update in 5), `UMSETZUNGSPLAN.md` (a reference
+  before WP 7, WP 7 items adjusted: browser instead of desktop
+  notification, packaging marked as already done in M5),
+  `docs/DEPENDENCIES.md` (Fyne/go-chart documented as "Removed",
+  htmx/Chart.js/plugins were already recorded before), two new ADRs
   (`docs/adr/0001-web-oberflaeche-statt-fyne.md`,
-  `docs/adr/0002-chartjs-statt-chartrenderer-port.md`), `AGENTS.md`
-  (alle sechs reinen Fyne-Fallstricke entfernt, Diagrammfarben-Abschnitt
-  auf `app.css`/`charts.js` umgeschrieben), `README.md` (komplett
-  überarbeitet: tatsächlicher Funktionsstand statt „AP 0", Start/
-  Browserverhalten/Beenden/`--kein-browser`/Sicherheitsmodell/
-  Installation über GitHub-Releases), `CHANGELOG.md` (Geändert-/
-  Entfernt-/Behoben-Einträge für die gesamte Migration M0–M5 ergänzt,
-  vorher stand dort nur der Fyne-Stand bis AP 6).
+  `docs/adr/0002-chartjs-statt-chartrenderer-port.md`), `AGENTS.md` (all
+  six pure Fyne pitfalls removed, the chart-colors section rewritten for
+  `app.css`/`charts.js`), `README.md` (fully reworked: actual feature
+  state instead of "WP 0", start/browser behavior/quit/
+  `--kein-browser`/security model/installation via GitHub releases),
+  `CHANGELOG.md` (Changed/Removed/Fixed entries added for the entire
+  M0–M5 migration; previously it only had the Fyne state up through
+  WP 6).
 
-**Fertig wenn:** `go list -deps ./... | grep fyne` ist leer, `task check` ist grün,
-und die Release-Binärdateien für alle Plattformen entstehen auf einem Rechner.
-**Erreicht** — siehe die einzelnen Punkte oben für Details und die
-verbleibenden, nur mit echter Windows-Maschine bzw. echtem Display
-prüfbaren Lücken (Windows-Konsolenverhalten, macOS-Dock-Verhalten).
+**Done when:** `go list -deps ./... | grep fyne` is empty, `task check`
+is green, and the release binaries for all platforms are produced on
+one machine. **Reached** — see the individual items above for details
+and the remaining gaps checkable only with a real Windows machine or a
+real display (Windows console behavior, macOS Dock behavior).
 
-### M6 — Feinschliff (S–M)
+### M6 — Polish (S–M)
 
-- [ ] Barrierefreiheit: vollständige Tastaturbedienung, sichtbarer Fokus,
-  Kontraste, `prefers-reduced-motion`, Tabellenansichten der Diagramme
-- [ ] Sichtprüfung in Safari, Firefox, Chrome und Edge, jeweils hell und dunkel
-- [ ] Rauchtest um die schreibenden Abläufe erweitern, falls sich dort Fehler häufen
+- [ ] Accessibility: full keyboard operation, visible focus, contrast,
+  `prefers-reduced-motion`, table views of the charts
+- [ ] Visual check in Safari, Firefox, Chrome, and Edge, each in light and dark
+- [ ] Extend the smoke test around the write flows, if errors accumulate there
 
-**Fertig wenn:** Alle Abläufe sind ohne Maus bedienbar und in allen vier
-Browsern ohne Darstellungsfehler.
+**Done when:** every flow is operable without a mouse and renders
+without display errors in all four browsers.
 
-### Reihenfolge
+### Order
 
 ```
-M0 ──▶ M1 ──▶ M2 ──▶ M3 (Umschalten) ──▶ M4 ──▶ M5 (Rückbau) ──▶ M6 ──▶ AP 7
+M0 ──▶ M1 ──▶ M2 ──▶ M3 (switchover) ──▶ M4 ──▶ M5 (removal) ──▶ M6 ──▶ WP 7
 ```
 
-M4 kann parallel zu M3 laufen. Bis einschließlich M2 bleibt Fyne der Standard.
+M4 can run in parallel with M3. Fyne stays the default up through and
+including M2.
 
 ## 11. Tests
 
-| Ebene                | Vorgehen                                                                                                                                                                                                                  |
-|----------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Sicherheit           | `httptest`: ohne Sitzung → 401; falscher `Host` → 421/400; POST ohne CSRF-Token oder mit fremdem `Origin` → 403; verbrauchter/abgelaufener Einmal-Code → abgewiesen; Passwort taucht in keiner Antwort und keinem Log auf |
-| Handler              | `httptest` mit den bestehenden handgeschriebenen Fakes (aus `internal/ui/*_test.go` übernommen): Statuscodes, Weiterleitungen (keine Konten → Ersteinrichtung), gerenderte Kerninhalte, Leer- und Fehlerzustände          |
-| Templates            | Jede Seite wird in Tests gerendert und als HTML geparst — ein Template-Fehler fällt im Test auf, nicht erst im Browser                                                                                                    |
-| Diagrammdaten        | JSON-Endpunkte mit `httptest`: leere Daten, ein Wert, viele Werte; kein `NaN`/`Inf` im JSON (bricht `encoding/json`); Drill-down-URLs enthalten die richtigen Filter; Labels angereichert                                 |
-| Diagramme im Browser | `chromedp`-Rauchtest (E-8): vier Diagramme gezeichnet, keine Konsolenfehler, ein Klick führt zur gefilterten Berichtsseite. `charts.js` bleibt bewusst dünn, damit die meiste Logik in Go getestet wird.                  |
-| Lebenszyklus         | Einzelinstanz-Erkennung, verwaister `instance.json`, sauberes Herunterfahren bei SIGTERM (offene Anfragen fertig, `instance.json` entfernt)                                                                                                                       |
-| Anwendungsschicht    | neue Tests für Fortschritts-Callback, `syncjob` (nur ein Lauf gleichzeitig, Abbruch), `ImportData`, gesperrter Schlüsselspeicher                                                                                          |
-| Sichtprüfung         | zusätzlich manuell je Meilenstein, hell und dunkel                                                                                                                                                                        |
+| Level | Approach |
+| --- | --- |
+| Security | `httptest`: no session → 401; wrong `Host` → 421/400; POST without a CSRF token or with a foreign `Origin` → 403; used-up/expired one-time code → rejected; password appears in no response and no log |
+| Handlers | `httptest` with the existing hand-written fakes (carried over from `internal/ui/*_test.go`): status codes, redirects (no accounts → first-run setup), rendered core content, empty and error states |
+| Templates | Every page is rendered in tests and parsed as HTML — a template error shows up in the test, not first in the browser |
+| Chart data | JSON endpoints with `httptest`: empty data, one value, many values; no `NaN`/`Inf` in the JSON (breaks `encoding/json`); drill-down URLs contain the right filters; labels enriched |
+| Charts in the browser | `chromedp` smoke test (E-8): four charts drawn, no console errors, one click leads to the filtered report page. `charts.js` stays deliberately thin, so most logic is tested in Go. |
+| Lifecycle | Single-instance detection, orphaned `instance.json`, clean shutdown on SIGTERM (open requests finish, `instance.json` removed) |
+| Application layer | new tests for the progress callback, `syncjob` (only one run at a time, cancel), `ImportData`, locked key store |
+| Visual check | additionally manual per milestone, light and dark |
 
-Die bestehenden Konventionen gelten weiter: `testify/require`, handgeschriebene
-Fakes, `-race`, deutsche Kommentare.
+The existing conventions continue to apply: `testify/require`,
+hand-written fakes, `-race`, German comments.
 
-## 12. Dokumentation
+> **Historical note:** "German comments" above reflects the language rule
+> in effect at the time this plan was written; the codebase has since
+> moved to English throughout (see `AGENTS.md`).
 
-| Datei                  | Anpassung                                                                                                                                                                                                                                  |
-|------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `FEATURES.md`          | Fyne-Vorgabe durch „eingebettete Web-Oberfläche im Browser" ersetzen — **eigene Vorgabe des Projekts, Änderung bitte bestätigen**                                                                                                          |
-| `IMPLEMENTIERUNG.md`   | Abschnitte 3 (Stack), 5 (Struktur), 8.2 (ChartRenderer), 10 (UI-Konzept statt Fyne-Praxis), 12 (Tests), 13 (Taskfile)                                                                                                                      |
-| `UMSETZUNGSPLAN.md`    | Verweis auf diesen Plan vor AP 7; AP 7 anpassen: Desktop-Benachrichtigung → Browser-Benachrichtigung bei offenem Tab, Packaging ohne `fyne package`                                                                                        |
-| `docs/DEPENDENCIES.md` | htmx, Chart.js, `chartjs-chart-matrix`, `chartjs-plugin-zoom` (Versionen, Lizenzen, Kompatibilität) und `chromedp` aufnehmen; Fyne und go-chart entfernen                                                                                  |
-| `docs/`                | ADR „Web-Oberfläche statt Fyne" und ADR „Interaktive Diagramme mit Chart.js statt ChartRenderer-Port"                                                                                                                                      |
-| `AGENTS.md`            | Fyne-Abschnitte entfernen; neue Regeln: keine Inline-Skripte (CSP), jede Zustandsänderung per POST mit CSRF, Templates immer im Test rendern, Diagrammlogik (Aggregation, Filter, Drill-down-Ziele) gehört nach Go, nicht nach `charts.js` |
-| `README.md`            | Start, Browserverhalten, Beenden (Strg+C/SIGTERM), `--kein-browser`, Sicherheitsmodell                                                                                                                                                                      |
-| `CHANGELOG.md`         | je Meilenstein ein Eintrag                                                                                                                                                                                                                 |
+## 12. Documentation
 
-## 13. Risiken
+| File | Change |
+| --- | --- |
+| `FEATURES.md` | replace the Fyne requirement with "embedded web UI in the browser" — **the project's own requirement, please confirm the change** |
+| `IMPLEMENTIERUNG.md` | sections 3 (stack), 5 (structure), 8.2 (ChartRenderer), 10 (UI concept instead of Fyne practice), 12 (tests), 13 (Taskfile) |
+| `UMSETZUNGSPLAN.md` | reference to this plan before WP 7; adjust WP 7: desktop notification → browser notification while a tab is open, packaging without `fyne package` |
+| `docs/DEPENDENCIES.md` | add htmx, Chart.js, `chartjs-chart-matrix`, `chartjs-plugin-zoom` (versions, licenses, compatibility) and `chromedp`; remove Fyne and go-chart |
+| `docs/` | ADR "web UI instead of Fyne" and ADR "interactive charts with Chart.js instead of a ChartRenderer port" |
+| `AGENTS.md` | remove Fyne sections; new rules: no inline scripts (CSP), every state change via POST with CSRF, always render templates in tests, chart logic (aggregation, filters, drill-down targets) belongs in Go, not in `charts.js` |
+| `README.md` | start, browser behavior, quit (Ctrl+C/SIGTERM), `--kein-browser`, security model |
+| `CHANGELOG.md` | one entry per milestone |
 
-| Risiko                                                                              | Gegenmaßnahme                                                                                                                                                            |
-|-------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Server läuft unbemerkt weiter, wenn nur der Browser-Tab geschlossen wird (Desktop-Nutzung, kein Docker) | Bewusst in Kauf genommen (E-3): kein Auto-Ende mehr. Abgemildert durch die Konsolenausgabe beim Start ("Strg+C zum Beenden") und die Einzelinstanz-Erkennung — ein zweiter Doppelklick startet keinen weiteren Prozess. Falls sich das als echtes Ärgernis zeigt: in M6 nachrüsten, ohne den Docker-Betrieb zu berühren (reiner Zusatz, kein Ersatz für SIGTERM). |
-| Andere Webseiten oder lokale Benutzer greifen auf den Server zu                     | Abschnitt 5 vollständig in M1, mit Tests                                                                                                                                 |
-| Kein Browser verfügbar (Server, SSH)                                                | `--kein-browser`, Adresse auf der Konsole; CLI bleibt unverändert                                                                                                        |
-| Doppelklick-Start verhält sich je Betriebssystem unerwartet (Konsolenfenster, Dock) | Prüfpunkte in M5                                                                                                                                                         |
-| Funktionen gehen beim Übertrag verloren                                             | Paritätstabelle (Abschnitt 8) als Abnahmeliste für M3                                                                                                                    |
-| Chart.js-Plugins passen nicht zur eingebundenen Chart.js-Version oder zur CSP       | Heatmap und Zoom zuerst im Durchstich (M0); Versionen gemeinsam pinnen und nur gemeinsam aktualisieren; Rückfallebene ECharts betrifft nur `charts.js` und die JSON-Form |
-| `<canvas>` ist für Screenreader unsichtbar                                          | Kurzbeschreibung und Tabellenansicht je Diagramm, Drill-down auch als Links                                                                                              |
-| Große Heatmap (viele Tage) wird unlesbar oder langsam                               | Zoom/Verschieben; Zeitraum-Vorgabe; Grenzwert im Rauchtest (10 × 365 Zellen)                                                                                             |
-| Logik wandert unbemerkt ins JavaScript und bleibt ungetestet                        | Regel in `AGENTS.md`: Aufbereitung und Drill-down-Ziele kommen fertig vom Server                                                                                         |
-| Die Oberfläche wird im Browser nicht mehr „nativ" wirken                            | bewusst in Kauf genommen                                                                                                                                                 |
+## 13. Risks
 
-## 14. Offene Fragen
+| Risk | Countermeasure |
+| --- | --- |
+| Server keeps running unnoticed if only the browser tab is closed (desktop use, no Docker) | Deliberately accepted (E-3): no more auto-exit. Mitigated by the console output at startup ("Ctrl+C to quit") and single-instance detection — a second double-click doesn't start another process. If this turns out to be a real annoyance: retrofit in M6, without touching Docker operation (a pure addition, not a replacement for SIGTERM). |
+| Other web pages or local users access the server | Section 5 fully in M1, with tests |
+| No browser available (server, SSH) | `--kein-browser`, address on the console; CLI stays unchanged |
+| Double-click launch behaves unexpectedly per OS (console window, Dock) | Checkpoints in M5 |
+| Features get lost in the transfer | Parity table (section 8) as an acceptance list for M3 |
+| Chart.js plugins don't fit the integrated Chart.js version or the CSP | Heatmap and zoom first in the spike (M0); pin versions together and only update them together; the ECharts fallback only affects `charts.js` and the JSON shape |
+| `<canvas>` is invisible to screen readers | Short description and table view per chart, drill-down also as links |
+| A large heatmap (many days) becomes unreadable or slow | Zoom/pan; a default time range; a limit in the smoke test (10 × 365 cells) |
+| Logic quietly moves into JavaScript and stays untested | Rule in `AGENTS.md`: preparation and drill-down targets come ready-made from the server |
+| The UI will no longer feel "native" in the browser | deliberately accepted |
 
-1. Entscheidungen E-1, E-4 bis E-8 — gelten die Empfehlungen? (E-2 ist mit
-   Chart.js, E-3 mit Strg+C/SIGTERM festgelegt.)
-2. Darf `FEATURES.md` entsprechend geändert werden?
-3. Soll die Oberflächensprache weiterhin nur Deutsch sein (die Struktur mit
-   `i18n` würde Englisch später erlauben)?
-4. Soll der Server auf Wunsch auch im Netz erreichbar sein — sei es im
-   Heimnetz (NAS) oder als Docker-Image (Abschnitt 5, „Spannung mit dem
-   geplanten Docker-Einsatz")? Dieser Plan baut nur das Loopback-Modell
-   (nur derselbe Rechner); Netzwerk-Erreichbarkeit bräuchte echte Anmeldung
-   (Benutzername/Passwort statt Einmal-Link) und TLS.
-5. Ist die Docker-Verpackung Teil **dieser** Migration (dann müsste M5/M6 um
-   ein `Dockerfile` und das in Frage 4 skizzierte Sicherheits-Nachtrag
-   ergänzt werden) oder ein eigener, späterer Plan? Empfehlung: eigener,
-   späterer Plan — diese Migration liefert zunächst die lokale
-   Web-Oberfläche; Docker braucht ein anderes Bedrohungsmodell (Frage 4)
-   und sollte nicht nebenbei mitentschieden werden.
+## 14. Open questions
+
+1. Decisions E-1, E-4 through E-8 — do the recommendations stand? (E-2 is
+   fixed with Chart.js, E-3 with Ctrl+C/SIGTERM.)
+2. May `FEATURES.md` be changed accordingly?
+3. Should the UI language stay German-only (the structure with `i18n`
+   would allow English later)?
+4. Should the server, on request, also be reachable over the network —
+   whether on a home network (NAS) or as a Docker image (section 5,
+   "tension with the planned Docker deployment")? This plan only builds
+   the loopback model (same machine only); network reachability would
+   need a real login (username/password instead of a one-time link) and
+   TLS.
+5. Is the Docker packaging part of **this** migration (then M5/M6 would
+   need to be extended with a `Dockerfile` and the security addendum
+   sketched in question 4) or a separate, later plan? Recommendation: a
+   separate, later plan — this migration first delivers the local web
+   UI; Docker needs a different threat model (question 4) and shouldn't
+   be decided as a side effect.

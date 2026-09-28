@@ -18,21 +18,21 @@ const (
 	maxFailedRecordsPageSize     = 500
 )
 
-// FailedRecordsRepository implementiert failedrecords.Repository gegen
-// SQLite: berichtsübergreifende Suche nach Records, bei denen DMARC
-// nicht bestanden wurde (weder dkim_result noch spf_result "pass").
+// FailedRecordsRepository implements failedrecords.Repository against
+// SQLite: cross-report search for records where DMARC was not passed
+// (neither dkim_result nor spf_result is "pass").
 type FailedRecordsRepository struct {
 	db *sql.DB
 }
 
 var _ failedrecords.Repository = (*FailedRecordsRepository)(nil)
 
-// NewFailedRecordsRepository erzeugt ein einsatzbereites Repository.
+// NewFailedRecordsRepository creates a ready-to-use repository.
 func NewFailedRecordsRepository(db *sql.DB) *FailedRecordsRepository {
 	return &FailedRecordsRepository{db: db}
 }
 
-// Query liefert eine Seite fehlgeschlagener Records für q.
+// Query returns a page of failed records for q.
 func (r *FailedRecordsRepository) Query(ctx context.Context, q failedrecords.Query) (failedrecords.Page, error) {
 	limit := q.Limit
 	if limit <= 0 {
@@ -54,9 +54,9 @@ func (r *FailedRecordsRepository) Query(ctx context.Context, q failedrecords.Que
 	}
 	args = append(args, cursorArgs...)
 
-	// limit+1: wie reportquery.go/domainstatsrepo.go — ein zusätzliches
-	// Ergebnis anfordern, um ohne separates COUNT(*) zu erkennen, ob eine
-	// weitere Seite existiert.
+	// limit+1: like reportquery.go/domainstatsrepo.go — request one extra
+	// result to detect whether another page exists without a separate
+	// COUNT(*).
 	args = append(args, limit+1)
 
 	query := fmt.Sprintf(`
@@ -73,7 +73,7 @@ func (r *FailedRecordsRepository) Query(ctx context.Context, q failedrecords.Que
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return failedrecords.Page{}, fmt.Errorf("fehlgeschlagene records konnten nicht abgefragt werden: %w", err)
+		return failedrecords.Page{}, fmt.Errorf("could not query failed records: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -100,12 +100,12 @@ func (r *FailedRecordsRepository) Query(ctx context.Context, q failedrecords.Que
 		if err := rows.Scan(&rr.recordID, &rr.sourceIP, &rr.count, &rr.disposition, &rr.dkimResult, &rr.spfResult,
 			&rr.headerFrom, &rr.envelopeFrom, &rr.envelopeTo,
 			&rr.reportID, &rr.orgName, &rr.policyDomain, &rr.dateBegin, &rr.dateEnd); err != nil {
-			return failedrecords.Page{}, fmt.Errorf("fehlgeschlagene-record-zeile konnte nicht gelesen werden: %w", err)
+			return failedrecords.Page{}, fmt.Errorf("could not read failed-record row: %w", err)
 		}
 		rawRows = append(rawRows, rr)
 	}
 	if err := rows.Err(); err != nil {
-		return failedrecords.Page{}, fmt.Errorf("fehlgeschlagene records konnten nicht vollständig gelesen werden: %w", err)
+		return failedrecords.Page{}, fmt.Errorf("could not fully read failed records: %w", err)
 	}
 
 	hasMore := len(rawRows) > limit
@@ -113,11 +113,11 @@ func (r *FailedRecordsRepository) Query(ctx context.Context, q failedrecords.Que
 		rawRows = rawRows[:limit]
 	}
 
-	// Rohdaten (DKIM/SPF-Prüfergebnisse, Override-Gründe) für genau diese
-	// Seite nachladen — eine IN-Klausel über eine kleine, bekannte Menge
-	// von Record-IDs (≤ Seitengröße) ist in Ordnung, siehe AGENTS.md
-	// ("wenn der Filterwert bereits bekannt ist, joinen"/loadReportErrors
-	// in reportquery.go); problematisch wäre nur eine unbegrenzte Liste.
+	// Load the raw data (DKIM/SPF check results, override reasons) for
+	// exactly this page — an IN clause over a small, known set of record
+	// IDs (≤ page size) is fine, see AGENTS.md ("if the filter value is
+	// already known, join instead"/loadReportErrors in reportquery.go);
+	// only an unbounded list would be a problem.
 	recordIDs := make([]int64, len(rawRows))
 	for i, rr := range rawRows {
 		recordIDs[i] = rr.recordID
@@ -139,15 +139,15 @@ func (r *FailedRecordsRepository) Query(ctx context.Context, q failedrecords.Que
 	for i, rr := range rawRows {
 		sourceIP, err := report.NewSourceIP(rr.sourceIP)
 		if err != nil {
-			return failedrecords.Page{}, fmt.Errorf("gespeicherte quell-ip %q ist ungültig: %w", rr.sourceIP, err)
+			return failedrecords.Page{}, fmt.Errorf("stored source IP %q is invalid: %w", rr.sourceIP, err)
 		}
 		headerFrom, err := report.NewDomainName(rr.headerFrom)
 		if err != nil {
-			return failedrecords.Page{}, fmt.Errorf("gespeicherter header_from %q ist ungültig: %w", rr.headerFrom, err)
+			return failedrecords.Page{}, fmt.Errorf("stored header_from %q is invalid: %w", rr.headerFrom, err)
 		}
 		policyDomain, err := report.NewDomainName(rr.policyDomain)
 		if err != nil {
-			return failedrecords.Page{}, fmt.Errorf("gespeicherte policy-domain %q ist ungültig: %w", rr.policyDomain, err)
+			return failedrecords.Page{}, fmt.Errorf("stored policy domain %q is invalid: %w", rr.policyDomain, err)
 		}
 
 		records[i] = failedrecords.Record{
@@ -201,10 +201,10 @@ func failedRecordsWhere(q failedrecords.Query) ([]string, []any) {
 	return clauses, args
 }
 
-// failedRecordsOrderAndCursor liefert die ORDER-BY-Klausel sowie — falls
-// q.Cursor gesetzt ist — die WHERE-Klausel und Parameter für die zweite
-// und folgende Seiten. rec.id ist in beiden Sortierungen der
-// Tiebreaker (eindeutig, für stabile Keyset-Pagination nötig).
+// failedRecordsOrderAndCursor returns the ORDER BY clause and — if
+// q.Cursor is set — the WHERE clause and parameters for the second and
+// subsequent pages. rec.id is the tiebreaker in both orderings (unique,
+// needed for stable keyset pagination).
 func failedRecordsOrderAndCursor(q failedrecords.Query) (orderBy, cursorSQL string, args []any, err error) {
 	var cur failedRecordCursor
 	if q.Cursor != "" {
@@ -223,7 +223,7 @@ func failedRecordsOrderAndCursor(q failedrecords.Query) (orderBy, cursorSQL stri
 		return orderBy, cursorSQL, args, nil
 	}
 
-	// Standard: SortByDate, neuester Bericht zuerst.
+	// Default: SortByDate, newest report first.
 	orderBy = "ORDER BY rep.date_begin DESC, rec.id DESC"
 	if q.Cursor != "" {
 		cursorSQL = "AND (rep.date_begin, rec.id) < (?, ?)"
@@ -243,7 +243,7 @@ func loadReasonsByRecordIDs(ctx context.Context, db *sql.DB, recordIDs []int64) 
 		WHERE record_id IN (`+placeholders+`)
 		ORDER BY rowid`, args...)
 	if err != nil {
-		return nil, fmt.Errorf("record_reasons konnten nicht geladen werden: %w", err)
+		return nil, fmt.Errorf("could not load record_reasons: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -252,7 +252,7 @@ func loadReasonsByRecordIDs(ctx context.Context, db *sql.DB, recordIDs []int64) 
 		var recordID int64
 		var reasonType, comment sql.NullString
 		if err := rows.Scan(&recordID, &reasonType, &comment); err != nil {
-			return nil, fmt.Errorf("record_reasons-zeile konnte nicht gelesen werden: %w", err)
+			return nil, fmt.Errorf("could not read record_reasons row: %w", err)
 		}
 		result[recordID] = append(result[recordID], report.PolicyOverrideReason{
 			Type:    reasonType.String,
@@ -273,7 +273,7 @@ func loadDKIMResultsByRecordIDs(ctx context.Context, db *sql.DB, recordIDs []int
 		WHERE record_id IN (`+placeholders+`)
 		ORDER BY rowid`, args...)
 	if err != nil {
-		return nil, fmt.Errorf("auth_results_dkim konnten nicht geladen werden: %w", err)
+		return nil, fmt.Errorf("could not load auth_results_dkim: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -282,7 +282,7 @@ func loadDKIMResultsByRecordIDs(ctx context.Context, db *sql.DB, recordIDs []int
 		var recordID int64
 		var domain, selector, res, humanResult sql.NullString
 		if err := rows.Scan(&recordID, &domain, &selector, &res, &humanResult); err != nil {
-			return nil, fmt.Errorf("auth_results_dkim-zeile konnte nicht gelesen werden: %w", err)
+			return nil, fmt.Errorf("could not read auth_results_dkim row: %w", err)
 		}
 		result[recordID] = append(result[recordID], report.DKIMAuthResult{
 			Domain:      domain.String,
@@ -305,7 +305,7 @@ func loadSPFResultsByRecordIDs(ctx context.Context, db *sql.DB, recordIDs []int6
 		WHERE record_id IN (`+placeholders+`)
 		ORDER BY rowid`, args...)
 	if err != nil {
-		return nil, fmt.Errorf("auth_results_spf konnten nicht geladen werden: %w", err)
+		return nil, fmt.Errorf("could not load auth_results_spf: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -314,7 +314,7 @@ func loadSPFResultsByRecordIDs(ctx context.Context, db *sql.DB, recordIDs []int6
 		var recordID int64
 		var domain, scope, res sql.NullString
 		if err := rows.Scan(&recordID, &domain, &scope, &res); err != nil {
-			return nil, fmt.Errorf("auth_results_spf-zeile konnte nicht gelesen werden: %w", err)
+			return nil, fmt.Errorf("could not read auth_results_spf row: %w", err)
 		}
 		result[recordID] = append(result[recordID], report.SPFAuthResult{
 			Domain: domain.String,
@@ -325,10 +325,9 @@ func loadSPFResultsByRecordIDs(ctx context.Context, db *sql.DB, recordIDs []int6
 	return result, rows.Err()
 }
 
-// failedRecordCursor ist die interne, typisierte Form von
-// failedrecords.Query.Cursor/Page.NextCursor. Nur die zum aktiven
-// Sortierfeld gehörenden Felder sind besetzt (siehe
-// failedRecordsOrderAndCursor).
+// failedRecordCursor is the internal, typed form of
+// failedrecords.Query.Cursor/Page.NextCursor. Only the fields belonging to
+// the active sort field are set (see failedRecordsOrderAndCursor).
 type failedRecordCursor struct {
 	DateBegin int64  `json:"d,omitempty"`
 	SourceIP  string `json:"s,omitempty"`
@@ -345,7 +344,7 @@ func buildFailedRecordCursor(sortField failedrecords.SortField, dateBegin int64,
 func (c failedRecordCursor) encode() string {
 	data, err := json.Marshal(c)
 	if err != nil {
-		panic(fmt.Sprintf("failedRecordCursor konnte nicht kodiert werden: %v", err))
+		panic(fmt.Sprintf("failedRecordCursor could not be encoded: %v", err))
 	}
 	return base64.RawURLEncoding.EncodeToString(data)
 }
@@ -354,10 +353,10 @@ func decodeFailedRecordCursor(s string) (failedRecordCursor, error) {
 	var c failedRecordCursor
 	data, err := base64.RawURLEncoding.DecodeString(s)
 	if err != nil {
-		return failedRecordCursor{}, fmt.Errorf("cursor konnte nicht dekodiert werden: %w", err)
+		return failedRecordCursor{}, fmt.Errorf("could not decode cursor: %w", err)
 	}
 	if err := json.Unmarshal(data, &c); err != nil {
-		return failedRecordCursor{}, fmt.Errorf("cursor hat ein ungültiges format: %w", err)
+		return failedRecordCursor{}, fmt.Errorf("cursor has an invalid format: %w", err)
 	}
 	return c, nil
 }

@@ -4,13 +4,13 @@
 {{end}}
 
 <section class="detail-card">
-  <h2>Konfiguriertes Konto</h2>
-  <p class="field-hint">Zugangsdaten kommen aus Umgebungsvariablen (siehe docs/features/deployment.md) und lassen
-    sich nur über einen Container-Neustart ändern.</p>
+  <h2>Configured account</h2>
+  <p class="field-hint">Credentials come from environment variables (see docs/features/deployment.md) and can
+    only be changed via a container restart.</p>
   {{if .Accounts}}
-  <table class="data-table" aria-label="Konfiguriertes Konto">
+  <table class="data-table" aria-label="Configured account">
     <thead>
-      <tr><th>Anzeigename</th><th>Host</th><th>Benutzername</th><th>Postfach</th><th>TLS</th><th></th></tr>
+      <tr><th>Display name</th><th>Host</th><th>Username</th><th>Mailbox</th><th>TLS</th><th></th></tr>
     </thead>
     <tbody>
       {{range .Accounts}}
@@ -19,11 +19,11 @@
         <td>{{.Host}}:{{.Port}}</td>
         <td>{{.Username}}</td>
         <td>{{.Mailbox}}</td>
-        <td>{{if .UseTLS}}Ja{{else}}Nein{{end}}</td>
+        <td>{{if .UseTLS}}Yes{{else}}No{{end}}</td>
         <td class="row-actions">
           <form method="post" action="/konten/{{.ID}}/test">
             <input type="hidden" name="csrf_token" value="{{csrfToken}}">
-            <button type="submit">Verbindung testen</button>
+            <button type="submit">Test connection</button>
           </form>
         </td>
       </tr>
@@ -31,19 +31,19 @@
     </tbody>
   </table>
   {{else}}
-  <p class="empty-state">Kein Konto konfiguriert — DMARC_IMAP_*-Umgebungsvariablen prüfen.</p>
+  <p class="empty-state">No account configured — check the DMARC_IMAP_* environment variables.</p>
   {{end}}
 </section>
 
 <section class="detail-card narrow-card">
-  <h2>Laufzeit-Einstellungen</h2>
+  <h2>Runtime settings</h2>
   <dl class="status-list">
-    <dt>Aufbewahrungsdauer</dt>
-    <dd>{{if .RetentionMonths}}{{.RetentionMonths}} Monate{{else}}unbegrenzt{{end}}</dd>
-    <dt>Automatischer Hintergrund-Abgleich</dt>
-    <dd>{{if .SyncIntervalMinutes}}alle {{.SyncIntervalMinutes}} Minuten{{else}}deaktiviert{{end}}</dd>
+    <dt>Retention period</dt>
+    <dd>{{if .RetentionMonths}}{{.RetentionMonths}} months{{else}}unlimited{{end}}</dd>
+    <dt>Automatic background sync</dt>
+    <dd>{{if .SyncIntervalMinutes}}every {{.SyncIntervalMinutes}} minutes{{else}}disabled{{end}}</dd>
   </dl>
-  <p class="field-hint">Änderbar über DMARC_RETENTION_MONTHS/DMARC_SYNC_INTERVAL_MINUTES, wirkt nach einem
-    Container-Neustart.</p>
+  <p class="field-hint">Changeable via DMARC_RETENTION_MONTHS/DMARC_SYNC_INTERVAL_MINUTES, takes effect after a
+    container restart.</p>
 </section>
 {{end}}

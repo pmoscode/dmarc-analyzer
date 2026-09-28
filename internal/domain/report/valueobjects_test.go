@@ -17,11 +17,11 @@ func TestNewSourceIP(t *testing.T) {
 		input   string
 		wantErr bool
 	}{
-		{name: "gültiges IPv4", input: "203.0.113.5"},
-		{name: "gültiges IPv6", input: "2001:db8::1"},
-		{name: "mit Leerzeichen", input: "  203.0.113.5  "},
-		{name: "leer", input: "", wantErr: true},
-		{name: "kein IP-Format", input: "not-an-ip", wantErr: true},
+		{name: "valid IPv4", input: "203.0.113.5"},
+		{name: "valid IPv6", input: "2001:db8::1"},
+		{name: "with whitespace", input: "  203.0.113.5  "},
+		{name: "empty", input: "", wantErr: true},
+		{name: "not an IP format", input: "not-an-ip", wantErr: true},
 	}
 
 	for _, tt := range tests {
@@ -71,10 +71,10 @@ func TestNewDateRange(t *testing.T) {
 	require.True(t, dr.End.Equal(end))
 
 	_, err = report.NewDateRange(end, begin)
-	require.Error(t, err, "Begin nach End muss abgelehnt werden")
+	require.Error(t, err, "Begin after End must be rejected")
 
 	_, err = report.NewDateRange(begin, begin)
-	require.Error(t, err, "Begin == End muss abgelehnt werden")
+	require.Error(t, err, "Begin == End must be rejected")
 }
 
 func TestDateRange_IsZero(t *testing.T) {
@@ -99,11 +99,11 @@ func TestParseDisposition_UnknownValueIsNotDiscarded(t *testing.T) {
 		input string
 		want  report.Disposition
 	}{
-		{name: "erkannt, klein", input: "none", want: report.DispositionNone},
-		{name: "erkannt, groß", input: "QUARANTINE", want: report.DispositionQuarantine},
-		{name: "erkannt, mit Leerzeichen", input: " reject ", want: report.DispositionReject},
-		{name: "leer", input: "", want: report.DispositionUnknown},
-		{name: "unbekannt", input: "unexpected", want: report.DispositionUnknown},
+		{name: "recognized, lowercase", input: "none", want: report.DispositionNone},
+		{name: "recognized, uppercase", input: "QUARANTINE", want: report.DispositionQuarantine},
+		{name: "recognized, with whitespace", input: " reject ", want: report.DispositionReject},
+		{name: "empty", input: "", want: report.DispositionUnknown},
+		{name: "unknown", input: "unexpected", want: report.DispositionUnknown},
 	}
 
 	for _, tt := range tests {
@@ -118,10 +118,10 @@ func TestParsePolicy_UnknownValueIsNotDiscarded(t *testing.T) {
 	t.Parallel()
 
 	tests := map[string]report.Policy{
-		"none":           report.PolicyNone,
-		"quarantine":     report.PolicyQuarantine,
-		"reject":         report.PolicyReject,
-		"was-auch-immer": report.PolicyUnknown,
+		"none":       report.PolicyNone,
+		"quarantine": report.PolicyQuarantine,
+		"reject":     report.PolicyReject,
+		"whatever":   report.PolicyUnknown,
 	}
 
 	for input, want := range tests {
@@ -166,11 +166,11 @@ func TestPolicyEvaluation_PassesDMARC(t *testing.T) {
 		eval report.PolicyEvaluation
 		want bool
 	}{
-		{name: "beide pass", eval: report.PolicyEvaluation{DKIM: report.AuthResultPass, SPF: report.AuthResultPass}, want: true},
-		{name: "nur dkim pass", eval: report.PolicyEvaluation{DKIM: report.AuthResultPass, SPF: report.AuthResultFail}, want: true},
-		{name: "nur spf pass", eval: report.PolicyEvaluation{DKIM: report.AuthResultFail, SPF: report.AuthResultPass}, want: true},
-		{name: "beide fail", eval: report.PolicyEvaluation{DKIM: report.AuthResultFail, SPF: report.AuthResultFail}, want: false},
-		{name: "beide unknown", eval: report.PolicyEvaluation{DKIM: report.AuthResultUnknown, SPF: report.AuthResultUnknown}, want: false},
+		{name: "both pass", eval: report.PolicyEvaluation{DKIM: report.AuthResultPass, SPF: report.AuthResultPass}, want: true},
+		{name: "only dkim pass", eval: report.PolicyEvaluation{DKIM: report.AuthResultPass, SPF: report.AuthResultFail}, want: true},
+		{name: "only spf pass", eval: report.PolicyEvaluation{DKIM: report.AuthResultFail, SPF: report.AuthResultPass}, want: true},
+		{name: "both fail", eval: report.PolicyEvaluation{DKIM: report.AuthResultFail, SPF: report.AuthResultFail}, want: false},
+		{name: "both unknown", eval: report.PolicyEvaluation{DKIM: report.AuthResultUnknown, SPF: report.AuthResultUnknown}, want: false},
 	}
 
 	for _, tt := range tests {

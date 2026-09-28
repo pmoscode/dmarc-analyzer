@@ -28,14 +28,14 @@ func TestDomainStatsRepository_Query_AggregatesAcrossReports(t *testing.T) {
 
 	page, err := stats.Query(ctx, domainstats.Query{Period: &period})
 	require.NoError(t, err)
-	require.Len(t, page.Stats, 1, "zwei Reports derselben Domain müssen zu einer Zeile aggregiert werden")
+	require.Len(t, page.Stats, 1, "two reports of the same domain must be aggregated into one row")
 
 	got := page.Stats[0]
 	require.Equal(t, "example.com", got.Domain.String())
-	require.Equal(t, 6, got.TotalCount, "je Report ein Record mit message_count 3 (siehe newTestReport)")
+	require.Equal(t, 6, got.TotalCount, "one record per report with message_count 3 (see newTestReport)")
 	require.Equal(t, 2, got.ReportCount)
 	require.Equal(t, 2, got.DistinctSources)
-	require.InDelta(t, 1.0, got.PassRate, 0.0001, "newTestReport erzeugt immer dkim=pass/spf=pass")
+	require.InDelta(t, 1.0, got.PassRate, 0.0001, "newTestReport always produces dkim=pass/spf=pass")
 	require.Empty(t, page.NextCursor)
 }
 
@@ -71,9 +71,9 @@ func TestDomainStatsRepository_Query_SortByVolume_PaginatesWithCursor(t *testing
 	saveTestReport(t, reports, reportOpts{domain: "big.example", reportID: "vol-big"})
 	saveTestReport(t, reports, reportOpts{domain: "mid.example", reportID: "vol-mid"})
 	saveTestReport(t, reports, reportOpts{domain: "small.example", reportID: "vol-small"})
-	// newTestReport erzeugt für jeden Report genau ein Record mit
-	// message_count 3 — für unterschiedliches Volumen je Domain zusätzliche
-	// Reports auf dieselbe Domain speichern.
+	// newTestReport produces exactly one record per report with
+	// message_count 3 — to get different volumes per domain, save
+	// additional reports for the same domain.
 	saveTestReport(t, reports, reportOpts{domain: "big.example", reportID: "vol-big-2"})
 	saveTestReport(t, reports, reportOpts{domain: "big.example", reportID: "vol-big-3"})
 	saveTestReport(t, reports, reportOpts{domain: "mid.example", reportID: "vol-mid-2"})

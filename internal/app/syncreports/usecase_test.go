@@ -17,7 +17,7 @@ import (
 var (
 	fixedBegin = time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 	hour       = time.Hour
-	errTest    = errors.New("testfehler")
+	errTest    = errors.New("test error")
 )
 
 const testAccountID account.AccountID = "acc-1"
@@ -29,8 +29,8 @@ func testAccount(t *testing.T) account.MailAccount {
 	return *acc
 }
 
-// newTestUseCase baut einen UseCase mit Fakes, die per Parameter
-// überschrieben werden können.
+// newTestUseCase builds a UseCase with fakes that can be overridden via
+// parameters.
 type testDeps struct {
 	accounts      *fakeAccountRepository
 	states        *fakeStateRepository
@@ -52,7 +52,7 @@ func newTestUseCase(t *testing.T, messages []domainsync.RawMessage, parserFailFo
 
 	uc := &syncreports.UseCase{
 		Accounts:      deps.accounts,
-		Secret:        account.NewSecretFromString("app-passwort"),
+		Secret:        account.NewSecretFromString("app-password"),
 		States:        deps.states,
 		Reports:       deps.reports,
 		FailedImports: deps.failedImports,
@@ -87,8 +87,8 @@ func TestSyncAccount_HappyPath_ImportsAllNewReports(t *testing.T) {
 
 	state, err := deps.states.Load(context.Background(), testAccountID, "INBOX")
 	require.NoError(t, err)
-	require.Equal(t, uint32(3), state.LastUID, "nach vollständigem Lauf muss LastUID auf die höchste UID zeigen")
-	require.True(t, deps.source.closed, "MessageSource muss nach dem Lauf geschlossen werden")
+	require.Equal(t, uint32(3), state.LastUID, "after a complete run, LastUID must point to the highest UID")
+	require.True(t, deps.source.closed, "MessageSource must be closed after the run")
 }
 
 func TestSyncAccount_OnProgress_ReportsCumulativeCountsAfterEachMessage(t *testing.T) {
@@ -106,10 +106,10 @@ func TestSyncAccount_OnProgress_ReportsCumulativeCountsAfterEachMessage(t *testi
 	})
 	require.NoError(t, err)
 
-	require.Len(t, updates, 3, "ein Aufruf je verarbeiteter Nachricht")
-	// Reihenfolge der Nachrichten ist nicht garantiert (nebenläufige
-	// Parser-Worker, siehe runPipeline-Dokumentation) — deshalb nur die
-	// letzte, kumulierte Momentaufnahme prüfen, nicht jeden Zwischenwert.
+	require.Len(t, updates, 3, "one call per processed message")
+	// Message order is not guaranteed (concurrent parser workers, see
+	// runPipeline documentation) — so only check the last, cumulative
+	// snapshot, not every intermediate value.
 	last := updates[len(updates)-1]
 	require.Equal(t, 3, last.Processed)
 	require.Equal(t, 3, last.New)
@@ -129,10 +129,10 @@ func TestSyncAccount_NilOnProgress_DoesNotPanic(t *testing.T) {
 }
 
 func TestSyncAccount_SecondRun_SkipsAlreadyImportedReports(t *testing.T) {
-	// Der zentrale End-to-End-Fall über MessageSource hinaus: derselbe
-	// Report kommt (z. B. durch eine erneut zugestellte Mail) ein zweites
-	// Mal an — Exists()/ErrDuplicate sorgen dafür, dass er als "skipped"
-	// gezählt wird, nicht als Fehler.
+	// The central end-to-end case beyond MessageSource: the same report
+	// arrives a second time (e.g. because a mail was delivered again) —
+	// Exists()/ErrDuplicate ensure it's counted as "skipped", not as an
+	// error.
 	t.Parallel()
 
 	uc, deps := newTestUseCase(t, []domainsync.RawMessage{msg(1, "report-a")}, nil)
@@ -140,15 +140,15 @@ func TestSyncAccount_SecondRun_SkipsAlreadyImportedReports(t *testing.T) {
 	_, err := uc.SyncAccount(context.Background(), testAccountID, nil)
 	require.NoError(t, err)
 
-	// Zweiter Lauf: MessageSource liefert dieselbe Nachricht erneut (z. B.
-	// weil die Postfach-UIDVALIDITY sich geändert hätte).
+	// Second run: MessageSource returns the same message again (e.g.
+	// because the mailbox's UIDVALIDITY had changed).
 	deps.source.messages = []domainsync.RawMessage{msg(1, "report-a")}
 	result, err := uc.SyncAccount(context.Background(), testAccountID, nil)
 	require.NoError(t, err)
 
 	require.Zero(t, result.New)
 	require.Equal(t, 1, result.Skipped)
-	require.Equal(t, 1, deps.reports.count(), "darf nicht dupliziert werden")
+	require.Equal(t, 1, deps.reports.count(), "must not be duplicated")
 }
 
 func TestSyncAccount_ParseError_CountsAsFailedAndQuarantines(t *testing.T) {
@@ -156,8 +156,8 @@ func TestSyncAccount_ParseError_CountsAsFailedAndQuarantines(t *testing.T) {
 
 	uc, deps := newTestUseCase(t, []domainsync.RawMessage{
 		msg(1, "report-a"),
-		msg(2, "kaputter-report"),
-	}, map[string]error{"kaputter-report": errTest})
+		msg(2, "broken-report"),
+	}, map[string]error{"broken-report": errTest})
 
 	result, err := uc.SyncAccount(context.Background(), testAccountID, nil)
 	require.NoError(t, err)
@@ -165,12 +165,12 @@ func TestSyncAccount_ParseError_CountsAsFailedAndQuarantines(t *testing.T) {
 	require.Equal(t, 1, result.New)
 	require.Equal(t, 1, result.Failed)
 	require.Len(t, result.Errors, 1)
-	require.Equal(t, 1, deps.failedImports.count(), "fehlgeschlagener Import muss in die Quarantäne")
+	require.Equal(t, 1, deps.failedImports.count(), "a failed import must go into quarantine")
 
 	state, err := deps.states.Load(context.Background(), testAccountID, "INBOX")
 	require.NoError(t, err)
 	require.Equal(t, uint32(2), state.LastUID,
-		"eine dauerhaft fehlschlagende Nachricht darf den Fortschritt nicht für immer blockieren")
+		"a permanently failing message must not block progress forever")
 }
 
 func TestSyncAccount_DecodeError_CountsAsFailed(t *testing.T) {
@@ -194,9 +194,9 @@ func TestSyncAccount_NoNewMessages_StillPersistsBaseline(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, result.New)
 
-	// Baseline wird sofort gespeichert, auch ganz ohne Nachrichten (siehe
-	// UseCase.SyncAccount) — relevant, wenn sich nur die UIDValidity
-	// geändert hat.
+	// The baseline is saved immediately, even with no messages at all
+	// (see UseCase.SyncAccount) — relevant when only the UIDValidity has
+	// changed.
 	require.NotEmpty(t, deps.states.saves)
 }
 
@@ -208,7 +208,7 @@ func TestSyncAccount_ConnectFailure_ReturnsErrorWithoutPartialState(t *testing.T
 
 	_, err := uc.SyncAccount(context.Background(), testAccountID, nil)
 	require.Error(t, err)
-	require.Empty(t, deps.states.saves, "bei fehlgeschlagener Verbindung darf kein Fortschritt gespeichert werden")
+	require.Empty(t, deps.states.saves, "no progress may be saved when the connection fails")
 }
 
 func TestSyncAccount_FetchFailure_ReturnsError(t *testing.T) {
@@ -225,16 +225,15 @@ func TestSyncAccount_UnknownAccount_ReturnsError(t *testing.T) {
 	t.Parallel()
 
 	uc, _ := newTestUseCase(t, nil, nil)
-	_, err := uc.SyncAccount(context.Background(), "nie-angelegt", nil)
+	_, err := uc.SyncAccount(context.Background(), "never-created", nil)
 	require.Error(t, err)
 }
 
 func TestSyncAccount_ContextCancelledMidSync_LeavesConsistentState(t *testing.T) {
-	// UMSETZUNGSPLAN.md AP 4: "Abbruch per context.Cancel hinterlässt
-	// konsistenten Zustand." Konsistent heißt hier: LastUID zeigt nie auf
-	// eine Nachricht, die nicht tatsächlich (erfolgreich oder in die
-	// Quarantäne) verarbeitet wurde, und bereits gespeicherte Reports
-	// bleiben unangetastet.
+	// UMSETZUNGSPLAN.md work package 4: "cancellation via context.Cancel
+	// leaves a consistent state." Consistent here means: LastUID never
+	// points to a message that wasn't actually processed (successfully
+	// or into quarantine), and already saved reports stay untouched.
 	t.Parallel()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -244,31 +243,31 @@ func TestSyncAccount_ContextCancelledMidSync_LeavesConsistentState(t *testing.T)
 		msg(2, "report-b"),
 		msg(3, "report-c"),
 	}, nil)
-	// Nach der ersten Nachricht abbrechen, indem der Fake beim Iterieren
-	// selbst den Kontext prüft (siehe fakeMessageSource.FetchNew) — cancel
-	// wird über einen Parser-Seiteneffekt ausgelöst: der erste geparste
-	// Report löst den Abbruch aus.
+	// Cancel after the first message by having the fake check the
+	// context itself while iterating (see fakeMessageSource.FetchNew) —
+	// cancel is triggered via a parser side effect: the first parsed
+	// report triggers the cancellation.
 	uc.Parsers = []domainsync.ReportParser{cancelingParser{parser: fakeParser{}, cancel: cancel}}
-	uc.Concurrency = 1 // deterministische Reihenfolge für diesen Test
+	uc.Concurrency = 1 // deterministic order for this test
 
 	result, err := uc.SyncAccount(ctx, testAccountID, nil)
-	require.NoError(t, err, "SyncAccount selbst meldet den Abbruch über Result.Errors, nicht als Rückgabefehler")
+	require.NoError(t, err, "SyncAccount itself reports the cancellation via Result.Errors, not as a return error")
 
 	state, loadErr := deps.states.Load(context.Background(), testAccountID, "INBOX")
 	require.NoError(t, loadErr)
 
-	// Der entscheidende Konsistenz-Check: LastUID darf niemals eine UID
-	// überspringen, die nicht tatsächlich verarbeitet wurde.
+	// The crucial consistency check: LastUID must never skip past a UID
+	// that wasn't actually processed.
 	require.LessOrEqual(t, int(state.LastUID), deps.reports.count()+result.Failed,
-		"LastUID darf nicht weiter fortgeschrieben sein, als tatsächlich verarbeitete Nachrichten existieren")
+		"LastUID must not be advanced further than the number of actually processed messages")
 
-	// Für jede als "neu" gezählte Nachricht muss auch wirklich ein Report
-	// gespeichert sein — kein Zählen ohne tatsächliche Persistenz.
+	// For every message counted as "new", a report must really have been
+	// saved — no counting without actual persistence.
 	require.Equal(t, result.New, deps.reports.count())
 }
 
-// cancelingParser ruft nach dem ersten erfolgreichen Parse cancel() auf —
-// simuliert einen Nutzer, der den Sync mitten im Lauf abbricht.
+// cancelingParser calls cancel() after the first successful parse —
+// simulates a user canceling the sync mid-run.
 type cancelingParser struct {
 	parser fakeParser
 	cancel context.CancelFunc
@@ -311,14 +310,14 @@ func TestSyncAccount_SaveError_NonDuplicate_CountsAsFailed(t *testing.T) {
 }
 
 func TestSyncAccount_MultiReportParser_ImportsAllReportsFromOneMessage(t *testing.T) {
-	// Regression: decodeAndParse rief zuvor ausschließlich Parse() auf,
-	// das laut domainsync.ReportParser-Vertrag nur EINEN Report liefert —
-	// eine Nachricht mit einem Anhang (z. B. ein .zip), der über
-	// domainsync.MultiReportParser mehrere Reports zurückgeben kann,
-	// wurde dadurch nur zu einem Bruchteil importiert. Siehe auch
-	// internal/app/importfiles für denselben Fehler und internal/web
-	// TestHandleImportSubmit_ZipWithMultipleReports_ImportsBoth für den
-	// echten dmarcxml.Parser.
+	// Regression: decodeAndParse used to call only Parse(), which per the
+	// domainsync.ReportParser contract returns only ONE report — a
+	// message with an attachment (e.g. a .zip) that can return multiple
+	// reports via domainsync.MultiReportParser was thereby only
+	// partially imported. See also internal/app/importfiles for the
+	// same bug and internal/web
+	// TestHandleImportSubmit_ZipWithMultipleReports_ImportsBoth for the
+	// real dmarcxml.Parser.
 	t.Parallel()
 
 	uc, deps := newTestUseCase(t, []domainsync.RawMessage{msg(1, "multi:report-a,report-b,report-c")}, nil)

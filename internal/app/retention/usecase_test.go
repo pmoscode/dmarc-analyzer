@@ -19,7 +19,7 @@ func TestApplyNow_ZeroRetention_DoesNotDelete(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Equal(t, int64(0), deleted)
-	require.Equal(t, 0, pruner.calls, "bei unbegrenzter Aufbewahrung darf nicht gelöscht werden")
+	require.Equal(t, 0, pruner.calls, "nothing may be deleted with unlimited retention")
 }
 
 func TestApplyNow_NegativeRetention_DoesNotDelete(t *testing.T) {
@@ -54,4 +54,4 @@ func TestApplyNow_PropagatesDeleteError(t *testing.T) {
 	require.ErrorIs(t, err, errTest)
 }
 
-var errTest = errors.New("testfehler")
+var errTest = errors.New("test error")

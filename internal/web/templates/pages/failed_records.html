@@ -1,32 +1,32 @@
 {{define "content"}}
 <form class="filter-bar" method="get" action="/fehlschlaege" aria-label="Filter">
-  <label>Zeitraum
+  <label>Period
     <select name="zeitraum">
       {{range .PeriodOptions}}<option value="{{.Days}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
     </select>
   </label>
   <label>Domain
-    <input type="text" name="domain" value="{{.Domain}}" placeholder="Alle" autocomplete="off">
+    <input type="text" name="domain" value="{{.Domain}}" placeholder="All" autocomplete="off">
   </label>
-  <label>Quell-IP
-    <input type="text" name="quelle" value="{{.SourceIP}}" placeholder="Alle" autocomplete="off">
+  <label>Source IP
+    <input type="text" name="quelle" value="{{.SourceIP}}" placeholder="All" autocomplete="off">
   </label>
-  <button type="submit">Filter anwenden</button>
-  <a href="/fehlschlaege" class="filter-reset">Filter zurücksetzen</a>
+  <button type="submit">Apply filter</button>
+  <a href="/fehlschlaege" class="filter-reset">Reset filter</a>
 </form>
 
-<p class="chart-hint">Zeigt Datensätze, bei denen DMARC nicht bestanden wurde (weder DKIM noch SPF ausgerichtet bestanden), über alle Berichte im gewählten Zeitraum hinweg.</p>
+<p class="chart-hint">Shows records where DMARC failed (neither DKIM nor SPF passed aligned), across all reports in the selected period.</p>
 
-<p class="export-link"><a href="{{.ExportURL}}">CSV exportieren (gesamter gefilterter Bestand)</a></p>
+<p class="export-link"><a href="{{.ExportURL}}">Export CSV (entire filtered set)</a></p>
 
-<table class="data-table" aria-label="Fehlgeschlagene Datensätze">
+<table class="data-table" aria-label="Failed records">
   <thead>
     <tr>
-      <th><a href="{{.SortDateURL}}">Zeitraum</a></th>
-      <th>Organisation</th>
+      <th><a href="{{.SortDateURL}}">Period</a></th>
+      <th>Organization</th>
       <th>Domain</th>
-      <th><a href="{{.SortSourceIPURL}}">Quell-IP</a></th>
-      <th>Nachrichten</th>
+      <th><a href="{{.SortSourceIPURL}}">Source IP</a></th>
+      <th>Messages</th>
       <th>Disposition</th>
       <th>DKIM</th>
       <th>SPF</th>
@@ -38,7 +38,7 @@
   </tbody>
 </table>
 {{if not .Rows.Rows}}
-<p class="empty-state">Keine fehlgeschlagenen Datensätze für diesen Filter gefunden.</p>
+<p class="empty-state">No failed records found for this filter.</p>
 {{end}}
 {{end}}
 
@@ -55,26 +55,26 @@
   <td><span class="badge badge-{{.SPFTone}}">{{.SPF}}</span></td>
   <td>
     <details class="record-detail">
-      <summary>anzeigen</summary>
+      <summary>show</summary>
       <dl class="detail-list">
         <dt>Header-From</dt><dd>{{.Detail.HeaderFrom}}</dd>
         {{if .Detail.EnvelopeFrom}}<dt>Envelope-From</dt><dd>{{.Detail.EnvelopeFrom}}</dd>{{end}}
         {{if .Detail.EnvelopeTo}}<dt>Envelope-To</dt><dd>{{.Detail.EnvelopeTo}}</dd>{{end}}
       </dl>
       {{if .Detail.DKIMResults}}
-      <p class="record-detail-heading">DKIM-Signaturen <button type="button" class="glossary-hint" data-tip="{{glossaryDef "DKIM-Selector"}}" aria-label="Begriff erklären: DKIM-Selector">?</button></p>
+      <p class="record-detail-heading">DKIM signatures <button type="button" class="glossary-hint" data-tip="{{glossaryDef "DKIM selector"}}" aria-label="Explain term: DKIM selector">?</button></p>
       <ul class="record-detail-list">
-        {{range .Detail.DKIMResults}}<li>Domain {{.Domain}}, Selector {{.Selector}}: {{.Result}}</li>{{end}}
+        {{range .Detail.DKIMResults}}<li>Domain {{.Domain}}, selector {{.Selector}}: {{.Result}}</li>{{end}}
       </ul>
       {{end}}
       {{if .Detail.SPFResults}}
-      <p class="record-detail-heading">SPF-Prüfungen <button type="button" class="glossary-hint" data-tip="{{glossaryDef "SPF-Scope"}}" aria-label="Begriff erklären: SPF-Scope">?</button></p>
+      <p class="record-detail-heading">SPF checks <button type="button" class="glossary-hint" data-tip="{{glossaryDef "SPF scope"}}" aria-label="Explain term: SPF scope">?</button></p>
       <ul class="record-detail-list">
-        {{range .Detail.SPFResults}}<li>Domain {{.Domain}}, Scope {{.Scope}}: {{.Result}}</li>{{end}}
+        {{range .Detail.SPFResults}}<li>Domain {{.Domain}}, scope {{.Scope}}: {{.Result}}</li>{{end}}
       </ul>
       {{end}}
       {{if .Detail.Reasons}}
-      <p class="record-detail-heading">Gründe für Abweichung</p>
+      <p class="record-detail-heading">Reasons for deviation</p>
       <ul class="record-detail-list">
         {{range .Detail.Reasons}}<li>{{.Type}}{{if .Comment}}: {{.Comment}}{{end}}</li>{{end}}
       </ul>
@@ -89,7 +89,7 @@
     <button type="button" class="load-more"
       hx-get="{{.NextPageURL}}"
       hx-target="#failed-records-load-more-row"
-      hx-swap="outerHTML">Weitere laden</button>
+      hx-swap="outerHTML">Load more</button>
   </td>
 </tr>
 {{end}}

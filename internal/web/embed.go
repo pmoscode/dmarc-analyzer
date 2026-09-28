@@ -2,11 +2,10 @@ package web
 
 import "embed"
 
-// embeddedTemplates und embeddedStatic betten HTML-Vorlagen und
-// statische Dateien (CSS/JS/vendor) in die Binärdatei ein
-// (MIGRATIONSPLAN.md Abschnitt 6: "vollständig in der Binärdatei").
-// Mit Options.Dev werden stattdessen die Dateien auf der Festplatte
-// gelesen (siehe views.go, static.go).
+// embeddedTemplates and embeddedStatic embed HTML templates and static
+// files (CSS/JS/vendor) into the binary (MIGRATIONSPLAN.md section 6:
+// "fully contained in the binary"). With Options.Dev, the files are read
+// from disk instead (see views.go, static.go).
 //
 //go:embed templates
 var embeddedTemplates embed.FS

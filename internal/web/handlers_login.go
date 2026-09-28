@@ -5,9 +5,9 @@ import (
 	"net/http"
 )
 
-// handleLoginStart leitet zur Authentik-Authorize-URL weiter und legt
-// dafür einen neuen, kurzlebigen Anmeldevorgang an (state/nonce/PKCE,
-// siehe auth.go beginLogin).
+// handleLoginStart redirects to the Authentik authorize URL and creates a
+// new, short-lived login attempt for it (state/nonce/PKCE, see auth.go
+// beginLogin).
 func (s *Server) handleLoginStart(w http.ResponseWriter, r *http.Request) {
 	id, p, err := s.auth.beginLogin()
 	if err != nil {
@@ -19,43 +19,43 @@ func (s *Server) handleLoginStart(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, s.oidc.authCodeURL(p.state, p.nonce, p.pkceVerifier), http.StatusSeeOther)
 }
 
-// handleLoginCallback verarbeitet die Rückkehr von Authentik: Code gegen
-// Tokens tauschen, ID-Token validieren, Admin-Gruppe prüfen, Sitzung
-// anlegen. Ein ungültiger/abgelaufener Anmeldevorgang oder eine fehlende
-// Admin-Gruppenmitgliedschaft führen zu einem klaren Fehler statt einer
-// Sitzung — kein automatischer erneuter Redirect zu Authentik, das würde
-// bei einer dauerhaft fehlenden Berechtigung zu einer Schleife führen.
+// handleLoginCallback processes the return from Authentik: exchange the
+// code for tokens, validate the ID token, check the admin group, create a
+// session. An invalid/expired login attempt or missing admin group
+// membership results in a clear error instead of a session — no automatic
+// redirect back to Authentik, since that would loop forever for a
+// permanently missing authorization.
 func (s *Server) handleLoginCallback(w http.ResponseWriter, r *http.Request) {
 	defer clearPendingLoginCookie(w)
 
 	cookie, err := r.Cookie(pendingLoginCookieName)
 	if err != nil {
-		http.Error(w, "Anmeldevorgang nicht gefunden oder abgelaufen — bitte erneut über /anmelden starten.", http.StatusBadRequest)
+		http.Error(w, "Login attempt not found or expired — please start again via /anmelden.", http.StatusBadRequest)
 		return
 	}
 
 	pending, ok := s.auth.redeemLogin(cookie.Value, r.URL.Query().Get("state"))
 	if !ok {
-		http.Error(w, "Anmeldevorgang ungültig oder abgelaufen — bitte erneut über /anmelden starten.", http.StatusBadRequest)
+		http.Error(w, "Login attempt invalid or expired — please start again via /anmelden.", http.StatusBadRequest)
 		return
 	}
 
 	if errParam := r.URL.Query().Get("error"); errParam != "" {
-		slog.Warn("oidc-anmeldung von authentik abgelehnt", "error", errParam, "description", r.URL.Query().Get("error_description"))
-		http.Error(w, "Anmeldung abgelehnt: "+errParam, http.StatusForbidden)
+		slog.Warn("oidc login rejected by authentik", "error", errParam, "description", r.URL.Query().Get("error_description"))
+		http.Error(w, "Login rejected: "+errParam, http.StatusForbidden)
 		return
 	}
 
 	code := r.URL.Query().Get("code")
 	if code == "" {
-		http.Error(w, "Antwort von Authentik enthält keinen Code.", http.StatusBadRequest)
+		http.Error(w, "Response from Authentik does not contain a code.", http.StatusBadRequest)
 		return
 	}
 
 	claims, err := s.oidc.exchange(r.Context(), code, pending.pkceVerifier, pending.nonce)
 	if err != nil {
-		slog.Error("oidc-token-austausch fehlgeschlagen", "error", err)
-		http.Error(w, "Anmeldung fehlgeschlagen.", http.StatusUnauthorized)
+		slog.Error("oidc token exchange failed", "error", err)
+		http.Error(w, "Login failed.", http.StatusUnauthorized)
 		return
 	}
 
@@ -65,7 +65,7 @@ func (s *Server) handleLoginCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if !claims.isAdmin(s.oidc.adminGroup) {
-		slog.Warn("oidc-anmeldung ohne admin-gruppe abgelehnt", "subject", claims.Subject, "email", claims.Email)
+		slog.Warn("oidc login rejected: missing admin group", "subject", claims.Subject, "email", claims.Email)
 		s.renderAccessDenied(w, r, username)
 		return
 	}
@@ -77,38 +77,38 @@ func (s *Server) handleLoginCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	setSessionCookie(w, cookieValue)
-	slog.Info("admin angemeldet", "email", claims.Email)
+	slog.Info("admin logged in", "email", claims.Email)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
-// accessDeniedData sind die Werte für access_denied.html — eine
-// eigenständige Seite ohne app-Layout (siehe dortiger Kommentar), da an
-// dieser Stelle keine Sitzung existiert.
+// accessDeniedData holds the values for access_denied.html — a standalone
+// page without the app layout (see the comment there), since no session
+// exists at this point.
 type accessDeniedData struct {
-	// Account ist die E-Mail-Adresse oder, falls das ID-Token keine
-	// enthält, das OIDC-Subject — derselbe Fallback wie beim
-	// Sitzungs-Benutzernamen (siehe Aufrufer).
+	// Account is the email address or, if the ID token doesn't contain
+	// one, the OIDC subject — the same fallback as for the session
+	// username (see the caller).
 	Account string
 }
 
-// renderAccessDenied zeigt eine erklärende Fehlerseite statt eines nackten
-// "403 Forbidden"-Klartexts (den bisherigen Zustand, bevor jemand ohne
-// Admin-Gruppe erstmals versucht hat, sich anzumelden — reproduziert
-// 2026-09-19: außer dem einen Satz war die Seite komplett leer). Rendert
-// mit http.StatusForbidden trotzdem korrekt: Content-Type wird VOR
-// WriteHeader gesetzt, views.renderNamed setzt ihn zwar erneut, das ist
-// nach WriteHeader aber wirkungslos (bereits korrekt gesetzter Wert).
+// renderAccessDenied shows an explanatory error page instead of a bare
+// "403 Forbidden" plaintext response (the previous state, before anyone
+// without the admin group had ever tried to log in — reproduced
+// 2026-09-19: apart from that one sentence, the page was completely
+// empty). Still renders correctly with http.StatusForbidden: Content-Type
+// is set BEFORE WriteHeader; views.renderNamed sets it again, but that's a
+// no-op after WriteHeader (already the correct value).
 func (s *Server) renderAccessDenied(w http.ResponseWriter, r *http.Request, account string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusForbidden)
 	if err := s.views.renderNamed(w, r, "access_denied.html", "fullpage", accessDeniedData{Account: account}); err != nil {
-		slog.Error("access-denied-seite konnte nicht gerendert werden", "error", err)
+		slog.Error("could not render access-denied page", "error", err)
 	}
 }
 
-// handleLogout beendet die Sitzung und leitet — falls Authentik einen
-// end_session_endpoint bekanntgibt — dorthin weiter (RP-initiated
-// Logout), sonst auf /anmelden.
+// handleLogout ends the session and — if Authentik advertises an
+// end_session_endpoint — redirects there (RP-initiated logout), otherwise
+// to /anmelden.
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	s.auth.endSession(r)
 	clearSessionCookie(w)

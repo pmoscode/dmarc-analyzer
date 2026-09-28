@@ -1,8 +1,8 @@
-// Package statistics orchestriert die Dashboard-Kennzahlen
-// (IMPLEMENTIERUNG.md Abschnitt 10.2), inklusive Vergleich zur Vorperiode
-// ("Veränderung gegenüber der Vorperiode (Trendpfeil)") — das gehört in
-// die Anwendungsschicht, nicht in den Repository-Port: Vorperiode ist eine
-// abgeleitete zweite Abfrage, kein Persistenzdetail.
+// Package statistics orchestrates the dashboard metrics
+// (IMPLEMENTIERUNG.md section 10.2), including comparison to the
+// previous period ("change vs. the previous period (trend arrow)") —
+// that belongs in the application layer, not in the repository port: the
+// previous period is a derived second query, not a persistence detail.
 package statistics
 
 import (
@@ -14,38 +14,38 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/sources"
 )
 
-// UseCase orchestriert Statistics-Abfragen.
+// UseCase orchestrates Statistics queries.
 type UseCase struct {
 	Repository analysis.Repository
-	// Enricher reichert Top-Sendequellen und Heatmap-Zeilen mit
-	// PTR-Hostname/erkanntem Dienst an (siehe SourceVolume.Label) —
-	// optional: nil überspringt die Anreicherung (z. B. in Tests), das
-	// Dashboard-Diagramm zeigt dann weiterhin nur die IP-Adresse.
+	// Enricher enriches top sending sources and heatmap rows with
+	// PTR hostname/recognized service (see SourceVolume.Label) —
+	// optional: nil skips the enrichment (e.g. in tests), the dashboard
+	// chart then keeps showing just the IP address.
 	Enricher sources.Enricher
 }
 
-// Comparison stellt Statistics für einen Zeitraum den Statistics der
-// unmittelbar davorliegenden, gleich langen Vorperiode gegenüber.
+// Comparison sets the Statistics for a period against the Statistics of
+// the immediately preceding period of equal length.
 type Comparison struct {
 	Current  analysis.Statistics
 	Previous analysis.Statistics
-	// PassRateTrend ist Current.PassRate - Previous.PassRate, in
-	// Prozentpunkten (kann negativ sein). 0, wenn die Vorperiode keine
-	// Nachrichten enthielt (Previous.TotalMessages == 0) — ein Vergleich
-	// gegen 0 Nachrichten wäre irreführend, nicht "0 % Verbesserung".
+	// PassRateTrend is Current.PassRate - Previous.PassRate, in
+	// percentage points (can be negative). 0 if the previous period
+	// contained no messages (Previous.TotalMessages == 0) — a comparison
+	// against 0 messages would be misleading, not "0% improvement".
 	PassRateTrend float64
-	// HasPreviousPeriodData meldet, ob die Vorperiode überhaupt
-	// Nachrichten enthielt — die UI zeigt sonst besser "kein Vergleich
-	// möglich" statt eines Trendpfeils auf Basis von 0/0.
+	// HasPreviousPeriodData reports whether the previous period contained
+	// any messages at all — otherwise the UI is better off showing "no
+	// comparison possible" instead of a trend arrow based on 0/0.
 	HasPreviousPeriodData bool
 }
 
-// ComputeWithTrend berechnet Statistics für q.Period sowie die
-// unmittelbar davorliegende, gleich lange Vorperiode.
+// ComputeWithTrend computes Statistics for q.Period as well as the
+// immediately preceding period of equal length.
 func (uc *UseCase) ComputeWithTrend(ctx context.Context, q analysis.Query) (Comparison, error) {
 	current, err := uc.Repository.Compute(ctx, q)
 	if err != nil {
-		return Comparison{}, fmt.Errorf("kennzahlen für den zeitraum konnten nicht berechnet werden: %w", err)
+		return Comparison{}, fmt.Errorf("failed to compute metrics for the period: %w", err)
 	}
 
 	previousQuery, err := previousPeriodQuery(q)
@@ -55,7 +55,7 @@ func (uc *UseCase) ComputeWithTrend(ctx context.Context, q analysis.Query) (Comp
 
 	previous, err := uc.Repository.Compute(ctx, previousQuery)
 	if err != nil {
-		return Comparison{}, fmt.Errorf("kennzahlen für die vorperiode konnten nicht berechnet werden: %w", err)
+		return Comparison{}, fmt.Errorf("failed to compute metrics for the previous period: %w", err)
 	}
 
 	comparison := Comparison{Current: current, Previous: previous}
@@ -66,15 +66,16 @@ func (uc *UseCase) ComputeWithTrend(ctx context.Context, q analysis.Query) (Comp
 	return comparison, nil
 }
 
-// topSourcesLimit ist die Anzahl Sendequellen für das Balkendiagramm und
-// die Heatmap (IMPLEMENTIERUNG.md Abschnitt 10.3: "Top-10-Sendequellen").
+// topSourcesLimit is the number of sending sources for the bar chart and
+// the heatmap (IMPLEMENTIERUNG.md section 10.3: "top 10 sending
+// sources").
 const topSourcesLimit = 10
 
-// Dashboard bündelt alle für die Übersicht benötigten Daten in einem
-// Aufruf: Kennzahlen inklusive Trend, Zeitreihe, Top-Sendequellen und
-// Heatmap (IMPLEMENTIERUNG.md Abschnitt 10.2/10.3) — eine Ansicht, ein
-// Ladevorgang, statt dass internal/ui/dashboard vier Use-Case-Methoden
-// einzeln koordinieren müsste.
+// Dashboard bundles all data needed for the overview into one call:
+// metrics including trend, time series, top sending sources and heatmap
+// (IMPLEMENTIERUNG.md section 10.2/10.3) — one view, one load, instead of
+// internal/ui/dashboard having to coordinate four use case methods
+// individually.
 type Dashboard struct {
 	Comparison   Comparison
 	DailyVolumes []analysis.DailyVolume
@@ -82,7 +83,7 @@ type Dashboard struct {
 	Heatmap      analysis.Heatmap
 }
 
-// Dashboard lädt alle Übersichtsdaten für q.
+// Dashboard loads all overview data for q.
 func (uc *UseCase) Dashboard(ctx context.Context, q analysis.Query) (Dashboard, error) {
 	comparison, err := uc.ComputeWithTrend(ctx, q)
 	if err != nil {
@@ -91,17 +92,17 @@ func (uc *UseCase) Dashboard(ctx context.Context, q analysis.Query) (Dashboard, 
 
 	dailyVolumes, err := uc.Repository.DailyVolumes(ctx, q)
 	if err != nil {
-		return Dashboard{}, fmt.Errorf("zeitreihe konnte nicht berechnet werden: %w", err)
+		return Dashboard{}, fmt.Errorf("failed to compute time series: %w", err)
 	}
 
 	topSources, err := uc.Repository.TopSources(ctx, q, topSourcesLimit)
 	if err != nil {
-		return Dashboard{}, fmt.Errorf("top-sendequellen konnten nicht berechnet werden: %w", err)
+		return Dashboard{}, fmt.Errorf("failed to compute top sending sources: %w", err)
 	}
 
 	heatmap, err := uc.Repository.Heatmap(ctx, q, topSourcesLimit)
 	if err != nil {
-		return Dashboard{}, fmt.Errorf("heatmap konnte nicht berechnet werden: %w", err)
+		return Dashboard{}, fmt.Errorf("failed to compute heatmap: %w", err)
 	}
 
 	uc.enrichSources(ctx, topSources, &heatmap)
@@ -114,12 +115,12 @@ func (uc *UseCase) Dashboard(ctx context.Context, q analysis.Query) (Dashboard, 
 	}, nil
 }
 
-// enrichSources füllt SourceVolume.Label (Top-Sendequellen-Diagramm) und
-// Heatmap.SourceLabels (Heatmap-Zeilen) über den optionalen Enricher —
-// dieselbe PTR-/Dienst-Anreicherung wie in der Sendequellen-Ansicht
-// (app/sourcestats.UseCase.List), hier zusätzlich fürs Dashboard.
-// uc.Enricher == nil (z. B. in Tests) überspringt das schlicht — die
-// Diagramme zeigen dann weiterhin die IP-Adresse.
+// enrichSources fills SourceVolume.Label (top sending sources chart) and
+// Heatmap.SourceLabels (heatmap rows) via the optional Enricher — the
+// same PTR/service enrichment as in the sending sources view
+// (app/sourcestats.UseCase.List), here additionally for the dashboard.
+// uc.Enricher == nil (e.g. in tests) simply skips this — the charts then
+// keep showing the IP address.
 func (uc *UseCase) enrichSources(ctx context.Context, topSources []analysis.SourceVolume, heatmap *analysis.Heatmap) {
 	if uc.Enricher == nil {
 		return
@@ -142,8 +143,8 @@ func (uc *UseCase) enrichSources(ctx context.Context, topSources []analysis.Sour
 	}
 }
 
-// sourceLabel priorisiert den erkannten Dienst vor dem reinen
-// PTR-Hostname — "Google Workspace" ist aussagekräftiger als
+// sourceLabel prioritizes the recognized service over the plain PTR
+// hostname — "Google Workspace" is more informative than
 // "mail-sor-f41.google.com".
 func sourceLabel(e sources.Enrichment) string {
 	if e.Service != "" {
@@ -152,14 +153,14 @@ func sourceLabel(e sources.Enrichment) string {
 	return e.Hostname
 }
 
-// previousPeriodQuery liefert dieselbe Query, aber mit einem Zeitraum
-// gleicher Länge unmittelbar vor q.Period.
+// previousPeriodQuery returns the same query, but with a period of equal
+// length immediately before q.Period.
 func previousPeriodQuery(q analysis.Query) (analysis.Query, error) {
 	duration := q.Period.End.Sub(q.Period.Begin)
 
 	previousPeriod, err := report.NewDateRange(q.Period.Begin.Add(-duration), q.Period.Begin)
 	if err != nil {
-		return analysis.Query{}, fmt.Errorf("vorperiode konnte nicht berechnet werden: %w", err)
+		return analysis.Query{}, fmt.Errorf("failed to compute previous period: %w", err)
 	}
 
 	return analysis.Query{Period: previousPeriod, Domain: q.Domain}, nil

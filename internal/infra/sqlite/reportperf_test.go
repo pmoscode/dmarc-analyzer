@@ -12,10 +12,9 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/infra/sqlite"
 )
 
-// newLargeTestReport baut einen Report mit n Records — für Import- und
-// Abfrage-Performance-Tests. Records unterscheiden sich in der Quell-IP,
-// damit Indizes wie im echten Betrieb genutzt werden statt auf identischen
-// Werten zu operieren.
+// newLargeTestReport builds a report with n records — for import and
+// query performance tests. Records differ in source IP, so indexes are
+// used as in real operation instead of operating on identical values.
 func newLargeTestReport(t testing.TB, reportID string, begin time.Time, n int) *report.AggregateReport {
 	t.Helper()
 
@@ -54,18 +53,17 @@ func newLargeTestReport(t testing.TB, reportID string, begin time.Time, n int) *
 	return r
 }
 
-// TestPerformance_100kRecords_ImportAndQuery deckt den in
-// UMSETZUNGSPLAN.md AP 2 geforderten Benchmark ab: 100.000 Records
-// importieren und abfragen. Läuft als regulärer, unter -short
-// übersprungener Test statt als go-test-Benchmark, weil das Szenario ein
-// einmaliger Ablauf ist (Datenmenge aufbauen, dann eine realistische
-// Abfrage messen), keine Mikro-Benchmark-Schleife. Zeitgrenzen bewusst mit
-// Sicherheitsabstand zum Zielwert (100 ms) gewählt, um auf langsameren
-// CI-Runnern nicht spontan zu flackern — die tatsächlich gemessenen Werte
-// werden geloggt.
+// TestPerformance_100kRecords_ImportAndQuery covers the benchmark required
+// in UMSETZUNGSPLAN.md AP 2: import and query 100,000 records. Runs as a
+// regular test skipped under -short instead of a go-test benchmark,
+// because the scenario is a one-time run (build up a dataset, then measure
+// one realistic query), not a micro-benchmark loop. Time limits are
+// deliberately chosen with a safety margin over the target value (100 ms)
+// so they don't flake spontaneously on slower CI runners — the actually
+// measured values are logged.
 func TestPerformance_100kRecords_ImportAndQuery(t *testing.T) {
 	if testing.Short() {
-		t.Skip("importiert 100.000 Records, siehe task test:unit")
+		t.Skip("imports 100,000 records, see task test:unit")
 	}
 	t.Parallel()
 	ctx := context.Background()
@@ -74,7 +72,7 @@ func TestPerformance_100kRecords_ImportAndQuery(t *testing.T) {
 
 	const (
 		reportsCount        = 1000
-		recordsPerReport    = 100 // 1000 * 100 = 100.000 Records insgesamt
+		recordsPerReport    = 100 // 1000 * 100 = 100,000 records total
 		bigReportRecordsCnt = 10000
 	)
 
@@ -85,16 +83,16 @@ func TestPerformance_100kRecords_ImportAndQuery(t *testing.T) {
 		r := newLargeTestReport(t, fmt.Sprintf("perf-%05d", i), base.Add(time.Duration(i)*time.Minute), recordsPerReport)
 		require.NoError(t, repo.Save(ctx, r))
 	}
-	// Ein einzelner großer Report zusätzlich — deckt den in
-	// IMPLEMENTIERUNG.md Abschnitt 12.3 genannten Testfall "Report mit
-	// 10.000 Records" ab und dient unten als FindByID-Ziel.
+	// One additional single large report — covers the test case "report
+	// with 10,000 records" named in IMPLEMENTIERUNG.md section 12.3, and
+	// serves as the FindByID target below.
 	bigReport := newLargeTestReport(t, "perf-big", base.Add(24*time.Hour), bigReportRecordsCnt)
 	require.NoError(t, repo.Save(ctx, bigReport))
 	importDuration := time.Since(importStart)
-	t.Logf("Import von %d Reports (%d Records) + 1 Report mit %d Records: %s",
+	t.Logf("Import of %d reports (%d records) + 1 report with %d records: %s",
 		reportsCount, reportsCount*recordsPerReport, bigReportRecordsCnt, importDuration)
 
-	// Berichtstabelle: eine typische, gefilterte, sortierte, erste Seite.
+	// Reports table: a typical, filtered, sorted first page.
 	queryStart := time.Now()
 	page, err := repo.Query(ctx, report.Query{
 		SortField: report.SortByDateBegin, SortDirection: report.SortDescending, Limit: 50,
@@ -102,24 +100,24 @@ func TestPerformance_100kRecords_ImportAndQuery(t *testing.T) {
 	queryDuration := time.Since(queryStart)
 	require.NoError(t, err)
 	require.Len(t, page.Reports, 50)
-	t.Logf("Query (Berichtstabelle, 50 von %d Reports): %s", reportsCount+1, queryDuration)
+	t.Logf("Query (reports table, 50 of %d reports): %s", reportsCount+1, queryDuration)
 	require.Less(t, queryDuration, 100*time.Millisecond,
-		"Query einer Seite der Berichtstabelle ist der eigentliche Zielwert aus UMSETZUNGSPLAN.md AP 2 — "+
-			"lokal gemessen ~7-8ms, hier ohne künstlichen Sicherheitsabstand, weil der Wert das auch verdient")
+		"querying a page of the reports table is the actual target value from UMSETZUNGSPLAN.md AP 2 — "+
+			"measured locally at ~7-8ms, here without an artificial safety margin because the value earns it")
 
-	// Bericht-Detailansicht: den einen großen Report vollständig laden.
-	// 10.000 Records in einem einzelnen Report ist deutlich mehr, als
-	// reale DMARC-Aggregate-Reports üblicherweise enthalten (siehe
-	// IMPLEMENTIERUNG.md Abschnitt 12.3, derselbe Testfall) — das ist der
-	// Rand-/Lastfall, nicht der Alltagspfad, deshalb hier ein spürbar
-	// großzügigerer Grenzwert als bei der Listenabfrage oben.
+	// Report detail view: fully load the one large report. 10,000 records
+	// in a single report is considerably more than real DMARC aggregate
+	// reports usually contain (see IMPLEMENTIERUNG.md section 12.3, same
+	// test case) — this is the edge/load case, not the everyday path,
+	// hence a noticeably more generous limit here than for the list query
+	// above.
 	findStart := time.Now()
 	loaded, err := repo.FindByID(ctx, bigReport.ID)
 	findDuration := time.Since(findStart)
 	require.NoError(t, err)
 	require.Len(t, loaded.Records, bigReportRecordsCnt)
-	t.Logf("FindByID (1 Report, %d Records): %s", bigReportRecordsCnt, findDuration)
+	t.Logf("FindByID (1 report, %d records): %s", bigReportRecordsCnt, findDuration)
 	require.Less(t, findDuration, 2*time.Second,
-		"ein einzelner Report mit 10.000 Records (unrealistisch groß) sollte trotzdem in vertretbarer Zeit laden; "+
-			"lokal gemessen ~460ms nach Umstellung der Batch-Ladefunktionen auf JOIN statt riesiger IN-Klausel")
+		"a single report with 10,000 records (unrealistically large) should still load in a reasonable time; "+
+			"measured locally at ~460ms after switching the batch-loading functions to JOIN instead of a huge IN clause")
 }

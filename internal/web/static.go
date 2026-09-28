@@ -7,27 +7,27 @@ import (
 	"os"
 )
 
-// staticFS liefert das Dateisystem für /static/ — eingebettet, oder im
-// Entwicklungsmodus von der Festplatte.
+// staticFS returns the filesystem for /static/ — embedded, or read from
+// disk in development mode.
 func staticFS(dev bool) (fs.FS, error) {
 	if dev {
 		return os.DirFS(devStaticDir), nil
 	}
 	sub, err := fs.Sub(embeddedStatic, "static")
 	if err != nil {
-		return nil, fmt.Errorf("eingebettete statische dateien konnten nicht geöffnet werden: %w", err)
+		return nil, fmt.Errorf("could not open embedded static files: %w", err)
 	}
 	return sub, nil
 }
 
-// devStaticDir: siehe devTemplatesDir in views.go — dieselbe Annahme
-// (Arbeitsverzeichnis ist die Repository-Wurzel).
+// devStaticDir: see devTemplatesDir in views.go — same assumption (the
+// working directory is the repository root).
 const devStaticDir = "internal/web/static"
 
-// staticHandler liefert /static/-Anfragen mit moderatem Caching — die
-// Dateien sind Teil der Binärdatei und ändern sich nur mit einem neuen
-// Programm-Release, ein langes Cache-Alter ist deshalb unproblematisch;
-// im Entwicklungsmodus (Dateien ändern sich laufend) wird nicht gecacht.
+// staticHandler serves /static/ requests with moderate caching — the
+// files are part of the binary and only change with a new program
+// release, so a long cache lifetime is unproblematic; in development mode
+// (files change constantly) nothing is cached.
 func (s *Server) staticHandler() http.Handler {
 	fileServer := http.FileServerFS(s.staticFS)
 

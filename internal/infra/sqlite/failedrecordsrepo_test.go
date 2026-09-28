@@ -23,9 +23,9 @@ func TestFailedRecordsRepository_Query_OnlyReturnsFailingRecords(t *testing.T) {
 	saveTestReport(t, reports, reportOpts{domain: "example.com", reportID: "ok-1", begin: begin, sourceIP: "203.0.113.1"})
 	saveTestReport(t, reports, reportOpts{domain: "example.com", reportID: "fail-1", begin: begin.Add(time.Hour), sourceIP: "198.51.100.1",
 		dkim: report.AuthResultFail, spf: report.AuthResultFail})
-	// DKIM allein bestanden -> PassesDMARC() true, gehört NICHT zu den
-	// Fehlschlägen (dieselbe Definition wie recordDetailView.PassesDMARC/
-	// AGENTS.md-Plan: "fehlgeschlagen" = weder DKIM noch SPF aligned).
+	// DKIM alone passed -> PassesDMARC() true, does NOT belong to the
+	// failures (same definition as recordDetailView.PassesDMARC/
+	// AGENTS.md plan: "failed" = neither DKIM nor SPF aligned).
 	saveTestReport(t, reports, reportOpts{domain: "example.com", reportID: "partial-1", begin: begin.Add(2 * time.Hour), sourceIP: "198.51.100.2",
 		dkim: report.AuthResultPass, spf: report.AuthResultFail})
 
@@ -121,7 +121,7 @@ func TestFailedRecordsRepository_Query_SortByDate_PaginatesWithCursor(t *testing
 	first, err := failed.Query(ctx, failedrecords.Query{Period: &period, Limit: 2})
 	require.NoError(t, err)
 	require.Len(t, first.Records, 2)
-	require.Equal(t, "198.51.100.3", first.Records[0].SourceIP.String(), "SortByDate: neuester Bericht zuerst")
+	require.Equal(t, "198.51.100.3", first.Records[0].SourceIP.String(), "SortByDate: newest report first")
 	require.Equal(t, "198.51.100.2", first.Records[1].SourceIP.String())
 	require.NotEmpty(t, first.NextCursor)
 

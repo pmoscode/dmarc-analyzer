@@ -1,6 +1,6 @@
-// Package sqlite implementiert die Repository-Ports aus internal/domain
-// gegen SQLite (modernc.org/sqlite, CGO-frei — siehe IMPLEMENTIERUNG.md
-// Abschnitt 3 und 8).
+// Package sqlite implements the repository ports from internal/domain
+// against SQLite (modernc.org/sqlite, CGO-free — see IMPLEMENTIERUNG.md
+// section 3 and 8).
 package sqlite
 
 import (
@@ -8,20 +8,19 @@ import (
 	"database/sql"
 	"fmt"
 
-	_ "modernc.org/sqlite" // registriert den Treiber "sqlite" bei database/sql
+	_ "modernc.org/sqlite" // registers the "sqlite" driver with database/sql
 )
 
-// Open öffnet (und legt bei Bedarf an) die SQLite-Datenbank unter path und
-// setzt die in IMPLEMENTIERUNG.md Abschnitt 8.2 festgelegten PRAGMAs direkt
-// in der Verbindungs-DSN: journal_mode=WAL, foreign_keys=ON,
-// busy_timeout=5000, synchronous=NORMAL. Wendet anschließend die
-// Migrationen an (siehe migrate.go).
+// Open opens (creating if necessary) the SQLite database at path and sets
+// the PRAGMAs defined in IMPLEMENTIERUNG.md section 8.2 directly in the
+// connection DSN: journal_mode=WAL, foreign_keys=ON, busy_timeout=5000,
+// synchronous=NORMAL. Afterwards applies the migrations (see migrate.go).
 //
-// path wird unverändert in die DSN übernommen (kein URL-Escaping) — so
-// erwartet es modernc.org/sqlite (siehe dessen dsn_test.go). Ein Pfad mit
-// "?" oder "#" würde die Query-Parameter-Grenze verwirren; für den aus
-// DMARC_DATA_DIR abgeleiteten Pfad (siehe internal/infra/envconfig)
-// kommt das praktisch nicht vor.
+// path is carried into the DSN unchanged (no URL escaping) — that's what
+// modernc.org/sqlite expects (see its dsn_test.go). A path containing "?"
+// or "#" would confuse the query-parameter boundary; for the path derived
+// from DMARC_DATA_DIR (see internal/infra/envconfig) that practically
+// never happens.
 func Open(ctx context.Context, path string) (*sql.DB, error) {
 	dsn := path +
 		"?_journal_mode=WAL" +
@@ -31,17 +30,17 @@ func Open(ctx context.Context, path string) (*sql.DB, error) {
 
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("datenbank %q konnte nicht geöffnet werden: %w", path, err)
+		return nil, fmt.Errorf("could not open database %q: %w", path, err)
 	}
 
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("datenbank %q antwortet nicht: %w", path, err)
+		return nil, fmt.Errorf("database %q is not responding: %w", path, err)
 	}
 
 	if err := Migrate(ctx, db); err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("migrationen konnten nicht angewendet werden: %w", err)
+		return nil, fmt.Errorf("could not apply migrations: %w", err)
 	}
 
 	return db, nil

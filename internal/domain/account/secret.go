@@ -1,74 +1,73 @@
 package account
 
-// maskedValue ersetzt jede Ausgabe eines Secret — über %v, %s, JSON oder
-// sonst eine Formatierung ist der echte Wert strukturell nicht erreichbar
-// (IMPLEMENTIERUNG.md Abschnitt 9, Regel "Passwort nie im Log").
+// maskedValue replaces every rendering of a Secret — via %v, %s, JSON or
+// any other formatting, the real value is structurally unreachable
+// (IMPLEMENTIERUNG.md section 9, rule "never log the password").
 const maskedValue = "***"
 
-// Secret hält ein Zugangsdaten-Geheimnis (Passwort, App-Passwort) im
-// Speicher. String() und MarshalJSON() geben ausnahmslos "***" zurück —
-// ein Leak über fmt.Sprintf("%v", ...) oder einen JSON-Dump ist damit
-// strukturell ausgeschlossen, nicht nur durch Disziplin beim Aufrufer.
+// Secret holds a credential secret (password, app password) in memory.
+// String() and MarshalJSON() always return "***" — a leak via
+// fmt.Sprintf("%v", ...) or a JSON dump is thereby structurally excluded,
+// not merely by caller discipline.
 type Secret struct {
 	value []byte
 }
 
-// NewSecret kopiert value — der Aufrufer behält die Kontrolle über sein
-// eigenes Slice und kann es unabhängig überschreiben.
+// NewSecret copies value — the caller keeps control of its own slice and
+// can overwrite it independently.
 func NewSecret(value []byte) Secret {
 	cp := make([]byte, len(value))
 	copy(cp, value)
 	return Secret{value: cp}
 }
 
-// NewSecretFromString ist eine Komfortfunktion für Aufrufer, die den Wert
-// als string vorliegen haben (z. B. aus einem UI-Formularfeld).
+// NewSecretFromString is a convenience function for callers that have the
+// value as a string (e.g. from a UI form field).
 func NewSecretFromString(value string) Secret {
 	return NewSecret([]byte(value))
 }
 
-// String erfüllt fmt.Stringer und maskiert immer — auch bei einem leeren
-// oder Nullwert-Secret, damit sich aus der Ausgabe nicht ableiten lässt,
-// ob überhaupt ein Geheimnis gesetzt ist.
+// String satisfies fmt.Stringer and always masks — even for an empty or
+// zero-value Secret, so the output can't be used to infer whether a
+// secret is set at all.
 func (s Secret) String() string {
 	return maskedValue
 }
 
-// GoString erfüllt fmt.GoStringer für den Format-Verb %#v. Ohne diese
-// Methode würde %#v die Struktur inklusive des rohen value-Slices als
-// Byte-Liste ausgeben — String() wird von %#v nicht benutzt, das wäre ein
-// eigenständiges Leck (hex-kodiert statt ASCII, aber trivial rückführbar).
+// GoString satisfies fmt.GoStringer for the %#v format verb. Without this
+// method, %#v would print the struct including the raw value slice as a
+// byte list — String() is not used by %#v, which would be a separate leak
+// (hex-encoded instead of ASCII, but trivially reversible).
 func (s Secret) GoString() string {
 	return "account.Secret{" + maskedValue + "}"
 }
 
-// MarshalJSON erfüllt json.Marshaler und maskiert immer.
+// MarshalJSON satisfies json.Marshaler and always masks.
 func (s Secret) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + maskedValue + `"`), nil
 }
 
-// IsZero meldet, ob kein Geheimnis gesetzt ist.
+// IsZero reports whether no secret is set.
 func (s Secret) IsZero() bool {
 	return len(s.value) == 0
 }
 
-// Expose liefert die Rohbytes für den unmittelbaren Gebrauch (z. B.
-// IMAP-LOGIN). Nur für den Moment der tatsächlichen Verwendung aufrufen,
-// das Ergebnis nicht zwischenspeichern oder weiterreichen. Direkt danach
-// Zero() aufrufen, sobald das Secret nicht mehr gebraucht wird.
+// Expose returns the raw bytes for immediate use (e.g. IMAP LOGIN). Only
+// call it right at the moment of actual use, don't cache or pass on the
+// result. Call Zero() immediately afterward once the secret is no longer
+// needed.
 func (s Secret) Expose() []byte {
 	return s.value
 }
 
-// Zero überschreibt die zugrunde liegenden Bytes mit Nullen. Da value ein
-// Slice ist, wirkt das auf alle Kopien dieses Secret, die dasselbe
-// Backing-Array teilen (IMPLEMENTIERUNG.md Abschnitt 9, Regel "Kurze
-// Lebensdauer im Speicher"). Eine über Expose() an eine string-basierte
-// API (z. B. imapclient.Login) übergebene Kopie kann dadurch NICHT mehr
-// erreicht werden — Go-Strings sind unveränderlich. Das ist eine bekannte,
-// hier bewusst akzeptierte Grenze: ohne unsafe-Tricks lässt sich ein
-// bereits als string vorliegendes Passwort nicht aktiv überschreiben, nur
-// der ursprüngliche []byte-Speicher.
+// Zero overwrites the underlying bytes with zeros. Since value is a slice,
+// this affects every copy of this Secret that shares the same backing
+// array (IMPLEMENTIERUNG.md section 9, rule "short lifetime in memory"). A
+// copy passed via Expose() to a string-based API (e.g. imapclient.Login)
+// can NOT be reached this way anymore — Go strings are immutable. This is
+// a known, deliberately accepted limitation: without unsafe tricks, a
+// password that already exists as a string can't be actively overwritten,
+// only the original []byte storage.
 func (s Secret) Zero() {
 	for i := range s.value {
 		s.value[i] = 0

@@ -30,14 +30,14 @@ func TestAuth_RedeemLogin_WrongState_Fails(t *testing.T) {
 	id, _, err := a.beginLogin()
 	require.NoError(t, err)
 
-	_, ok := a.redeemLogin(id, "definitiv-falscher-state")
+	_, ok := a.redeemLogin(id, "definitely-wrong-state")
 	require.False(t, ok)
 }
 
 func TestAuth_RedeemLogin_UnknownID_Fails(t *testing.T) {
 	a := newAuth()
 
-	_, ok := a.redeemLogin("unbekannte-id", "irgendein-state")
+	_, ok := a.redeemLogin("unknown-id", "some-state")
 	require.False(t, ok)
 }
 
@@ -47,10 +47,10 @@ func TestAuth_RedeemLogin_IsSingleUse(t *testing.T) {
 	require.NoError(t, err)
 
 	_, ok := a.redeemLogin(id, p.state)
-	require.True(t, ok, "erster Versuch muss gelingen")
+	require.True(t, ok, "first attempt must succeed")
 
 	_, ok = a.redeemLogin(id, p.state)
-	require.False(t, ok, "zweiter Versuch mit derselben ID muss scheitern")
+	require.False(t, ok, "second attempt with the same ID must fail")
 }
 
 func TestAuth_RedeemLogin_Expired_Fails(t *testing.T) {
@@ -58,8 +58,8 @@ func TestAuth_RedeemLogin_Expired_Fails(t *testing.T) {
 	id, p, err := a.beginLogin()
 	require.NoError(t, err)
 
-	// Ablaufzeit künstlich in die Vergangenheit setzen, statt echte
-	// 10 Minuten im Test zu warten.
+	// Artificially set the expiry into the past, instead of actually
+	// waiting 10 minutes in the test.
 	a.mu.Lock()
 	expired := a.pending[id]
 	expired.expiresAt = time.Now().Add(-time.Second)
@@ -90,7 +90,7 @@ func TestAuth_ValidSession_WrongCookie_Fails(t *testing.T) {
 	a := newAuth()
 
 	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", nil)
-	r.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "fremdes-token"})
+	r.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "foreign-token"})
 
 	require.False(t, a.validSession(r))
 }
@@ -142,7 +142,7 @@ func TestAuth_EndSession_RemovesSession(t *testing.T) {
 
 func TestSetSessionCookie_IsHttpOnlySecureAndLax(t *testing.T) {
 	rec := httptest.NewRecorder()
-	setSessionCookie(rec, "wert")
+	setSessionCookie(rec, "value")
 
 	resp := rec.Result()
 	defer func() { _ = resp.Body.Close() }()

@@ -39,7 +39,7 @@ func TestHandleDashboard_RendersFilterResetLink(t *testing.T) {
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(body), `<a href="/" class="filter-reset">Filter zurücksetzen</a>`)
+	require.Contains(t, string(body), `<a href="/" class="filter-reset">Reset filter</a>`)
 }
 
 func TestHandleDashboard_FilterParams_ReachRepository(t *testing.T) {
@@ -54,10 +54,10 @@ func TestHandleDashboard_FilterParams_ReachRepository(t *testing.T) {
 	require.Equal(t, "example.com", repo.lastDailyVolumesQuery.Domain)
 }
 
-// TestHandleDashboard_GlossaryHints_ShowDefinitionInline belegt, dass die
-// "?"-Hinweise die Begriffserklärung direkt als Attribut mitliefern
-// (app.css zeigt sie per Tooltip an) statt auf eine separate Glossarseite
-// zu verlinken — es gibt keine solche Seite mehr, siehe
+// TestHandleDashboard_GlossaryHints_ShowDefinitionInline verifies that
+// the "?" hints carry the term explanation directly as an attribute
+// (app.css shows it via a tooltip) instead of linking to a separate
+// glossary page — there is no such page anymore, see
 // TestGlossarRoute_NoLongerExists.
 func TestHandleDashboard_GlossaryHints_ShowDefinitionInline(t *testing.T) {
 	srv := newTestServerWithRepo(t, &fakeRepository{})
@@ -72,7 +72,7 @@ func TestHandleDashboard_GlossaryHints_ShowDefinitionInline(t *testing.T) {
 
 	require.NotContains(t, got, "/glossar")
 
-	for _, term := range []string{"DMARC-Pass-Rate", "Alignment", "Quell-IP", "Nachrichtenvolumen pro Tag", "Top-Sendequellen", "Verteilung nach Disposition", "Sendequelle × Tag (Pass-Rate)"} {
+	for _, term := range []string{"DMARC pass rate", "Alignment", "Source IP", "Message volume per day", "Top sending sources", "Disposition breakdown", "Sending source × day (pass rate)"} {
 		def, ok := glossary.ByName(term)
 		require.True(t, ok, term)
 		require.Contains(t, got, `data-tip="`+html.EscapeString(def.Definition)+`"`, term)

@@ -1,7 +1,7 @@
-// Package mailmime zerlegt eine rohe E-Mail (RFC 5322/MIME) in ihre
-// Anhänge. Protokollunabhängig: dieselbe Logik verarbeitet sowohl
-// IMAP-Nachrichten (sync.RawMessage.Data) als auch importierte
-// .eml-Dateien — siehe Kommentar an sync.RawMessage.
+// Package mailmime breaks a raw email (RFC 5322/MIME) apart into its
+// attachments. Protocol-independent: the same logic processes both IMAP
+// messages (sync.RawMessage.Data) and imported .eml files — see the
+// comment on sync.RawMessage.
 package mailmime
 
 import (
@@ -15,37 +15,38 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/sync"
 )
 
-// Decoder implementiert sync.MessageDecoder gegen go-message. Zustandslos —
-// ein Wert genügt, keine Konstruktion mit Abhängigkeiten nötig.
+// Decoder implements sync.MessageDecoder against go-message. Stateless —
+// a value is enough, no construction with dependencies needed.
 type Decoder struct{}
 
 var _ sync.MessageDecoder = Decoder{}
 
-// NewDecoder erzeugt einen einsatzbereiten Decoder.
+// NewDecoder creates a ready-to-use Decoder.
 func NewDecoder() Decoder {
 	return Decoder{}
 }
 
-// Decode erfüllt sync.MessageDecoder über die paketweite Decode-Funktion.
+// Decode satisfies sync.MessageDecoder via the package-wide Decode
+// function.
 func (Decoder) Decode(data []byte) ([]sync.RawAttachment, error) {
 	return Decode(data)
 }
 
-// maxAttachmentSize begrenzt die Größe eines einzelnen gelesenen Anhangs —
-// dieselbe Grenze wie beim Entpacken in internal/infra/dmarcxml, hier
-// zusätzlich vor dem eigentlichen Entpacken angewendet
-// (IMPLEMENTIERUNG.md Abschnitt 16: Zip-/Gzip-Bomben).
+// maxAttachmentSize limits the size of a single attachment being read —
+// the same limit as unpacking in internal/infra/dmarcxml, applied here
+// additionally before the actual unpacking
+// (IMPLEMENTIERUNG.md section 16: zip/gzip bombs).
 const maxAttachmentSize = 100 * 1024 * 1024 // 100 MB
 
-// Decode liest eine rohe Nachricht und liefert alle Anhänge. Nicht-
-// Anhang-Teile (z. B. der Textkörper "Hier ist Ihr DMARC-Report") werden
-// übersprungen — ReportParser entscheidet ohnehin selbst per Supports(),
-// ob ein Anhang ein verwertbarer DMARC-Report ist, das unnötig
-// mitzuschleifen wäre reine Verschwendung.
+// Decode reads a raw message and returns all attachments. Non-attachment
+// parts (e.g. the text body "Here is your DMARC report") are skipped —
+// ReportParser decides via Supports() anyway whether an attachment is a
+// usable DMARC report, so dragging it along unnecessarily would be pure
+// waste.
 func Decode(data []byte) ([]sync.RawAttachment, error) {
 	entity, err := message.Read(bytes.NewReader(data))
 	if err != nil && !message.IsUnknownCharset(err) {
-		return nil, fmt.Errorf("nachricht konnte nicht gelesen werden: %w", err)
+		return nil, fmt.Errorf("failed to read message: %w", err)
 	}
 
 	var attachments []sync.RawAttachment
@@ -63,7 +64,7 @@ func collectAttachments(entity *message.Entity, out *[]sync.RawAttachment) error
 				break
 			}
 			if err != nil {
-				return fmt.Errorf("mime-teil konnte nicht gelesen werden: %w", err)
+				return fmt.Errorf("failed to read mime part: %w", err)
 			}
 			if err := collectAttachments(part, out); err != nil {
 				return err
@@ -74,7 +75,7 @@ func collectAttachments(entity *message.Entity, out *[]sync.RawAttachment) error
 
 	filename, ok := attachmentFilename(entity)
 	if !ok {
-		return nil // kein Anhang, z. B. der Textkörper der Mail — überspringen
+		return nil // not an attachment, e.g. the mail's text body — skip
 	}
 
 	contentType, _, _ := entity.Header.ContentType()
@@ -82,10 +83,10 @@ func collectAttachments(entity *message.Entity, out *[]sync.RawAttachment) error
 	limited := io.LimitReader(entity.Body, maxAttachmentSize+1)
 	data, err := io.ReadAll(limited)
 	if err != nil {
-		return fmt.Errorf("anhang %q konnte nicht gelesen werden: %w", filename, err)
+		return fmt.Errorf("failed to read attachment %q: %w", filename, err)
 	}
 	if len(data) > maxAttachmentSize {
-		return fmt.Errorf("anhang %q überschreitet das größenlimit von 100 mb", filename)
+		return fmt.Errorf("attachment %q exceeds the 100 mb size limit", filename)
 	}
 
 	*out = append(*out, sync.RawAttachment{
@@ -96,10 +97,10 @@ func collectAttachments(entity *message.Entity, out *[]sync.RawAttachment) error
 	return nil
 }
 
-// attachmentFilename liefert den Dateinamen eines Anhangs, falls der Teil
-// einer ist. Providers benennen das uneinheitlich: Content-Disposition
-// "filename" ist der RFC-2183-Standardweg, Content-Type "name" ein
-// älterer, weiterhin verbreiteter Zusatz.
+// attachmentFilename returns the filename of an attachment, if the part is
+// one. Providers name this inconsistently: Content-Disposition "filename"
+// is the RFC 2183 standard way, Content-Type "name" is an older, still
+// common addition.
 func attachmentFilename(entity *message.Entity) (string, bool) {
 	if _, params, err := entity.Header.ContentDisposition(); err == nil {
 		if name := strings.TrimSpace(params["filename"]); name != "" {

@@ -13,7 +13,7 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/report"
 )
 
-var errTest = errors.New("testfehler")
+var errTest = errors.New("test error")
 
 type fakeStatsRepository struct {
 	byPeriod map[time.Time]analysis.Statistics // keyed by Period.Begin
@@ -29,10 +29,10 @@ func (f *fakeStatsRepository) Compute(_ context.Context, q analysis.Query) (anal
 	return f.byPeriod[q.Period.Begin], nil
 }
 
-// DailyVolumes/TopSources/Heatmap: von den ComputeWithTrend-Tests in
-// dieser Datei nicht ausgeübt — leere Stubs, nur damit fakeStatsRepository
-// analysis.Repository weiterhin vollständig erfüllt. Dashboard-Tests mit
-// echten Erwartungen an diese drei Methoden stehen in dashboard_test.go.
+// DailyVolumes/TopSources/Heatmap: not exercised by the ComputeWithTrend
+// tests in this file — empty stubs, only so fakeStatsRepository still
+// fully satisfies analysis.Repository. Dashboard tests with real
+// expectations for these three methods live in dashboard_test.go.
 func (f *fakeStatsRepository) DailyVolumes(context.Context, analysis.Query) ([]analysis.DailyVolume, error) {
 	return nil, nil
 }
@@ -70,7 +70,7 @@ func TestComputeWithTrend_CalculatesPreviousPeriodOfSameLength(t *testing.T) {
 
 	wantPrevBegin := begin.Add(-7 * 24 * time.Hour)
 	require.True(t, repo.calls[1].Period.Begin.Equal(wantPrevBegin),
-		"Vorperiode muss unmittelbar davor liegen und gleich lang sein")
+		"previous period must be immediately before and of equal length")
 	require.True(t, repo.calls[1].Period.End.Equal(begin))
 }
 
@@ -101,7 +101,7 @@ func TestComputeWithTrend_NoPreviousPeriodData_TrendIsZeroAndFlagged(t *testing.
 
 	repo := &fakeStatsRepository{byPeriod: map[time.Time]analysis.Statistics{
 		begin: {TotalMessages: 50, PassRate: 0.9},
-		// Vorperiode absichtlich nicht im Fixture → TotalMessages 0.
+		// Previous period deliberately not in the fixture → TotalMessages 0.
 	}}
 	uc := &statistics.UseCase{Repository: repo}
 
@@ -140,8 +140,8 @@ func TestComputeWithTrend_ForwardsDomainFilterToPreviousPeriod(t *testing.T) {
 	require.Equal(t, "example.com", repo.calls[1].Domain)
 }
 
-// erroringOnSecondCallRepository liefert beim ersten Compute-Aufruf
-// (aktuelle Periode) ein Ergebnis, beim zweiten (Vorperiode) einen Fehler.
+// erroringOnSecondCallRepository returns a result on the first Compute
+// call (current period), and an error on the second (previous period).
 type erroringOnSecondCallRepository struct {
 	calls int
 }

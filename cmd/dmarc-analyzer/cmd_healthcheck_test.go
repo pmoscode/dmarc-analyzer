@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// listenerPort extrahiert den Port aus der Adresse eines net.Listener —
-// httptest.NewServer bindet auf einen zufälligen Port, den der Test dann
-// über DMARC_LISTEN_ADDR bekannt geben muss.
+// listenerPort extracts the port from a net.Listener's address —
+// httptest.NewServer binds to a random port, which the test then has to
+// announce via DMARC_LISTEN_ADDR.
 func listenerPort(t *testing.T, addr string) string {
 	t.Helper()
 	_, port, err := net.SplitHostPort(addr)
@@ -50,10 +50,10 @@ func TestRunHealthcheck_ServerUnreachable_ReturnsError(t *testing.T) {
 }
 
 func TestRunHealthcheck_MalformedListenAddr_FallsBackToDefaultPort(t *testing.T) {
-	t.Setenv("DMARC_LISTEN_ADDR", "kein-gueltiges-addr-format")
+	t.Setenv("DMARC_LISTEN_ADDR", "not-a-valid-addr-format")
 
 	err := runHealthcheck(context.Background(), nil)
 	require.Error(t, err)
-	require.NotContains(t, err.Error(), "healthcheck-anfrage konnte nicht gebaut werden",
-		"ein ungültiges DMARC_LISTEN_ADDR sollte auf den Standardport zurückfallen, nicht die Anfrage kaputt machen")
+	require.NotContains(t, err.Error(), "failed to build healthcheck request",
+		"an invalid DMARC_LISTEN_ADDR should fall back to the default port, not break the request")
 }

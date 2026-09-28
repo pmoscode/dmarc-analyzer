@@ -1,24 +1,24 @@
 package web
 
-// shortCommitLen ist die Länge, auf die der Commit-Hash in der Oberfläche
-// gekürzt wird — dieselbe Länge wie "git log --oneline" üblicherweise.
+// shortCommitLen is the length the commit hash is truncated to in the
+// UI — the same length "git log --oneline" typically uses.
 const shortCommitLen = 7
 
-// BuildInfo beschreibt den laufenden Build (Version und Git-Commit) für
-// die Anzeige unter dem Schriftzug in der Kopfzeile (layout.html). Ermittelt wird beides in der
-// Composition Root (cmd/dmarc-analyzer/version.go), das Web-Paket zeigt es
-// nur an.
+// BuildInfo describes the running build (version and git commit) for
+// display below the wordmark in the header (layout.html). Both are
+// determined in the composition root (cmd/dmarc-analyzer/version.go); the
+// web package only displays them.
 type BuildInfo struct {
-	// Version ist z. B. ein Tag ("v1.2.0") oder "dev".
+	// Version is e.g. a tag ("v1.2.0") or "dev".
 	Version string
-	// Commit ist der vollständige Git-Commit-Hash, leer, wenn unbekannt.
+	// Commit is the full git commit hash, empty if unknown.
 	Commit string
 }
 
-// ShortCommit liefert den auf shortCommitLen gekürzten Commit-Hash. Ein
-// Suffix wie "-dirty" (siehe cmd/dmarc-analyzer/version.go) bleibt dabei
-// erhalten, damit ein Build aus einem veränderten Arbeitsverzeichnis in der
-// Oberfläche erkennbar bleibt.
+// ShortCommit returns the commit hash truncated to shortCommitLen. A
+// suffix like "-dirty" (see cmd/dmarc-analyzer/version.go) is preserved,
+// so a build from a modified working directory stays recognizable in the
+// UI.
 func (b BuildInfo) ShortCommit() string {
 	hash, suffix := b.Commit, ""
 	for i, r := range b.Commit {

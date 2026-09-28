@@ -1,60 +1,61 @@
-# Abhängigkeiten
+# Dependencies
 
-> Ergänzt `docs/architecture.md`. Dort steht die *Begründung* je Bibliothek
-> in groben Zügen, hier die *konkret gepinnte Version*.
+> Complements `docs/architecture.md`. That file has the *rationale* for
+> each library in broad strokes; this one has the *concretely pinned
+> version*.
 
-## Grundsatz
+## Principle
 
-Eine Abhängigkeit wird erst per `go get <modul>@<version>` in `go.mod`
-aufgenommen, wenn tatsächlich Code sie importiert. Ein `go.mod`, das
-Abhängigkeiten enthält, die nirgends importiert werden, lügt über den
-Ist-Zustand und wird beim nächsten `task tidy` ohnehin wieder entfernt.
+A dependency is only added to `go.mod` via `go get <module>@<version>`
+once code actually imports it. A `go.mod` that contains dependencies
+imported nowhere lies about the actual state and gets removed again by
+the next `task tidy` anyway.
 
-## Eingebunden
+## In use
 
-| Modul                            | Version         | Verwendung                                                                                                                                            |
-|----------------------------------|-----------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `github.com/stretchr/testify`    | `v1.12.1`       | `require` in allen Tests                                                                                                                              |
-| `modernc.org/sqlite`             | `v1.59.0`       | Persistenz (`internal/infra/sqlite`), CGO-frei — Voraussetzung für `CGO_ENABLED=0` im Docker-Build                                                    |
-| `github.com/emersion/go-imap/v2` | `v2.0.0-beta.8` | IMAP-Adapter (`internal/infra/imap`)                                                                                                                  |
-| `github.com/emersion/go-message` | `v0.18.2`       | MIME-Zerlegung (`internal/infra/mailmime`) zu `sync.RawAttachment`                                                                                    |
-| `github.com/coreos/go-oidc/v3`   | `v3.21.0`       | OIDC-Client (Discovery, ID-Token-Validierung) gegen Authentik, siehe `docs/features/auth.md`                                                          |
-| `golang.org/x/oauth2`            | `v0.37.0`       | Authorization-Code-Flow + PKCE für die OIDC-Anmeldung                                                                                                 |
-| `github.com/go-jose/go-jose/v4`  | `v4.1.5`        | Transitiv über `go-oidc` (JWT/JWS-Signaturprüfung), direkt importiert im Test-Doppel `internal/web/fakeoidc_test.go` (lokaler Fake-Identity-Provider) |
+| Module                            | Version         | Usage                                                                                                                                                  |
+|------------------------------------|-----------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `github.com/stretchr/testify`    | `v1.12.1`       | `require` in all tests                                                                                                                                 |
+| `modernc.org/sqlite`             | `v1.59.0`       | Persistence (`internal/infra/sqlite`), CGO-free — required for `CGO_ENABLED=0` in the Docker build                                                    |
+| `github.com/emersion/go-imap/v2` | `v2.0.0-beta.8` | IMAP adapter (`internal/infra/imap`)                                                                                                                   |
+| `github.com/emersion/go-message` | `v0.18.2`       | MIME splitting (`internal/infra/mailmime`) into `sync.RawAttachment`                                                                                   |
+| `github.com/coreos/go-oidc/v3`   | `v3.21.0`       | OIDC client (discovery, ID token validation) against Authentik, see `docs/features/auth.md`                                                           |
+| `golang.org/x/oauth2`            | `v0.37.0`       | Authorization code flow + PKCE for the OIDC login                                                                                                      |
+| `github.com/go-jose/go-jose/v4`  | `v4.1.5`        | Transitive via `go-oidc` (JWT/JWS signature verification), directly imported in the test double `internal/web/fakeoidc_test.go` (local fake identity provider) |
 
-### Frontend (`internal/web/static/vendor/`) — kein Go-Modul, minifizierte Dateien im Repository
+### Frontend (`internal/web/static/vendor/`) — not a Go module, minified files checked into the repository
 
-Statt CDN werden htmx, Chart.js und dessen Plugins als minifizierte
-UMD-Bündel direkt im Repository abgelegt (offline-fähig, passt zur
-Content-Security-Policy `default-src 'self'`). Lizenzen liegen jeweils als
-`LICENSE.<name>.txt` daneben.
+Instead of a CDN, htmx, Chart.js and its plugins are kept as minified UMD
+bundles directly in the repository (works offline, fits the Content
+Security Policy `default-src 'self'`). Licenses sit alongside as
+`LICENSE.<name>.txt` each.
 
-| Datei                         | Version  | Lizenz       | Verwendung                                                          |
-|-------------------------------|----------|--------------|---------------------------------------------------------------------|
-| `chart.umd.min.js`            | `4.5.1`  | MIT          | Diagramme im Browser (`internal/web/static/charts.js`)              |
-| `chartjs-chart-matrix.min.js` | `3.1.0`  | MIT          | Heatmap-Diagrammtyp (`matrix`)                                      |
-| `chartjs-plugin-zoom.min.js`  | `2.2.0`  | MIT          | Zoom/Verschieben in der Zeitreihe                                   |
-| `htmx.min.js`                 | `2.0.10` | BSD-0-Clause | Serverseitig gerenderte Teilaktualisierungen (Paginierung, Dialoge) |
+| File                           | Version  | License      | Usage                                                                |
+|---------------------------------|----------|--------------|------------------------------------------------------------------------|
+| `chart.umd.min.js`            | `4.5.1`  | MIT          | Charts in the browser (`internal/web/static/charts.js`)                |
+| `chartjs-chart-matrix.min.js` | `3.1.0`  | MIT          | Heatmap chart type (`matrix`)                                          |
+| `chartjs-plugin-zoom.min.js`  | `2.2.0`  | MIT          | Zoom/pan in the time series                                            |
+| `htmx.min.js`                 | `2.0.10` | BSD-0-Clause | Server-rendered partial updates (pagination, dialogs)                  |
 
-Bei einem Versions-Update: alle drei Chart.js-Dateien (Kern + beide
-Plugins) gemeinsam aktualisieren und gegeneinander testen (Plugins folgen
-nicht zwingend demselben Versionsschema wie Chart.js selbst).
+On a version update: update all three Chart.js files (core + both
+plugins) together and test them against each other (plugins don't
+necessarily follow the same version scheme as Chart.js itself).
 
-Standardbibliothek (`encoding/xml`, `compress/gzip`, `archive/zip`,
-`database/sql`, `log/slog`, `net/http`) braucht kein Pinning.
+The standard library (`encoding/xml`, `compress/gzip`, `archive/zip`,
+`database/sql`, `log/slog`, `net/http`) needs no pinning.
 
-## Entfernt
+## Removed
 
-- `fyne.io/fyne/v2` und `github.com/wcharczuk/go-chart/v2` — mit dem
-  Umstieg von der Fyne-Desktop-Oberfläche auf die eingebettete Web-
-  Oberfläche entfernt. Begründung: `docs/adr/0001-web-oberflaeche-statt-fyne.md`,
+- `fyne.io/fyne/v2` and `github.com/wcharczuk/go-chart/v2` — removed with
+  the move from the Fyne desktop UI to the embedded web UI. Rationale:
+  `docs/adr/0001-web-oberflaeche-statt-fyne.md`,
   `docs/adr/0002-chartjs-statt-chartrenderer-port.md`.
 - `github.com/zalando/go-keyring`, `golang.org/x/crypto` (scrypt),
-  `github.com/danieljoos/wincred`, `github.com/godbus/dbus/v5` — der
-  OS-Schlüsselbund-Adapter (`internal/infra/keyring`) ist mit dem Umstieg
-  auf reine ENV-Konfiguration entfallen; IMAP-Zugangsdaten kommen jetzt
-  aus `DMARC_IMAP_PASSWORD` statt aus einem persistierten Schlüsselbund.
-  Begründung: `docs/adr/0003-docker-nativ-oidc-statt-desktop-keychain.md`.
-- `github.com/google/uuid` — wurde nur für frei vergebene Konto-IDs beim
-  interaktiven Anlegen eines Kontos gebraucht; es gibt seit dem
-  ENV-Konfigurationsmodell nur noch ein Konto mit fester ID pro Container.
+  `github.com/danieljoos/wincred`, `github.com/godbus/dbus/v5` — the OS
+  keychain adapter (`internal/infra/keyring`) went away with the move to
+  pure ENV configuration; IMAP credentials now come from
+  `DMARC_IMAP_PASSWORD` instead of a persisted keychain. Rationale:
+  `docs/adr/0003-docker-nativ-oidc-statt-desktop-keychain.md`.
+- `github.com/google/uuid` — was only needed for freely assigned account
+  IDs when interactively creating an account; since the ENV configuration
+  model there's only ever one account with a fixed ID per container.

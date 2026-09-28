@@ -14,12 +14,12 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/report"
 )
 
-// sessionTransport injiziert das Sitzungs-Cookie einer über
-// authenticatedClient erzeugten Sitzung in jede Anfrage — ein eigener,
-// von Secure/SameSite unabhängiger Mechanismus statt eines
-// net/http/cookiejar: cookiejar würde ein Secure-Cookie (siehe auth.go
-// setSessionCookie) für die "http://"-Testserver-URLs dieses Pakets beim
-// Zurücklesen stillschweigend verwerfen.
+// sessionTransport injects the session cookie of a session created via
+// authenticatedClient into every request — its own mechanism,
+// independent of Secure/SameSite, instead of a net/http/cookiejar:
+// cookiejar would silently drop a Secure cookie (see auth.go
+// setSessionCookie) when reading it back for this package's
+// "http://" test server URLs.
 type sessionTransport struct {
 	cookieValue string
 }
@@ -30,11 +30,11 @@ func (t *sessionTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 	return http.DefaultTransport.RoundTrip(req)
 }
 
-// authenticatedClient legt direkt eine Sitzung an (ohne für jeden
-// Handler-Test den echten OIDC-Umweg über den Fake-Provider zu
-// durchlaufen — das prüfen die Login-spezifischen Tests in
-// server_test.go/handlers_login_test.go separat) und liefert einen
-// Client, der das Sitzungs-Cookie bei jeder Anfrage mitschickt.
+// authenticatedClient creates a session directly (without going through
+// the real OIDC detour via the fake provider for every handler test —
+// the login-specific tests in server_test.go/handlers_login_test.go
+// check that separately) and returns a client that sends the session
+// cookie with every request.
 func authenticatedClient(t *testing.T, srv *Server) *http.Client {
 	t.Helper()
 
@@ -44,19 +44,19 @@ func authenticatedClient(t *testing.T, srv *Server) *http.Client {
 	return &http.Client{Transport: &sessionTransport{cookieValue: cookieValue}}
 }
 
-// csrfTokenFor liefert das CSRF-Token der Sitzung von client (siehe
-// authenticatedClient) — für Formulartests, die requireCSRF durchlaufen
-// müssen.
+// csrfTokenFor returns the CSRF token of client's session (see
+// authenticatedClient) — for form tests that need to pass through
+// requireCSRF.
 func csrfTokenFor(t *testing.T, srv *Server, client *http.Client) string {
 	t.Helper()
 
 	tr, ok := client.Transport.(*sessionTransport)
-	require.True(t, ok, "client wurde nicht über authenticatedClient erzeugt")
+	require.True(t, ok, "client was not created via authenticatedClient")
 
 	srv.auth.mu.Lock()
 	defer srv.auth.mu.Unlock()
 	s, ok := srv.auth.sessions[tr.cookieValue]
-	require.True(t, ok, "sitzung nicht gefunden")
+	require.True(t, ok, "session not found")
 	return s.csrfToken
 }
 
@@ -173,7 +173,7 @@ func TestHandleChartHeatmap_DuplicateEnrichedLabels_StayDistinguishableByIP(t *t
 
 	require.Len(t, got.SourceLabels, 2)
 	require.NotEqual(t, got.SourceLabels[0], got.SourceLabels[1],
-		"zwei Quellen mit demselben erkannten Dienst dürfen im Diagramm nicht in derselben Zeile landen")
+		"two sources with the same detected service must not end up in the same chart row")
 }
 
 func TestHandleChartHeatmap_NoLabel_FallsBackToIP(t *testing.T) {
@@ -199,11 +199,11 @@ func TestHandleChartHeatmap_NoLabel_FallsBackToIP(t *testing.T) {
 func TestHandleChartDailyVolume_ComputeError_Returns500NotPanic(t *testing.T) {
 	repo := &fakeRepository{}
 	srv := newTestServerWithRepo(t, repo)
-	// Der Fehler wird erst nach der Anmeldung gesetzt: Die Anmeldung
-	// selbst leitet auf "/" weiter und der Test-Client folgt dem
-	// Redirect — die Übersicht ruft ebenfalls Statistics.Dashboard auf
-	// und würde mit computeErr von Anfang an schon beim Anmelden
-	// scheitern, nicht erst bei der hier zu prüfenden Anfrage.
+	// The error is only set after login: login itself redirects to "/"
+	// and the test client follows the redirect — the overview also calls
+	// Statistics.Dashboard and would already fail during login with
+	// computeErr set from the start, not only at the request under test
+	// here.
 	client := authenticatedClient(t, srv)
 	repo.computeErr = errTest
 
@@ -314,7 +314,7 @@ func TestHandleChartDisposition_ReturnsAllFourInFixedOrderWithDrilldownURLs(t *t
 	require.Len(t, got.Slices, 4)
 
 	require.Equal(t, "none", got.Slices[0].Disposition)
-	require.Equal(t, "Keine Maßnahme", got.Slices[0].Label)
+	require.Equal(t, "No action", got.Slices[0].Label)
 	require.Equal(t, 80, got.Slices[0].Total)
 	require.Contains(t, got.Slices[0].URL, "disposition=none")
 

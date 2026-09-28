@@ -7,24 +7,24 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/account"
 )
 
-// FailedImport ist eine Nachricht (oder ein Anhang darin), die nicht
-// verarbeitet werden konnte — landet in der Fehlerquarantäne statt den
-// gesamten Sync-Lauf abzubrechen (IMPLEMENTIERUNG.md Abschnitt 7.2). In
-// der UI einsehbar und gezielt wiederholbar (AP 5/7).
+// FailedImport is a message (or an attachment within it) that couldn't be
+// processed — ends up in the error quarantine instead of aborting the
+// whole sync run (IMPLEMENTIERUNG.md section 7.2). Viewable in the UI and
+// individually retriable (work package 5/7).
 type FailedImport struct {
 	AccountID  account.AccountID
 	MessageUID uint32
 	Filename   string
 	Error      string
-	// Raw ist der unverarbeitete Anhang bzw. die Nachricht — ermöglicht
-	// ein erneutes Einlesen nach einer Parser-Korrektur, ohne das Postfach
-	// erneut zu befragen.
+	// Raw is the unprocessed attachment or message — allows re-parsing
+	// after a parser fix without querying the mailbox again.
 	Raw        []byte
 	OccurredAt time.Time
 }
 
-// FailedImportRepository ist der Port zur Fehlerquarantäne. Implementiert
-// in AP 4 gegen SQLite (Tabelle failed_imports, Schema aus AP 2).
+// FailedImportRepository is the port for the error quarantine. Implemented
+// in work package 4 against SQLite (table failed_imports, schema from
+// work package 2).
 type FailedImportRepository interface {
 	Record(ctx context.Context, f FailedImport) error
 }

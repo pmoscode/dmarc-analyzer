@@ -5,10 +5,10 @@ import (
 	"net/http"
 )
 
-// dashboardPageData sind die Werte, die layout.html/dashboard.html
-// brauchen — bereits fertig formatiert (Prozentangaben etc.), damit die
-// Vorlage keine Formatierungslogik enthalten muss (MIGRATIONSPLAN.md
-// Abschnitt 9/AGENTS.md-Nachtrag: "Aufbereitung ... gehört nach Go").
+// dashboardPageData holds the values layout.html/dashboard.html need —
+// already fully formatted (percentages etc.), so the template doesn't
+// need to contain formatting logic (MIGRATIONSPLAN.md section 9/AGENTS.md
+// addendum: "preparation ... belongs in Go").
 type dashboardPageData struct {
 	Title string
 	Nav   []navItem
@@ -23,17 +23,17 @@ type dashboardPageData struct {
 	TrendUp   bool
 	TrendText string
 
-	// PeriodOptions und Domain füllen die Filterleiste (MIGRATIONSPLAN.md
-	// Meilenstein M1: "Filterleiste mit Werten in der URL").
+	// PeriodOptions and Domain fill the filter bar (MIGRATIONSPLAN.md
+	// milestone M1: "filter bar with values in the URL").
 	PeriodOptions []periodOptionView
 	Domain        string
 }
 
-// handleDashboard rendert die Übersicht: Kennzahlen-Kacheln aus
-// statistics.UseCase.Dashboard, gefiltert nach Zeitraum/Domain aus der
-// URL (M1). Die zwei Diagramme lädt die Seite selbst per JavaScript von
-// /api/diagramme/* nach (Abschnitt 6a) — sie stehen bewusst nicht schon
-// in dashboardPageData.
+// handleDashboard renders the overview: metric tiles from
+// statistics.UseCase.Dashboard, filtered by period/domain from the URL
+// (M1). The page itself loads the two charts via JavaScript from
+// /api/diagramme/* (section 6a) — they're deliberately not already in
+// dashboardPageData.
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	filter := parseFilterParams(r)
 	q, err := filter.query()
@@ -50,7 +50,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	current := dash.Comparison.Current
 	data := dashboardPageData{
-		Title:                "Übersicht",
+		Title:                "Overview",
 		Nav:                  navItems(r.URL.Path),
 		TotalMessages:        current.TotalMessages,
 		PassRatePercent:      formatPercent(current.PassRate),
@@ -74,5 +74,5 @@ func formatPercent(rate float64) string {
 }
 
 func formatTrend(passRateTrendPoints float64) string {
-	return fmt.Sprintf("%+.1f Prozentpunkte ggü. Vorperiode", passRateTrendPoints*100)
+	return fmt.Sprintf("%+.1f percentage points vs. previous period", passRateTrendPoints*100)
 }

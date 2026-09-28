@@ -33,7 +33,7 @@ func TestBuildInfo_ShortCommit(t *testing.T) {
 func TestLayout_HeaderShowsVersionAndCommit(t *testing.T) {
 	t.Parallel()
 
-	srv, _ := newTestServerWithAccounts(t, mustAccount(t, "Konto 1"))
+	srv, _ := newTestServerWithAccounts(t, mustAccount(t, "Account 1"))
 	client := authenticatedClient(t, srv)
 
 	for _, path := range []string{"/", "/berichte", "/einstellungen"} {

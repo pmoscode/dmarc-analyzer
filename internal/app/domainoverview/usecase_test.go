@@ -11,7 +11,7 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/domainstats"
 )
 
-var errTest = errors.New("testfehler")
+var errTest = errors.New("test error")
 
 type fakeDomainsRepository struct {
 	page domainstats.Page

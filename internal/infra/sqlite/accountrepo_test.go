@@ -14,7 +14,7 @@ import (
 
 func newTestAccount(t testing.TB, id account.AccountID) *account.MailAccount {
 	t.Helper()
-	acc, err := account.NewMailAccount(id, "Test-Konto", "imap.example.com", 993, "user@example.com", "INBOX", true, time.Now())
+	acc, err := account.NewMailAccount(id, "Test Account", "imap.example.com", 993, "user@example.com", "INBOX", true, time.Now())
 	require.NoError(t, err)
 	return acc
 }
@@ -46,16 +46,16 @@ func TestAccountRepository_Save_UpsertsExistingAccount(t *testing.T) {
 	acc := newTestAccount(t, "acc-1")
 	require.NoError(t, repo.Save(ctx, acc))
 
-	acc.DisplayName = "Neuer Name"
+	acc.DisplayName = "New Name"
 	require.NoError(t, repo.Save(ctx, acc))
 
 	loaded, err := repo.FindByID(ctx, "acc-1")
 	require.NoError(t, err)
-	require.Equal(t, "Neuer Name", loaded.DisplayName)
+	require.Equal(t, "New Name", loaded.DisplayName)
 
 	all, err := repo.FindAll(ctx)
 	require.NoError(t, err)
-	require.Len(t, all, 1, "Upsert darf keinen zweiten Datensatz anlegen")
+	require.Len(t, all, 1, "upsert must not create a second record")
 }
 
 func TestAccountRepository_FindByID_NotFound(t *testing.T) {
@@ -63,7 +63,7 @@ func TestAccountRepository_FindByID_NotFound(t *testing.T) {
 	ctx := context.Background()
 	repo := sqlite.NewAccountRepository(newTestDB(t))
 
-	_, err := repo.FindByID(ctx, "nie-angelegt")
+	_, err := repo.FindByID(ctx, "never-created")
 	require.Error(t, err)
 	require.ErrorIs(t, err, sql.ErrNoRows)
 }
@@ -74,15 +74,15 @@ func TestAccountRepository_FindAll_OrderedByDisplayName(t *testing.T) {
 	repo := sqlite.NewAccountRepository(newTestDB(t))
 
 	accZ := newTestAccount(t, "acc-z")
-	accZ.DisplayName = "Z-Konto"
+	accZ.DisplayName = "Z-Account"
 	accA := newTestAccount(t, "acc-a")
-	accA.DisplayName = "A-Konto"
+	accA.DisplayName = "A-Account"
 	require.NoError(t, repo.Save(ctx, accZ))
 	require.NoError(t, repo.Save(ctx, accA))
 
 	all, err := repo.FindAll(ctx)
 	require.NoError(t, err)
 	require.Len(t, all, 2)
-	require.Equal(t, "A-Konto", all[0].DisplayName)
-	require.Equal(t, "Z-Konto", all[1].DisplayName)
+	require.Equal(t, "A-Account", all[0].DisplayName)
+	require.Equal(t, "Z-Account", all[1].DisplayName)
 }

@@ -1,5 +1,5 @@
-// Package imap implementiert den Port sync.MessageSource gegen ein
-// IMAP-Postfach (github.com/emersion/go-imap/v2).
+// Package imap implements the sync.MessageSource port against an IMAP
+// mailbox (github.com/emersion/go-imap/v2).
 package imap
 
 import (
@@ -13,32 +13,31 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/sync"
 )
 
-// Adapter implementiert sync.MessageSource gegen ein IMAP-Postfach: TLS
-// erzwungen (sofern MailAccount.UseTLS gesetzt ist — die Bestätigung für
-// Klartext-IMAP liegt in der UI, siehe IMPLEMENTIERUNG.md Abschnitt 9),
-// UID-basiert, mit BODY.PEEK und EXAMINE statt SELECT, damit das Postfach
-// für andere Clients unberührt bleibt.
+// Adapter implements sync.MessageSource against an IMAP mailbox: TLS
+// enforced (provided MailAccount.UseTLS is set — the confirmation for
+// plaintext IMAP lives in the UI, see IMPLEMENTIERUNG.md section 9),
+// UID-based, using BODY.PEEK and EXAMINE instead of SELECT so the mailbox
+// stays untouched for other clients.
 type Adapter struct {
 	client *imapclient.Client
 }
 
 var _ sync.MessageSource = (*Adapter)(nil)
 
-// errNotConnected wird von FetchNew/Close zurückgegeben, wenn Connect noch
-// nicht erfolgreich aufgerufen wurde.
-var errNotConnected = errors.New("nicht verbunden — Connect muss zuerst aufgerufen werden")
+// errNotConnected is returned by FetchNew/Close when Connect has not yet
+// been called successfully.
+var errNotConnected = errors.New("not connected — Connect must be called first")
 
-// NewAdapter erzeugt einen unverbundenen Adapter. Connect muss vor
-// FetchNew aufgerufen werden.
+// NewAdapter creates an unconnected Adapter. Connect must be called before
+// FetchNew.
 func NewAdapter() *Adapter {
 	return &Adapter{}
 }
 
-// Connect baut die Verbindung auf (mit Backoff bei temporären
-// Netzwerkfehlern, siehe backoff.go) und meldet sich an. Ein
-// Anmeldefehler wird NICHT wiederholt — ein falsches Passwort wird durch
-// erneutes Versuchen nicht richtig, und wiederholte Fehlversuche können
-// Konten beim Provider sperren.
+// Connect establishes the connection (with backoff on transient network
+// errors, see backoff.go) and logs in. A login error is NOT retried — a
+// wrong password doesn't become correct by trying again, and repeated
+// failed attempts can get accounts locked out by the provider.
 func (a *Adapter) Connect(ctx context.Context, acc account.MailAccount, secret account.Secret) error {
 	var client *imapclient.Client
 	dialErr := retry(ctx, func() error {
@@ -50,7 +49,7 @@ func (a *Adapter) Connect(ctx context.Context, acc account.MailAccount, secret a
 		return nil
 	})
 	if dialErr != nil {
-		return fmt.Errorf("verbindung zu %s:%d konnte nicht aufgebaut werden: %w", acc.Host, acc.Port, dialErr)
+		return fmt.Errorf("failed to establish connection to %s:%d: %w", acc.Host, acc.Port, dialErr)
 	}
 
 	loginErr := runCtx(ctx, client, func() error {
@@ -59,7 +58,7 @@ func (a *Adapter) Connect(ctx context.Context, acc account.MailAccount, secret a
 	if loginErr != nil {
 		_ = client.Close()
 		return fmt.Errorf(
-			"anmeldung als %q fehlgeschlagen — bei aktivierter Zwei-Faktor-Authentifizierung wird ein App-Passwort benötigt: %w",
+			"login as %q failed — an app password is required when two-factor authentication is enabled: %w",
 			acc.Username, loginErr,
 		)
 	}
@@ -68,10 +67,10 @@ func (a *Adapter) Connect(ctx context.Context, acc account.MailAccount, secret a
 	return nil
 }
 
-// Close meldet ab und schließt die Verbindung. Ein Fehler beim Abmelden
-// (z. B. weil die Verbindung durch einen abgebrochenen Kontext bereits
-// geschlossen wurde) ist kein Grund, Close selbst scheitern zu lassen —
-// die Verbindung wird ohnehin im Anschluss geschlossen.
+// Close logs out and closes the connection. A logout error (e.g. because
+// the connection was already closed by a cancelled context) is not a
+// reason to fail Close itself — the connection is closed afterward
+// regardless.
 func (a *Adapter) Close() error {
 	if a.client == nil {
 		return nil

@@ -5,13 +5,12 @@ import (
 	"io"
 )
 
-// runCtx führt fn in einer Goroutine aus und macht den Aufruf dadurch
-// context-fähig: bricht ctx ab, wird closer geschlossen (das lässt jeden
-// gerade blockierenden Lese-/Schreibvorgang in fn mit einem Fehler
-// zurückkehren) und ctx.Err() geliefert, statt auf fn zu warten
-// (IMPLEMENTIERUNG.md Abschnitt 7.2: "jeder Schritt respektiert
-// context.Context"). Wartet danach trotzdem auf die Rückkehr von fn, damit
-// keine Goroutine hängen bleibt.
+// runCtx runs fn in a goroutine, making the call context-aware: if ctx is
+// cancelled, closer is closed (which causes any currently blocking
+// read/write in fn to return with an error) and ctx.Err() is returned
+// instead of waiting for fn (IMPLEMENTIERUNG.md section 7.2: "every step
+// honors context.Context"). Still waits for fn to return afterward, so no
+// goroutine is left hanging.
 func runCtx(ctx context.Context, closer io.Closer, fn func() error) error {
 	done := make(chan error, 1)
 	go func() { done <- fn() }()
@@ -21,7 +20,7 @@ func runCtx(ctx context.Context, closer io.Closer, fn func() error) error {
 		return err
 	case <-ctx.Done():
 		_ = closer.Close()
-		<-done // fn muss nach dem Close zeitnah zurückkehren
+		<-done // fn must return promptly after the Close
 		return ctx.Err()
 	}
 }

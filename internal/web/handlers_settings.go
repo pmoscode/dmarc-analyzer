@@ -7,9 +7,9 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/account"
 )
 
-// accountRowView ist die für die Status-Seite aufbereitete Sicht auf das
-// eine, per ENV konfigurierte Konto (nie das Passwort — das steht nur im
-// Prozessspeicher, siehe internal/infra/envconfig).
+// accountRowView is the status-page-ready view of the one account
+// configured via ENV (never the password — that only lives in process
+// memory, see internal/infra/envconfig).
 type accountRowView struct {
 	ID          string
 	DisplayName string
@@ -36,11 +36,11 @@ func accountRows(accounts []account.MailAccount) []accountRowView {
 	return rows
 }
 
-// settingsPageData sind die Werte für die reine Status-Seite (AP 7 /
-// Docker-Umstieg): Konto und Laufzeit-Einstellungen kommen komplett aus
-// ENV (internal/infra/envconfig) und werden hier nur angezeigt, nicht
-// mehr bearbeitet — Ändern braucht einen Container-Neustart mit anderen
-// Umgebungsvariablen.
+// settingsPageData holds the values for the plain status page (AP 7 /
+// Docker migration): account and runtime settings come entirely from ENV
+// (internal/infra/envconfig) and are only displayed here, no longer
+// editable — changing them needs a container restart with different
+// environment variables.
 type settingsPageData struct {
 	Title string
 	Nav   []navItem
@@ -62,8 +62,8 @@ func redirectToSettingsWithMessage(w http.ResponseWriter, r *http.Request, messa
 	http.Redirect(w, r, "/einstellungen?"+v.Encode(), http.StatusSeeOther)
 }
 
-// handleSettings zeigt das per ENV konfigurierte Konto sowie die aktuell
-// geltende Aufbewahrungsdauer/den Sync-Intervall an.
+// handleSettings shows the account configured via ENV as well as the
+// currently effective retention period/sync interval.
 func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	accounts, err := s.deps.Accounts.List(r.Context())
 	if err != nil {
@@ -85,13 +85,13 @@ func (s *Server) handleSettings(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleAccountTest testet die Verbindung des konfigurierten Kontos.
+// handleAccountTest tests the connection of the configured account.
 func (s *Server) handleAccountTest(w http.ResponseWriter, r *http.Request) {
 	id := account.AccountID(r.PathValue("id"))
 
 	if err := s.deps.Accounts.TestConnectionByID(r.Context(), id); err != nil {
-		redirectToSettingsWithMessage(w, r, "Verbindung fehlgeschlagen.", true)
+		redirectToSettingsWithMessage(w, r, "Connection failed.", true)
 		return
 	}
-	redirectToSettingsWithMessage(w, r, "Verbindung erfolgreich.", false)
+	redirectToSettingsWithMessage(w, r, "Connection successful.", false)
 }

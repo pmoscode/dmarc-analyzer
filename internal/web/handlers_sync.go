@@ -11,40 +11,39 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/app/syncjob"
 )
 
-// redirectBack leitet auf die Seite zurück, von der die Anfrage kam
-// (Referer-Header, nur der Pfad — nie das ganze, potenziell fremde URL,
-// siehe unten), sonst auf "/". Für Formulare wie /abgleich, die von
-// praktisch jeder Seite aus ausgelöst werden können (der Sync-Knopf sitzt
-// in layout.html, also auf jeder Seite) und danach dorthin zurückkehren
-// sollen, statt immer auf die Übersicht zu springen.
+// redirectBack redirects back to the page the request came from (the
+// Referer header, path only — never the whole, potentially foreign URL,
+// see below), otherwise to "/". For forms like /abgleich that can be
+// triggered from practically any page (the sync button sits in
+// layout.html, so on every page) and should return there afterward,
+// instead of always jumping to the overview.
 func redirectBack(w http.ResponseWriter, r *http.Request) {
 	target := "/"
 	if ref := r.Referer(); ref != "" {
 		if u, err := url.Parse(ref); err == nil && u.Path != "" && !strings.HasPrefix(u.Path, "//") {
-			// Nur den Pfad (+ Query) übernehmen, nie Schema/Host aus dem
-			// Referer — der stammt aus einem Browser-Header, dem CSRF-
-			// /Host-geprüften Ursprung zum Trotz kein Grund, ihn als
-			// Redirect-Ziel wörtlich zu vertrauen (Open-Redirect-Vorsicht).
-			// "//" als Pfadanfang zusätzlich ausgeschlossen: ein
-			// schema-relatives "//evil.example" würde der Browser als
-			// eigenständiges Redirect-Ziel behandeln, nicht als Pfad
-			// dieses Servers.
+			// Only take over the path (+ query), never scheme/host from
+			// the Referer — it comes from a browser header, and despite
+			// the CSRF/host-checked origin there's no reason to trust it
+			// literally as a redirect target (open-redirect caution).
+			// "//" as a path prefix is also excluded: a scheme-relative
+			// "//evil.example" would be treated by the browser as an
+			// independent redirect target, not as a path on this server.
 			target = u.Path
 			if u.RawQuery != "" {
 				target += "?" + u.RawQuery
 			}
 		}
 	}
-	//nolint:gosec // G710: target ist oben auf einen reinen, mit "/" (nicht
-	// "//") beginnenden Pfad ohne Schema/Host eingeschränkt — kein Ziel
-	// außerhalb dieses Servers erreichbar.
+	//nolint:gosec // G710: target is restricted above to a plain path
+	// starting with "/" (not "//"), with no scheme/host — no target
+	// outside this server is reachable.
 	http.Redirect(w, r, target, http.StatusSeeOther)
 }
 
-// handleSyncStart stößt einen Sync-Lauf über alle konfigurierten Konten
-// an (MIGRATIONSPLAN.md Abschnitt 7: "POST /abgleich"). Läuft bereits
-// einer, ist das kein Fehler — der Nutzer sieht ohnehin den laufenden
-// Fortschritt (siehe /ereignisse).
+// handleSyncStart kicks off a sync run across all configured accounts
+// (MIGRATIONSPLAN.md section 7: "POST /abgleich"). If one is already
+// running, that's not an error — the user sees the running progress
+// anyway (see /ereignisse).
 func (s *Server) handleSyncStart(w http.ResponseWriter, r *http.Request) {
 	if err := s.deps.SyncJob.Start(); err != nil && !errors.Is(err, syncjob.ErrAlreadyRunning) {
 		s.serverError(w, r, err)
@@ -53,18 +52,17 @@ func (s *Server) handleSyncStart(w http.ResponseWriter, r *http.Request) {
 	redirectBack(w, r)
 }
 
-// handleSyncCancel bricht einen laufenden Sync ab (MIGRATIONSPLAN.md
-// Abschnitt 7: "POST /abgleich/abbrechen") — kein Fehler, wenn keiner
-// läuft.
+// handleSyncCancel cancels a running sync (MIGRATIONSPLAN.md section 7:
+// "POST /abgleich/abbrechen") — not an error if none is running.
 func (s *Server) handleSyncCancel(w http.ResponseWriter, r *http.Request) {
 	s.deps.SyncJob.Cancel()
 	redirectBack(w, r)
 }
 
-// sseState ist die JSON-Form eines syncjob.State für /ereignisse — eigene
-// Feldnamen (lowerCamelCase, verschachtelte progress/total-Objekte) statt
-// syncjob.State direkt zu marshalen, damit static/app.js ein stabiles,
-// bewusst gestaltetes Format bekommt statt der Go-internen Struktur.
+// sseState is the JSON form of a syncjob.State for /ereignisse — its own
+// field names (lowerCamelCase, nested progress/total objects) instead of
+// marshaling syncjob.State directly, so static/app.js gets a stable,
+// deliberately designed format instead of the Go-internal structure.
 type sseState struct {
 	Status         string `json:"status"`
 	CurrentAccount string `json:"currentAccount,omitempty"`
@@ -97,14 +95,14 @@ func newSSEState(s syncjob.State) sseState {
 	return out
 }
 
-// handleEvents liefert den Sync-Fortschritt als Server-Sent Events
-// (MIGRATIONSPLAN.md Abschnitt 7: "GET /ereignisse"). Ein Ereignis sofort
-// beim Verbindungsaufbau (aktueller Stand), danach eines je Änderung, bis
-// der Browser die Verbindung schließt (r.Context() endet dann).
+// handleEvents delivers sync progress as Server-Sent Events
+// (MIGRATIONSPLAN.md section 7: "GET /ereignisse"). One event
+// immediately on connection (current state), then one per change, until
+// the browser closes the connection (r.Context() then ends).
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		http.Error(w, "SSE wird von diesem Server nicht unterstützt", http.StatusInternalServerError)
+		http.Error(w, "This server does not support SSE", http.StatusInternalServerError)
 		return
 	}
 

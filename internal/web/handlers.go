@@ -5,18 +5,18 @@ import (
 	"net/http"
 )
 
-// serverError loggt err und antwortet mit einer Klartext-Fehlermeldung
-// (UMSETZUNGSPLAN.md-Konvention: keine technischen Details an den
-// Nutzer/Browser durchreichen).
+// serverError logs err and responds with a plaintext error message
+// (UMSETZUNGSPLAN.md convention: don't pass technical details to the
+// user/browser).
 func (s *Server) serverError(w http.ResponseWriter, r *http.Request, err error) {
-	s.logger.Error("anfrage fehlgeschlagen", "path", r.URL.Path, "error", err)
-	http.Error(w, "Daten konnten nicht geladen werden.", http.StatusInternalServerError)
+	s.logger.Error("request failed", "path", r.URL.Path, "error", err)
+	http.Error(w, "Could not load data.", http.StatusInternalServerError)
 }
 
-// writeJSON schreibt v als JSON-Antwort. NaN/Inf in float64-Feldern würden
-// json.Marshal mit einem Fehler scheitern lassen (encoding/json kennt
-// keine Darstellung dafür) — das würde hier als serverError sichtbar,
-// nicht als kaputtes JSON beim Browser ankommen.
+// writeJSON writes v as a JSON response. NaN/Inf in float64 fields would
+// make json.Marshal fail with an error (encoding/json has no
+// representation for them) — that surfaces here as serverError, not as
+// broken JSON arriving at the browser.
 func (s *Server) writeJSON(w http.ResponseWriter, r *http.Request, v any) {
 	data, err := json.Marshal(v)
 	if err != nil {

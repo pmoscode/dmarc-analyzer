@@ -7,19 +7,19 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/app/exportdata"
 )
 
-// exportPageSize ist die Seitengröße, mit der ein CSV-Export intern aus
-// dem Repository nachlädt — größer als reportsPageSize/sourcesPageSize
-// (weniger Datenbank-Roundtrips für einen typischerweise großen Export),
-// aber weiterhin eine Seite nach der anderen: der gesamte gefilterte
-// Bestand liegt nie komplett im Speicher (MIGRATIONSPLAN.md Meilenstein
-// M4: "CSV-Export des gesamten gefilterten Bestands, gestreamt").
+// exportPageSize is the page size a CSV export uses to load from the
+// repository internally — bigger than reportsPageSize/sourcesPageSize
+// (fewer database round trips for a typically large export), but still
+// one page at a time: the entire filtered set is never fully in memory
+// (MIGRATIONSPLAN.md milestone M4: "CSV export of the entire filtered
+// set, streamed").
 const exportPageSize = 500
 
-// handleExportReportsCSV liefert ALLE Reports, die dem aktuellen Filter
-// entsprechen, als CSV-Download — im Unterschied zur früheren
-// Fyne-Oberfläche (die nur die bereits geladenen, sichtbaren Seiten
-// exportierte, siehe internal/ui/reports.View.exportCSV) lädt dieser
-// Export selbst nach, seitenweise, direkt in die Antwort geschrieben.
+// handleExportReportsCSV returns ALL reports matching the current filter
+// as a CSV download — unlike the former Fyne UI (which only exported the
+// pages already loaded and visible, see internal/ui/reports.View.exportCSV)
+// this export loads more itself, page by page, written directly into the
+// response.
 func (s *Server) handleExportReportsCSV(w http.ResponseWriter, r *http.Request) {
 	filter, err := parseReportsFilter(r)
 	if err != nil {
@@ -52,9 +52,9 @@ func (s *Server) handleExportReportsCSV(w http.ResponseWriter, r *http.Request) 
 				return
 			}
 		}
-		// Nach jeder Seite flushen, statt am Ende: bei einem großen
-		// gefilterten Bestand soll der Browser den Download-Fortschritt
-		// sehen, nicht erst nach dem letzten Byte alles auf einmal.
+		// Flush after every page instead of at the end: for a large
+		// filtered set, the browser should see download progress, not get
+		// everything at once after the last byte.
 		cw.Flush()
 		if err := cw.Error(); err != nil {
 			s.logExportError(r, err)
@@ -71,8 +71,8 @@ func (s *Server) handleExportReportsCSV(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-// handleExportSourcesCSV: siehe handleExportReportsCSV, für die
-// Sendequellen-Ansicht.
+// handleExportSourcesCSV: see handleExportReportsCSV, for the sending
+// sources view.
 func (s *Server) handleExportSourcesCSV(w http.ResponseWriter, r *http.Request) {
 	filter := parseSourcesFilter(r)
 
@@ -122,8 +122,8 @@ func (s *Server) handleExportSourcesCSV(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-// handleExportDomainsCSV: siehe handleExportReportsCSV, für die
-// Domains-Ansicht.
+// handleExportDomainsCSV: see handleExportReportsCSV, for the domains
+// view.
 func (s *Server) handleExportDomainsCSV(w http.ResponseWriter, r *http.Request) {
 	filter := parseDomainsFilter(r)
 
@@ -173,8 +173,8 @@ func (s *Server) handleExportDomainsCSV(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-// handleExportFailedRecordsCSV: siehe handleExportReportsCSV, für die
-// Fehlschläge-Ansicht.
+// handleExportFailedRecordsCSV: see handleExportReportsCSV, for the
+// failures view.
 func (s *Server) handleExportFailedRecordsCSV(w http.ResponseWriter, r *http.Request) {
 	filter := parseFailedRecordsFilter(r)
 
@@ -224,12 +224,12 @@ func (s *Server) handleExportFailedRecordsCSV(w http.ResponseWriter, r *http.Req
 	}
 }
 
-// logExportError protokolliert einen Fehler, der mitten im Streamen
-// eines CSV-Downloads auftritt — anders als s.serverError kann hier kein
-// HTTP-Fehlerstatus mehr gesendet werden (der 200er-Status samt Kopfzeilen
-// ist beim ersten geschriebenen Byte schon beim Browser angekommen); der
-// Download bricht für den Nutzer sichtbar unvollständig ab, serverseitig
-// bleibt wenigstens die Ursache im Log.
+// logExportError logs an error that occurs in the middle of streaming a
+// CSV download — unlike s.serverError, no HTTP error status can be sent
+// anymore at this point (the 200 status plus headers already reached the
+// browser with the first byte written); the download visibly breaks off
+// incomplete for the user, but the server-side log at least keeps the
+// cause.
 func (s *Server) logExportError(r *http.Request, err error) {
-	s.logger.Error("csv-export abgebrochen", "path", r.URL.Path, "error", err)
+	s.logger.Error("csv export aborted", "path", r.URL.Path, "error", err)
 }

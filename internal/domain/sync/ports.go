@@ -1,5 +1,5 @@
-// Package sync enthält den Sync-Fortschritt (State) sowie die Ports
-// MessageSource und ReportParser (IMPLEMENTIERUNG.md Abschnitt 6.4).
+// Package sync contains the sync progress (State) and the ports
+// MessageSource and ReportParser (IMPLEMENTIERUNG.md section 6.4).
 package sync
 
 import (
@@ -10,57 +10,56 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/report"
 )
 
-// RawAttachment ist ein unverarbeiteter Anhang aus einer Quelle: Rohbytes
-// plus die Metadaten, die zur Formaterkennung nötig sind.
+// RawAttachment is an unprocessed attachment from a source: raw bytes plus
+// the metadata needed for format detection.
 type RawAttachment struct {
 	Filename    string
 	ContentType string
 	Data        []byte
 }
 
-// MessageDecoder zerlegt eine rohe Nachricht (RawMessage.Data) in ihre
-// Anhänge — der protokollunabhängige Schritt zwischen MessageSource und
-// ReportParser (siehe Kommentar an RawMessage). Implementiert in AP 4
-// gegen github.com/emersion/go-message (internal/infra/mailmime). Eigener
-// Port statt eines direkten Imports von internal/infra/mailmime aus der
-// Anwendungsschicht — sonst würde syncreports an einer konkreten
-// Infra-Technologie hängen statt an einem Port (DIP, IMPLEMENTIERUNG.md
-// Abschnitt 4.2).
+// MessageDecoder splits a raw message (RawMessage.Data) into its
+// attachments — the protocol-independent step between MessageSource and
+// ReportParser (see comment on RawMessage). Implemented in work package 4
+// against github.com/emersion/go-message (internal/infra/mailmime). Its
+// own port instead of a direct import of internal/infra/mailmime from the
+// application layer — otherwise syncreports would depend on a concrete
+// infra technology instead of a port (DIP, IMPLEMENTIERUNG.md section
+// 4.2).
 type MessageDecoder interface {
 	Decode(data []byte) ([]RawAttachment, error)
 }
 
-// ReportParser wandelt einen Rohanhang in Domänenobjekte. Über Supports()
-// wird die passende Implementierung gewählt — so kommen RUF und TLS-RPT
-// später additiv hinzu, ohne bestehenden Code zu ändern (Open/Closed,
-// IMPLEMENTIERUNG.md Abschnitt 6.4).
+// ReportParser converts a raw attachment into domain objects. Supports()
+// selects the matching implementation — this way RUF and TLS-RPT can be
+// added additively later without changing existing code (open/closed,
+// IMPLEMENTIERUNG.md section 6.4).
 type ReportParser interface {
 	Supports(attachment RawAttachment) bool
 	Parse(ctx context.Context, attachment RawAttachment) (*report.AggregateReport, error)
 }
 
-// MultiReportParser ist eine optionale Erweiterung von ReportParser für
-// Anhänge, die mehrere Reports enthalten können — bei DMARC-Aggregate-
-// Reports insbesondere ein .zip mit mehreren XML-Dateien
-// (internal/infra/dmarcxml.Parser implementiert dies bereits über
-// ParseAll). Aufrufer (importfiles/syncreports) prüfen per Typ-Assertion,
-// ob ein Parser diese Schnittstelle zusätzlich zu ReportParser erfüllt —
-// derselbe optionale-Schnittstellen-Zuschnitt wie MailboxLister weiter
-// unten. Ein Parser, der nur Parse() implementiert, liefert dann eben nur
-// den einen Report, den Parse() zurückgibt — kein Fehler, nur weniger
-// Funktionsumfang.
+// MultiReportParser is an optional extension of ReportParser for
+// attachments that can contain multiple reports — for DMARC aggregate
+// reports in particular a .zip with several XML files
+// (internal/infra/dmarcxml.Parser already implements this via ParseAll).
+// Callers (importfiles/syncreports) check via type assertion whether a
+// parser implements this interface in addition to ReportParser — the
+// same optional-interface slicing as MailboxLister further below. A
+// parser that only implements Parse() then simply returns the single
+// report that Parse() returns — not an error, just less functionality.
 type MultiReportParser interface {
 	ParseAll(ctx context.Context, attachment RawAttachment) ([]*report.AggregateReport, error)
 }
 
-// ParseAttachment liefert alle in attachment enthaltenen Reports —
-// bevorzugt über MultiReportParser.ParseAll, falls parser das zusätzlich
-// implementiert (z. B. für .zip-Anhänge mit mehreren XML-Dateien), sonst
-// über das einzelne Parse() aus ReportParser. Gemeinsam genutzt von
-// importfiles.UseCase und syncreports.UseCase, damit beide dasselbe
-// Verhalten haben (vor dieser Funktion importierte importfiles einen
-// .zip mit mehreren Reports nur unvollständig — es wurde stets nur der
-// erste enthaltene Report gespeichert, siehe Regressionstest
+// ParseAttachment returns all reports contained in attachment —
+// preferably via MultiReportParser.ParseAll if parser additionally
+// implements that (e.g. for .zip attachments with multiple XML files),
+// otherwise via the single Parse() from ReportParser. Shared by
+// importfiles.UseCase and syncreports.UseCase so both behave the same way
+// (before this function, importfiles imported a .zip with multiple
+// reports only incompletely — only the first contained report was ever
+// saved, see regression test
 // TestHandleImportSubmit_ZipWithMultipleReports_ImportsBoth in
 // internal/web).
 func ParseAttachment(ctx context.Context, parser ReportParser, attachment RawAttachment) ([]*report.AggregateReport, error) {
@@ -74,54 +73,53 @@ func ParseAttachment(ctx context.Context, parser ReportParser, attachment RawAtt
 	return []*report.AggregateReport{rep}, nil
 }
 
-// RawMessage ist eine unverarbeitete Nachricht aus einer Quelle: die
-// vollständigen Rohbytes (bei IMAP: BODY.PEEK[], bei Datei-Import
-// (AP 4/7): der Dateiinhalt) plus die UID, unter der die Quelle sie führt.
-// Die MIME-Zerlegung in RawAttachment-Werte passiert bewusst NICHT hier,
-// sondern als eigener, protokollunabhängiger Schritt in der
-// Anwendungsschicht (AP 4) — dieselbe Logik verarbeitet dann sowohl
-// IMAP-Nachrichten als auch importierte .eml-Dateien.
+// RawMessage is an unprocessed message from a source: the complete raw
+// bytes (for IMAP: BODY.PEEK[], for file import (work package 4/7): the
+// file content) plus the UID under which the source keeps it. The MIME
+// decomposition into RawAttachment values deliberately does NOT happen
+// here, but as its own, protocol-independent step in the application
+// layer (work package 4) — the same logic then processes both IMAP
+// messages and imported .eml files.
 type RawMessage struct {
 	UID  uint32
 	Data []byte
 }
 
-// MessageSource liefert Rohnachrichten aus einer Quelle (v1: IMAP,
-// internal/infra/imap). Bewusst technikneutral, damit später Dateiimport
-// oder andere Protokolle ohne Änderung der Use Cases andocken können
-// (IMPLEMENTIERUNG.md Abschnitt 6.4).
+// MessageSource returns raw messages from a source (v1: IMAP,
+// internal/infra/imap). Deliberately technology-neutral, so that file
+// import or other protocols can be added later without changing the use
+// cases (IMPLEMENTIERUNG.md section 6.4).
 //
-// Abweichend vom ursprünglichen Entwurf nimmt Connect das Secret separat
-// entgegen statt es aus account.MailAccount zu lesen: MailAccount enthält
-// laut Sicherheitsmodell (IMPLEMENTIERUNG.md Abschnitt 9) bewusst kein
-// Passwort, das liegt ausschließlich im Schlüsselbund. Der Aufrufer holt es
-// über account.CredentialStore und reicht es hier explizit durch.
+// Diverging from the original design, Connect takes the Secret
+// separately instead of reading it from account.MailAccount: per the
+// security model (IMPLEMENTIERUNG.md section 9), MailAccount deliberately
+// contains no password, which lives exclusively in the credential store.
+// The caller fetches it via account.CredentialStore and passes it through
+// explicitly here.
 type MessageSource interface {
 	Connect(ctx context.Context, acc account.MailAccount, secret account.Secret) error
-	// FetchNew liefert einen Iterator über neue Nachrichten ab state sowie
-	// einen Baseline-State, der sofort persistierbar ist (insbesondere die
-	// aktuelle UIDValidity) — auch wenn der Iterator noch nicht konsumiert
-	// wurde. Den tatsächlichen Fortschritt (LastUID) schreibt der Aufrufer
-	// nach jeder erfolgreich verarbeiteten RawMessage selbst fort
-	// (IMPLEMENTIERUNG.md Abschnitt 7.1, Schritt 6) — FetchNew liefert dafür
-	// mit jeder RawMessage deren UID.
+	// FetchNew returns an iterator over new messages since state, plus a
+	// baseline state that can be persisted immediately (in particular the
+	// current UIDValidity) — even before the iterator has been consumed.
+	// The caller itself persists the actual progress (LastUID) after each
+	// successfully processed RawMessage (IMPLEMENTIERUNG.md section 7.1,
+	// step 6) — FetchNew supplies that UID with every RawMessage for this
+	// purpose.
 	FetchNew(ctx context.Context, state State) (iter.Seq2[RawMessage, error], State, error)
 	Close() error
 }
 
-// MailboxLister ist ein optionaler Zusatz-Port für Quellen, die die auf
-// dem Server tatsächlich vorhandenen Postfächer/Ordner auflisten können —
-// Grundlage für einen Ordner-Picker im Kontoformular, weil DMARC-Berichte
-// nicht zwangsläufig im Wurzelpostfach (INBOX) landen, sondern z. B. über
-// eine Mailregel in einen Unterordner sortiert sein können. Bewusst ein
-// eigener, separater Port statt einer weiteren MessageSource-Methode:
-// nicht jede denkbare Quelle (z. B. ein künftiger Datei-Adapter) kann das
-// sinnvoll leisten — Aufrufer prüfen per Typassertion, ob eine
-// MessageSource zusätzlich MailboxLister implementiert (siehe
-// manageaccount.UseCase.ListMailboxes).
+// MailboxLister is an optional additional port for sources that can list
+// the mailboxes/folders actually present on the server — the basis for a
+// folder picker in the account form, since DMARC reports don't
+// necessarily end up in the root mailbox (INBOX), but can e.g. be sorted
+// into a subfolder via a mail rule. Deliberately its own, separate port
+// instead of another MessageSource method: not every conceivable source
+// (e.g. a future file adapter) can meaningfully provide this — callers
+// check via type assertion whether a MessageSource additionally
+// implements MailboxLister (see manageaccount.UseCase.ListMailboxes).
 //
-// Setzt wie FetchNew eine bereits erfolgreiche Connect()-Verbindung
-// voraus.
+// Like FetchNew, requires an already successful Connect() connection.
 type MailboxLister interface {
 	ListMailboxes(ctx context.Context) ([]string, error)
 }

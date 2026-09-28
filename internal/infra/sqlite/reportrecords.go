@@ -8,14 +8,14 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/report"
 )
 
-// loadRecords lädt alle Records eines Reports inklusive Reasons und
-// Auth-Ergebnissen. Alle drei Zusatzabfragen filtern über
-// "JOIN records ON ... WHERE records.report_id = ?" statt über eine
-// IN-Klausel mit einem Platzhalter je Record-ID: Bei Reports mit
-// tausenden Records macht allein das Vorbereiten eines Statements mit
-// entsprechend vielen Platzhaltern die Abfrage unbrauchbar langsam
-// (gemessen: > 3s bei 10.000 Records statt der angestrebten < 100ms) —
-// der Join nutzt stattdessen den vorhandenen Index auf records(report_id).
+// loadRecords loads all records of a report, including reasons and auth
+// results. All three follow-up queries filter via
+// "JOIN records ON ... WHERE records.report_id = ?" instead of an IN
+// clause with one placeholder per record ID: for reports with thousands
+// of records, just preparing a statement with that many placeholders
+// makes the query unusably slow (measured: > 3s at 10,000 records instead
+// of the targeted < 100ms) — the join instead uses the existing index on
+// records(report_id).
 func loadRecords(ctx context.Context, db *sql.DB, reportID int64) ([]report.Record, error) {
 	rows, err := db.QueryContext(ctx, `
 		SELECT id, source_ip, message_count, disposition, dkim_result, spf_result,
@@ -24,7 +24,7 @@ func loadRecords(ctx context.Context, db *sql.DB, reportID int64) ([]report.Reco
 		WHERE report_id = ?
 		ORDER BY id`, reportID)
 	if err != nil {
-		return nil, fmt.Errorf("records konnten nicht geladen werden: %w", err)
+		return nil, fmt.Errorf("could not load records: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -45,12 +45,12 @@ func loadRecords(ctx context.Context, db *sql.DB, reportID int64) ([]report.Reco
 		var rr recordRow
 		if err := rows.Scan(&rr.id, &rr.sourceIP, &rr.count, &rr.disposition, &rr.dkimResult, &rr.spfResult,
 			&rr.headerFrom, &rr.envelopeFrom, &rr.envelopeTo); err != nil {
-			return nil, fmt.Errorf("record-zeile konnte nicht gelesen werden: %w", err)
+			return nil, fmt.Errorf("could not read record row: %w", err)
 		}
 		rawRecords = append(rawRecords, rr)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("records konnten nicht vollständig gelesen werden: %w", err)
+		return nil, fmt.Errorf("could not fully read records: %w", err)
 	}
 	if len(rawRecords) == 0 {
 		return nil, nil
@@ -73,11 +73,11 @@ func loadRecords(ctx context.Context, db *sql.DB, reportID int64) ([]report.Reco
 	for _, rr := range rawRecords {
 		sourceIP, err := report.NewSourceIP(rr.sourceIP)
 		if err != nil {
-			return nil, fmt.Errorf("gespeicherte quell-ip %q ist ungültig: %w", rr.sourceIP, err)
+			return nil, fmt.Errorf("stored source IP %q is invalid: %w", rr.sourceIP, err)
 		}
 		headerFrom, err := report.NewDomainName(rr.headerFrom)
 		if err != nil {
-			return nil, fmt.Errorf("gespeicherter header_from %q ist ungültig: %w", rr.headerFrom, err)
+			return nil, fmt.Errorf("stored header_from %q is invalid: %w", rr.headerFrom, err)
 		}
 
 		evaluated := report.PolicyEvaluation{
@@ -98,7 +98,7 @@ func loadRecords(ctx context.Context, db *sql.DB, reportID int64) ([]report.Reco
 
 		rec, err := report.NewRecord(sourceIP, rr.count, evaluated, identifiers, auth)
 		if err != nil {
-			return nil, fmt.Errorf("gespeicherter record ist ungültig: %w", err)
+			return nil, fmt.Errorf("stored record is invalid: %w", err)
 		}
 		records = append(records, rec)
 	}
@@ -114,7 +114,7 @@ func loadRecordReasons(ctx context.Context, db *sql.DB, reportID int64) (map[int
 		WHERE rec.report_id = ?
 		ORDER BY rr.rowid`, reportID)
 	if err != nil {
-		return nil, fmt.Errorf("record_reasons konnten nicht geladen werden: %w", err)
+		return nil, fmt.Errorf("could not load record_reasons: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -123,7 +123,7 @@ func loadRecordReasons(ctx context.Context, db *sql.DB, reportID int64) (map[int
 		var recordID int64
 		var reasonType, comment sql.NullString
 		if err := rows.Scan(&recordID, &reasonType, &comment); err != nil {
-			return nil, fmt.Errorf("record_reasons-zeile konnte nicht gelesen werden: %w", err)
+			return nil, fmt.Errorf("could not read record_reasons row: %w", err)
 		}
 		result[recordID] = append(result[recordID], report.PolicyOverrideReason{
 			Type:    reasonType.String,
@@ -141,7 +141,7 @@ func loadDKIMResults(ctx context.Context, db *sql.DB, reportID int64) (map[int64
 		WHERE rec.report_id = ?
 		ORDER BY d.rowid`, reportID)
 	if err != nil {
-		return nil, fmt.Errorf("auth_results_dkim konnten nicht geladen werden: %w", err)
+		return nil, fmt.Errorf("could not load auth_results_dkim: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -150,7 +150,7 @@ func loadDKIMResults(ctx context.Context, db *sql.DB, reportID int64) (map[int64
 		var recordID int64
 		var domain, selector, res, humanResult sql.NullString
 		if err := rows.Scan(&recordID, &domain, &selector, &res, &humanResult); err != nil {
-			return nil, fmt.Errorf("auth_results_dkim-zeile konnte nicht gelesen werden: %w", err)
+			return nil, fmt.Errorf("could not read auth_results_dkim row: %w", err)
 		}
 		result[recordID] = append(result[recordID], report.DKIMAuthResult{
 			Domain:      domain.String,
@@ -170,7 +170,7 @@ func loadSPFResults(ctx context.Context, db *sql.DB, reportID int64) (map[int64]
 		WHERE rec.report_id = ?
 		ORDER BY s.rowid`, reportID)
 	if err != nil {
-		return nil, fmt.Errorf("auth_results_spf konnten nicht geladen werden: %w", err)
+		return nil, fmt.Errorf("could not load auth_results_spf: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -179,7 +179,7 @@ func loadSPFResults(ctx context.Context, db *sql.DB, reportID int64) (map[int64]
 		var recordID int64
 		var domain, scope, res sql.NullString
 		if err := rows.Scan(&recordID, &domain, &scope, &res); err != nil {
-			return nil, fmt.Errorf("auth_results_spf-zeile konnte nicht gelesen werden: %w", err)
+			return nil, fmt.Errorf("could not read auth_results_spf row: %w", err)
 		}
 		result[recordID] = append(result[recordID], report.SPFAuthResult{
 			Domain: domain.String,

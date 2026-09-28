@@ -15,23 +15,21 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/web"
 )
 
-// retentionCheckInterval ist der Abstand zwischen zwei Anwendungen der
-// Aufbewahrungsrichtlinie (AP 7) — Löschen alter Reports ist unauffällige
-// Wartung, ein Tag Verzögerung nach einer geänderten Einstellung ist
-// unproblematisch.
+// retentionCheckInterval is the interval between two applications of the
+// retention policy (AP 7) — deleting old reports is unobtrusive
+// maintenance, a one-day delay after a changed setting is unproblematic.
 const retentionCheckInterval = 24 * time.Hour
 
-// runWeb startet die eingebettete Web-Oberfläche. Lebenszyklus über
-// SIGINT/SIGTERM — "docker stop" sendet SIGTERM, kein Auto-Ende, kein
-// Beenden-Knopf: der Prozess verhält sich wie ein gewöhnlicher
-// Container-Hauptprozess.
+// runWeb starts the embedded web UI. Lifecycle via SIGINT/SIGTERM —
+// "docker stop" sends SIGTERM, there's no auto-shutdown and no shutdown
+// button: the process behaves like an ordinary container main process.
 func runWeb(ctx context.Context, a *app, _ []string) error {
-	// Eigener, auf diesen Aufruf begrenzter signal-Kontext statt den
-	// übergebenen ctx global umzustellen — sync/import/stats sollen von
-	// dieser Änderung im Lebenszyklus unberührt bleiben (AGENTS.md:
-	// Composition Root verdrahtet nur, was der jeweilige Unterbefehl
-	// tatsächlich braucht). Derselbe Kontext ist gleich unten die Basis
-	// für syncjob.Runner und die Hintergrund-Aufträge.
+	// A dedicated signal context scoped to this call, instead of globally
+	// replacing the passed-in ctx — sync/import/stats should stay
+	// unaffected by this lifecycle change (AGENTS.md: the Composition
+	// Root only wires what the given subcommand actually needs). The
+	// same context is also the basis below for syncjob.Runner and the
+	// background jobs.
 	signalCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -63,27 +61,27 @@ func runWeb(ctx context.Context, a *app, _ []string) error {
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("web-oberfläche konnte nicht aufgebaut werden: %w", err)
+		return fmt.Errorf("web UI could not be built: %w", err)
 	}
 
-	// Hintergrund-Aufträge (AP 7) — laufen über die Lebensdauer des
-	// Servers (signalCtx), unabhängig von einzelnen HTTP-Anfragen: die
-	// Aufbewahrungsrichtlinie und der geplante Abgleich laufen auch, wenn
-	// gerade niemand angemeldet ist.
+	// Background jobs (AP 7) — run for the lifetime of the server
+	// (signalCtx), independent of individual HTTP requests: the
+	// retention policy and the scheduled sync keep running even when
+	// nobody is currently logged in.
 	go retentionjob.NewRunner(a.retention, retentionCheckInterval, slog.Default()).Run(signalCtx)
 	go syncscheduler.NewScheduler(syncJob, time.Duration(a.config.SyncIntervalMinutes)*time.Minute, slog.Default()).Run(signalCtx)
 
 	if err := srv.Start(signalCtx); err != nil {
-		return fmt.Errorf("web-oberfläche konnte nicht gestartet werden: %w", err)
+		return fmt.Errorf("web UI could not be started: %w", err)
 	}
 
-	fmt.Printf("dmarc-analyzer läuft: http://%s\n", srv.Addr())
-	fmt.Println("Strg+C zum Beenden.")
-	slog.Info("web-oberfläche gestartet", "addr", srv.Addr())
+	fmt.Printf("dmarc-analyzer running: http://%s\n", srv.Addr())
+	fmt.Println("Press Ctrl+C to stop.")
+	slog.Info("web UI started", "addr", srv.Addr())
 
 	<-signalCtx.Done()
-	fmt.Println("\nWird beendet …")
-	slog.Info("web-oberfläche wird beendet")
+	fmt.Println("\nShutting down …")
+	slog.Info("web UI shutting down")
 
 	return srv.Shutdown(context.Background())
 }

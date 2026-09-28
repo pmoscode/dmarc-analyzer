@@ -17,7 +17,7 @@ import (
 var (
 	fixedBegin = time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
 	hour       = time.Hour
-	errTest    = errors.New("testfehler")
+	errTest    = errors.New("test error")
 )
 
 type testDeps struct {
@@ -49,9 +49,9 @@ func writeTestFile(t *testing.T, name, content string) string {
 func TestImportFile_XMLFile_ImportsAsSingleAttachment(t *testing.T) {
 	t.Parallel()
 
-	// Nicht-.eml-Dateien gehen unverändert als ein Anhang an den Parser —
-	// der Dateiinhalt selbst steuert hier (über fakeParser), welcher
-	// Report entsteht.
+	// Non-.eml files go to the parser unchanged as one attachment — the
+	// file content itself controls here (via fakeParser) which report
+	// results.
 	path := writeTestFile(t, "report.xml", "report-from-xml")
 
 	uc, deps := newTestUseCase(nil)
@@ -90,16 +90,16 @@ func TestImportFile_NonexistentFile_ReturnsError(t *testing.T) {
 	t.Parallel()
 
 	uc, _ := newTestUseCase(nil)
-	_, err := uc.ImportFile(context.Background(), "/pfad/existiert/nicht.xml")
+	_, err := uc.ImportFile(context.Background(), "/path/does/not/exist.xml")
 	require.Error(t, err)
 }
 
 func TestImportFile_ParseError_RecordsFailure(t *testing.T) {
 	t.Parallel()
 
-	path := writeTestFile(t, "kaputt.xml", "kaputter-report")
+	path := writeTestFile(t, "broken.xml", "broken-report")
 
-	uc, deps := newTestUseCase(map[string]error{"kaputter-report": errTest})
+	uc, deps := newTestUseCase(map[string]error{"broken-report": errTest})
 	result, err := uc.ImportFile(context.Background(), path)
 	require.NoError(t, err)
 	require.Equal(t, 1, result.Failed)
@@ -110,7 +110,7 @@ func TestImportFile_ParseError_RecordsFailure(t *testing.T) {
 func TestImportFile_DuplicateReport_CountsAsSkipped(t *testing.T) {
 	t.Parallel()
 
-	path := writeTestFile(t, "report.xml", "gleicher-report")
+	path := writeTestFile(t, "report.xml", "same-report")
 	uc, deps := newTestUseCase(nil)
 
 	_, err := uc.ImportFile(context.Background(), path)
@@ -145,7 +145,7 @@ func TestImportPaths_OneFileFails_OthersStillProcessed(t *testing.T) {
 	uc, deps := newTestUseCase(nil)
 	result, err := uc.ImportPaths(context.Background(), []string{missing, good})
 	require.NoError(t, err)
-	require.Equal(t, 1, result.New, "die gute Datei muss trotz der fehlenden importiert werden")
+	require.Equal(t, 1, result.New, "the good file must still be imported despite the missing one")
 	require.Equal(t, 1, result.Failed)
 	require.Equal(t, 1, deps.reports.count())
 }
@@ -162,16 +162,16 @@ func TestImportPaths_ContextCancelled_StopsEarly(t *testing.T) {
 	uc, deps := newTestUseCase(nil)
 	_, err := uc.ImportPaths(ctx, []string{a, b})
 	require.ErrorIs(t, err, context.Canceled)
-	require.Zero(t, deps.reports.count(), "bei sofort abgebrochenem Kontext darf nichts importiert werden")
+	require.Zero(t, deps.reports.count(), "nothing may be imported when the context is already canceled")
 }
 
 func TestImportFile_ZeroRecordsReport_IsImportedFineToo(t *testing.T) {
-	// Randfall aus IMPLEMENTIERUNG.md Abschnitt 12.3: ein Report ohne
-	// Records ist fachlich gültig (fakeParser liefert hier ohnehin nie
-	// Records, aber das ist repräsentativ für den Pfad).
+	// Edge case from IMPLEMENTIERUNG.md section 12.3: a report without
+	// records is a valid business case (fakeParser never returns records
+	// here anyway, but this is representative of the path).
 	t.Parallel()
 
-	path := writeTestFile(t, "leer.xml", "report-ohne-records")
+	path := writeTestFile(t, "empty.xml", "report-without-records")
 	uc, _ := newTestUseCase(nil)
 
 	result, err := uc.ImportFile(context.Background(), path)
@@ -202,8 +202,8 @@ func TestImportData_EmlBytes_Decodes(t *testing.T) {
 func TestImportData_ParseError_RecordsFailure(t *testing.T) {
 	t.Parallel()
 
-	uc, deps := newTestUseCase(map[string]error{"kaputter-report": errTest})
-	result, err := uc.ImportData(context.Background(), "kaputt.xml", []byte("kaputter-report"))
+	uc, deps := newTestUseCase(map[string]error{"broken-report": errTest})
+	result, err := uc.ImportData(context.Background(), "broken.xml", []byte("broken-report"))
 	require.NoError(t, err)
 	require.Equal(t, 1, result.Failed)
 	require.Len(t, result.Errors, 1)
@@ -214,7 +214,7 @@ func TestImportData_DuplicateReport_CountsAsSkipped(t *testing.T) {
 	t.Parallel()
 
 	uc, deps := newTestUseCase(nil)
-	data := []byte("gleicher-report")
+	data := []byte("same-report")
 
 	_, err := uc.ImportData(context.Background(), "report.xml", data)
 	require.NoError(t, err)
@@ -227,20 +227,19 @@ func TestImportData_DuplicateReport_CountsAsSkipped(t *testing.T) {
 }
 
 func TestImportData_SameContentAsImportFile_ProducesEquivalentResult(t *testing.T) {
-	// ImportFile muss nach der Umstellung auf ImportData (siehe
-	// usecase.go) exakt dasselbe Ergebnis liefern wie ImportData mit
-	// bereits gelesenen Bytes — keine Verhaltensänderung durch die
-	// Extraktion, nur ein neuer Einstiegspunkt (MIGRATIONSPLAN.md
-	// Erweiterung 9.3).
+	// After the switch to ImportData (see usecase.go), ImportFile must
+	// return exactly the same result as ImportData with already-read
+	// bytes — no behavior change from the extraction, just a new entry
+	// point (MIGRATIONSPLAN.md extension 9.3).
 	t.Parallel()
 
-	path := writeTestFile(t, "report.xml", "identischer-inhalt")
+	path := writeTestFile(t, "report.xml", "identical-content")
 	ucFile, depsFile := newTestUseCase(nil)
 	fileResult, err := ucFile.ImportFile(context.Background(), path)
 	require.NoError(t, err)
 
 	ucData, depsData := newTestUseCase(nil)
-	dataResult, err := ucData.ImportData(context.Background(), "report.xml", []byte("identischer-inhalt"))
+	dataResult, err := ucData.ImportData(context.Background(), "report.xml", []byte("identical-content"))
 	require.NoError(t, err)
 
 	require.Equal(t, fileResult, dataResult)
@@ -248,13 +247,13 @@ func TestImportData_SameContentAsImportFile_ProducesEquivalentResult(t *testing.
 }
 
 func TestImportData_MultiReportParser_ImportsAllReportsFromOneAttachment(t *testing.T) {
-	// Regression: importAttachments rief zuvor ausschließlich Parse()
-	// auf, das laut domainsync.ReportParser-Vertrag nur EINEN Report
-	// liefert — ein Anhang (z. B. ein .zip), der über
-	// domainsync.MultiReportParser mehrere Reports zurückgeben kann,
-	// wurde dadurch nur zu einem Fünftel (dem ersten Report) importiert.
-	// Siehe auch internal/web TestHandleImportSubmit_ZipWithMultipleReports_ImportsBoth
-	// für denselben Fehler mit dem echten dmarcxml.Parser.
+	// Regression: importAttachments used to call only Parse(), which per
+	// the domainsync.ReportParser contract returns only ONE report — an
+	// attachment (e.g. a .zip) that can return multiple reports via
+	// domainsync.MultiReportParser was thereby imported only a fifth of
+	// the way (the first report). See also internal/web
+	// TestHandleImportSubmit_ZipWithMultipleReports_ImportsBoth for the
+	// same bug with the real dmarcxml.Parser.
 	t.Parallel()
 
 	uc, deps := newTestUseCase(nil)

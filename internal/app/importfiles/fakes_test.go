@@ -46,7 +46,7 @@ func (f *fakeReportRepository) Exists(_ context.Context, key report.Key) (bool, 
 }
 
 func (f *fakeReportRepository) FindByID(context.Context, report.ReportID) (*report.AggregateReport, error) {
-	return nil, nil //nolint:nilnil // im Test nicht benötigt
+	return nil, nil //nolint:nilnil // not needed in the test
 }
 
 func (f *fakeReportRepository) Query(context.Context, report.Query) (report.Page, error) {
@@ -85,9 +85,9 @@ func (f *fakeFailedImportRepository) count() int {
 
 // --- domainsync.MessageDecoder ---------------------------------------------
 
-// fakeDecoder behandelt jede .eml-Datei als genau einen Anhang mit dem
-// Dateiinhalt als "Filename" (praktisch für Tests: der Inhalt steuert,
-// welcher Report daraus entsteht).
+// fakeDecoder treats every .eml file as exactly one attachment with the
+// file content as "Filename" (convenient for tests: the content controls
+// which report results from it).
 type fakeDecoder struct{}
 
 func (fakeDecoder) Decode(data []byte) ([]domainsync.RawAttachment, error) {
@@ -96,9 +96,9 @@ func (fakeDecoder) Decode(data []byte) ([]domainsync.RawAttachment, error) {
 
 // --- domainsync.ReportParser -----------------------------------------------
 
-// fakeParser akzeptiert jeden Anhang außer solche mit dem Inhalt
-// "unsupported" (simuliert einen Nicht-DMARC-Anhang) und liefert einen
-// Report, dessen ReportID dem Anhangsinhalt entspricht.
+// fakeParser accepts every attachment except those with the content
+// "unsupported" (simulates a non-DMARC attachment) and returns a report
+// whose ReportID matches the attachment content.
 type fakeParser struct {
 	failFor map[string]error
 }
@@ -132,10 +132,10 @@ func (p fakeParser) Parse(_ context.Context, att domainsync.RawAttachment) (*rep
 	)
 }
 
-// fakeMultiParser implementiert zusätzlich domainsync.MultiReportParser
-// — simuliert einen Anhang (z. B. ein .zip), der mehrere Reports auf
-// einmal enthält. Anhangsinhalt "multi:a,b,c" liefert drei Reports mit
-// den ReportIDs a, b, c.
+// fakeMultiParser additionally implements domainsync.MultiReportParser
+// — simulates an attachment (e.g. a .zip) that contains multiple reports
+// at once. Attachment content "multi:a,b,c" yields three reports with
+// ReportIDs a, b, c.
 type fakeMultiParser struct{}
 
 func (p fakeMultiParser) Supports(att domainsync.RawAttachment) bool {

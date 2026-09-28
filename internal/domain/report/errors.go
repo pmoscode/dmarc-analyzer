@@ -2,10 +2,10 @@ package report
 
 import "errors"
 
-// Sentinel-Fehler für die Invarianten aus NewAggregateReport — als
-// eigene Variablen, damit Aufrufer sie mit errors.Is unterscheiden können
-// (z. B. um sie in der UI unterschiedlich anzuzeigen).
+// Sentinel errors for the invariants in NewAggregateReport — kept as
+// their own variables so callers can distinguish them with errors.Is
+// (e.g. to display them differently in the UI).
 var (
-	errReportIDRequired  = errors.New("report ohne report_id ist ungültig")
-	errDateRangeRequired = errors.New("report ohne gültigen zeitraum ist ungültig")
+	errReportIDRequired  = errors.New("report without report_id is invalid")
+	errDateRangeRequired = errors.New("report without a valid date range is invalid")
 )

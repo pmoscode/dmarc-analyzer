@@ -1,18 +1,18 @@
-# Beispiel für den lokalen Betrieb bzw. als Vorlage für die Produktion —
-# vollständige ENV-Referenz in docs/features/deployment.md.
+# Example for local operation, or as a template for production —
+# full ENV reference in docs/features/deployment.md.
 #
-# Voraussetzung: eine Authentik-Anwendung (OAuth2/OIDC-Provider) mit
-# Redirect-URI "<öffentliche-URL>/anmelden/callback" und einer Gruppe, die
-# als DMARC_OIDC_ADMIN_GROUP eingetragen wird (siehe docs/features/auth.md).
+# Prerequisite: an Authentik application (OAuth2/OIDC provider) with
+# redirect URI "<public-URL>/anmelden/callback" and a group entered as
+# DMARC_OIDC_ADMIN_GROUP (see docs/features/auth.md).
 #
-# Werte kommen aus .env (Vorlage: .env.example kopieren, ausfüllen — .env
-# ist in .gitignore und wird nie committet).
+# Values come from .env (template: copy .env.example, fill it in — .env
+# is in .gitignore and is never committed).
 services:
   dmarc-analyzer:
-    # VERSION/COMMIT landen per -ldflags im Binary und als OCI-Labels im
-    # Image (siehe Dockerfile). "task compose:build"/"task compose:up"
-    # setzen beide aus Git; bei einem direkten "docker compose build"
-    # bleiben sie leer bzw. "dev", sofern nicht selbst exportiert.
+    # VERSION/COMMIT end up in the binary via -ldflags and as OCI labels
+    # in the image (see Dockerfile). "task compose:build"/"task
+    # compose:up" set both from Git; with a direct "docker compose
+    # build" they stay empty or "dev" unless exported yourself.
     build:
       context: .
       args:

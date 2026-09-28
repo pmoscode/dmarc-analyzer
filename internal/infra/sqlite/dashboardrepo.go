@@ -10,16 +10,16 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/report"
 )
 
-// dayBucketExpr ordnet einen Report dem UTC-Tag von date_begin zu, nicht
-// anteilig mehreren Tagen. DMARC-Aggregate-Reports sind nach RFC 7489 fast
-// immer Ein-Tages-Zeiträume — für die seltene Ausnahme (längerer Zeitraum)
-// verschiebt sich die Zuordnung auf den ersten Tag, was für die
-// Zeitreihen-/Heatmap-Visualisierung eine vertretbare Vereinfachung ist.
-// date_begin ist laut migrations/0001_init.sql bereits Unix-Sekunden UTC.
+// dayBucketExpr assigns a report to the UTC day of date_begin, not
+// proportionally to multiple days. Per RFC 7489, DMARC aggregate reports
+// are almost always single-day periods — for the rare exception (longer
+// period), the assignment shifts to the first day, which is an acceptable
+// simplification for the time-series/heatmap visualization. date_begin is
+// already Unix seconds UTC per migrations/0001_init.sql.
 const dayBucketExpr = "(rep.date_begin / 86400) * 86400"
 
-// DailyVolumes berechnet das Nachrichtenvolumen je Tag im Zeitraum von q,
-// aufgeteilt nach Pass/Fail (dkim_result = 'pass' OR spf_result = 'pass').
+// DailyVolumes calculates the message volume per day within q's period,
+// split by pass/fail (dkim_result = 'pass' OR spf_result = 'pass').
 func (r *StatisticsRepository) DailyVolumes(ctx context.Context, q analysis.Query) ([]analysis.DailyVolume, error) {
 	where, args := statsWhere(q)
 
@@ -35,7 +35,7 @@ func (r *StatisticsRepository) DailyVolumes(ctx context.Context, q analysis.Quer
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("tägliches volumen konnte nicht berechnet werden: %w", err)
+		return nil, fmt.Errorf("could not calculate daily volume: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -44,7 +44,7 @@ func (r *StatisticsRepository) DailyVolumes(ctx context.Context, q analysis.Quer
 		var dayUnix int64
 		var pass, fail int64
 		if err := rows.Scan(&dayUnix, &pass, &fail); err != nil {
-			return nil, fmt.Errorf("tageszeile konnte nicht gelesen werden: %w", err)
+			return nil, fmt.Errorf("could not read day row: %w", err)
 		}
 		result = append(result, analysis.DailyVolume{
 			Day:  time.Unix(dayUnix, 0).UTC(),
@@ -53,13 +53,13 @@ func (r *StatisticsRepository) DailyVolumes(ctx context.Context, q analysis.Quer
 		})
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("tägliches volumen konnte nicht vollständig gelesen werden: %w", err)
+		return nil, fmt.Errorf("could not fully read daily volume: %w", err)
 	}
 	return result, nil
 }
 
-// TopSources liefert die nach Volumen absteigend sortierten Sendequellen
-// im Zeitraum von q, begrenzt auf limit Einträge.
+// TopSources returns the sending sources sorted by volume descending
+// within q's period, limited to limit entries.
 func (r *StatisticsRepository) TopSources(ctx context.Context, q analysis.Query, limit int) ([]analysis.SourceVolume, error) {
 	where, args := statsWhere(q)
 	args = append(args, limit)
@@ -77,7 +77,7 @@ func (r *StatisticsRepository) TopSources(ctx context.Context, q analysis.Query,
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("top-sendequellen konnten nicht berechnet werden: %w", err)
+		return nil, fmt.Errorf("could not calculate top sending sources: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -86,11 +86,11 @@ func (r *StatisticsRepository) TopSources(ctx context.Context, q analysis.Query,
 		var rawIP string
 		var total, passed int64
 		if err := rows.Scan(&rawIP, &total, &passed); err != nil {
-			return nil, fmt.Errorf("sendequellen-zeile konnte nicht gelesen werden: %w", err)
+			return nil, fmt.Errorf("could not read sending-source row: %w", err)
 		}
 		ip, err := report.NewSourceIP(rawIP)
 		if err != nil {
-			return nil, fmt.Errorf("gespeicherte quell-ip %q ist ungültig: %w", rawIP, err)
+			return nil, fmt.Errorf("stored source IP %q is invalid: %w", rawIP, err)
 		}
 		result = append(result, analysis.SourceVolume{
 			SourceIP: ip,
@@ -99,15 +99,15 @@ func (r *StatisticsRepository) TopSources(ctx context.Context, q analysis.Query,
 		})
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("top-sendequellen konnten nicht vollständig gelesen werden: %w", err)
+		return nil, fmt.Errorf("could not fully read top sending sources: %w", err)
 	}
 	return result, nil
 }
 
-// Heatmap berechnet die Quelle-×-Tag-Pass-Rate-Matrix für die
-// sourceLimit volumenstärksten Quellen im Zeitraum von q. Tage ohne
-// Nachrichten einer Quelle werden als HasData=false markiert, statt eine
-// irreführende Pass-Rate von 0 zu melden.
+// Heatmap calculates the source-×-day pass-rate matrix for the
+// sourceLimit highest-volume sources within q's period. Days without
+// messages from a source are marked HasData=false instead of reporting a
+// misleading pass rate of 0.
 func (r *StatisticsRepository) Heatmap(ctx context.Context, q analysis.Query, sourceLimit int) (analysis.Heatmap, error) {
 	topSources, err := r.TopSources(ctx, q, sourceLimit)
 	if err != nil {
@@ -181,7 +181,7 @@ func (r *StatisticsRepository) heatmapCells(ctx context.Context, q analysis.Quer
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("heatmap konnte nicht berechnet werden: %w", err)
+		return nil, fmt.Errorf("could not calculate heatmap: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -189,19 +189,19 @@ func (r *StatisticsRepository) heatmapCells(ctx context.Context, q analysis.Quer
 	for rows.Next() {
 		var row heatmapRow
 		if err := rows.Scan(&row.sourceIP, &row.dayUnix, &row.total, &row.passed); err != nil {
-			return nil, fmt.Errorf("heatmap-zeile konnte nicht gelesen werden: %w", err)
+			return nil, fmt.Errorf("could not read heatmap row: %w", err)
 		}
 		result = append(result, row)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("heatmap konnte nicht vollständig gelesen werden: %w", err)
+		return nil, fmt.Errorf("could not fully read heatmap: %w", err)
 	}
 	return result, nil
 }
 
-// daysInRange listet jeden UTC-Tagesbeginn von period.Begin (abgerundet)
-// bis period.End (exklusiv) — die vollständige Tagesachse der Heatmap,
-// unabhängig davon, ob an einem Tag Daten vorliegen.
+// daysInRange lists every UTC day start from period.Begin (rounded down)
+// to period.End (exclusive) — the full day axis of the heatmap, regardless
+// of whether data exists for a given day.
 func daysInRange(period report.DateRange) []time.Time {
 	start := period.Begin.UTC().Truncate(24 * time.Hour)
 	end := period.End.UTC()

@@ -1,10 +1,10 @@
-// Package envconfig liest die gesamte Laufzeit-Konfiguration einmalig aus
-// Umgebungsvariablen (12-factor, siehe README.md/docs/features/deployment.md)
-// — IMAP-Zugangsdaten, Aufbewahrungsdauer/Sync-Intervall, Datenverzeichnis,
-// Listen-Adresse und OIDC-Parameter für die Authentik-Anmeldung. Es gibt
-// keine Laufzeit-Änderung und keine Persistenz dieser Werte (ersetzt die
-// frühere OS-Schlüsselbund-/JSON-Datei-Konfiguration der Desktop-Ära) —
-// eine geänderte Einstellung braucht einen Container-Neustart.
+// Package envconfig reads the entire runtime configuration once from
+// environment variables (12-factor, see README.md/docs/features/deployment.md)
+// — IMAP credentials, retention duration/sync interval, data directory,
+// listen address, and OIDC parameters for the Authentik login. There is no
+// runtime change and no persistence of these values (replaces the earlier
+// OS keychain/JSON file configuration from the desktop era) — a changed
+// setting requires a container restart.
 package envconfig
 
 import (
@@ -17,7 +17,7 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/account"
 )
 
-// Config ist die vollständige, beim Start einmalig geladene Konfiguration.
+// Config is the complete configuration, loaded once at startup.
 type Config struct {
 	IMAPHost    string
 	IMAPPort    int
@@ -36,36 +36,36 @@ type Config struct {
 	OIDC OIDC
 }
 
-// OIDC bündelt die Parameter für die Authentik-Anmeldung (Authorization
-// Code Flow, siehe internal/web/handlers_login.go).
+// OIDC bundles the parameters for the Authentik login (Authorization Code
+// Flow, see internal/web/handlers_login.go).
 type OIDC struct {
 	IssuerURL    string
 	ClientID     string
 	ClientSecret string
 	RedirectURL  string
-	// AdminGroup ist der Authentik-Gruppenname, den der "groups"-Claim des
-	// ID-Tokens enthalten muss — fehlt er, wird der Zugriff verweigert.
+	// AdminGroup is the Authentik group name that the ID token's "groups"
+	// claim must contain — if missing, access is denied.
 	AdminGroup string
-	// InsecureSkipVerify deaktiviert die TLS-Zertifikatsprüfung für alle
-	// HTTP-Calls gegen den OIDC-Issuer (Discovery, JWKS, Token-Exchange).
-	// Nur für Entwicklungsumgebungen mit selbstsigniertem Zertifikat
-	// gedacht (z. B. Caddys "tls internal" im FS-BS-VPS-Setup) — niemals
-	// in Produktion setzen, sonst sind Token-Austausch und
-	// ID-Token-Validierung gegen einen Man-in-the-Middle ungeschützt.
+	// InsecureSkipVerify disables TLS certificate verification for all HTTP
+	// calls against the OIDC issuer (discovery, JWKS, token exchange). Only
+	// intended for development environments with a self-signed certificate
+	// (e.g. Caddy's "tls internal" in the FS-BS-VPS setup) — never set this
+	// in production, or token exchange and ID token validation are
+	// unprotected against a man-in-the-middle.
 	InsecureSkipVerify bool
 }
 
-// Load liest und validiert alle Umgebungsvariablen. Bei fehlenden
-// Pflichtangaben oder ungültigen Werten werden ALLE Probleme gesammelt
-// zurückgegeben (nicht nur das erste) — ein Container-Betreiber soll nicht
-// die Startschleife mehrfach durchlaufen müssen, um jede fehlende Variable
-// einzeln zu entdecken.
+// Load reads and validates all environment variables. If required values
+// are missing or values are invalid, ALL problems are collected and
+// returned (not just the first one) — a container operator shouldn't have
+// to go through the startup loop multiple times to discover each missing
+// variable one by one.
 func Load() (Config, error) {
 	var errs []error
 	req := func(key string) string {
 		v := os.Getenv(key)
 		if v == "" {
-			errs = append(errs, fmt.Errorf("%s ist nicht gesetzt", key))
+			errs = append(errs, fmt.Errorf("%s is not set", key))
 		}
 		return v
 	}
@@ -76,7 +76,7 @@ func Load() (Config, error) {
 		}
 		n, err := strconv.Atoi(v)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("%s ist keine gültige ganze zahl: %q", key, v))
+			errs = append(errs, fmt.Errorf("%s is not a valid integer: %q", key, v))
 			return def
 		}
 		return n
@@ -88,7 +88,7 @@ func Load() (Config, error) {
 		}
 		b, err := strconv.ParseBool(v)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("%s ist kein gültiger wahrheitswert (true/false/1/0): %q", key, v))
+			errs = append(errs, fmt.Errorf("%s is not a valid boolean (true/false/1/0): %q", key, v))
 			return def
 		}
 		return b
@@ -128,23 +128,23 @@ func Load() (Config, error) {
 	cfg.IMAPSecret = account.NewSecretFromString(password)
 
 	if cfg.IMAPPort < 1 || cfg.IMAPPort > 65535 {
-		errs = append(errs, fmt.Errorf("DMARC_IMAP_PORT ist ungültig: %d", cfg.IMAPPort))
+		errs = append(errs, fmt.Errorf("DMARC_IMAP_PORT is invalid: %d", cfg.IMAPPort))
 	}
 	if cfg.RetentionMonths < 0 {
-		errs = append(errs, fmt.Errorf("DMARC_RETENTION_MONTHS darf nicht negativ sein: %d", cfg.RetentionMonths))
+		errs = append(errs, fmt.Errorf("DMARC_RETENTION_MONTHS must not be negative: %d", cfg.RetentionMonths))
 	}
 	if cfg.SyncIntervalMinutes < 0 {
-		errs = append(errs, fmt.Errorf("DMARC_SYNC_INTERVAL_MINUTES darf nicht negativ sein: %d", cfg.SyncIntervalMinutes))
+		errs = append(errs, fmt.Errorf("DMARC_SYNC_INTERVAL_MINUTES must not be negative: %d", cfg.SyncIntervalMinutes))
 	}
 	if cfg.OIDC.RedirectURL != "" {
 		u, err := url.Parse(cfg.OIDC.RedirectURL)
 		if err != nil || u.Scheme == "" || u.Host == "" {
-			errs = append(errs, fmt.Errorf("DMARC_OIDC_REDIRECT_URL ist keine vollständige URL: %q", cfg.OIDC.RedirectURL))
+			errs = append(errs, fmt.Errorf("DMARC_OIDC_REDIRECT_URL is not a complete URL: %q", cfg.OIDC.RedirectURL))
 		}
 	}
 
 	if len(errs) > 0 {
-		return Config{}, fmt.Errorf("konfiguration ungültig:\n%w", errors.Join(errs...))
+		return Config{}, fmt.Errorf("invalid configuration:\n%w", errors.Join(errs...))
 	}
 	return cfg, nil
 }

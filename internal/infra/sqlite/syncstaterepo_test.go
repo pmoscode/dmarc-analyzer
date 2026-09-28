@@ -12,10 +12,10 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/infra/sqlite"
 )
 
-// newTestDBWithAccount öffnet eine Test-DB und legt darin bereits den
-// Account "acc-1" an — sync_state.account_id referenziert accounts(id)
-// per Fremdschlüssel, ohne einen vorhandenen Account schlägt jedes Save
-// mit FOREIGN KEY constraint failed fehl.
+// newTestDBWithAccount opens a test DB and already creates the account
+// "acc-1" in it — sync_state.account_id references accounts(id) via a
+// foreign key, so without an existing account every Save fails with
+// FOREIGN KEY constraint failed.
 func newTestDBWithAccount(t *testing.T) *sql.DB {
 	t.Helper()
 
@@ -31,7 +31,7 @@ func TestSyncStateRepository_Load_ReturnsZeroValueWhenNotFound(t *testing.T) {
 	repo := sqlite.NewSyncStateRepository(newTestDBWithAccount(t))
 
 	state, err := repo.Load(ctx, "acc-1", "INBOX")
-	require.NoError(t, err, "kein gespeicherter Fortschritt ist kein Fehlerfall")
+	require.NoError(t, err, "no stored progress is not an error case")
 	require.Equal(t, domainsync.State{AccountID: "acc-1", Mailbox: "INBOX"}, state)
 }
 
@@ -68,7 +68,7 @@ func TestSyncStateRepository_Save_UpsertsExistingState(t *testing.T) {
 
 	got, err := repo.Load(ctx, "acc-1", "INBOX")
 	require.NoError(t, err)
-	require.Equal(t, uint32(2), got.LastUID, "Save muss den vorhandenen Eintrag aktualisieren, nicht duplizieren")
+	require.Equal(t, uint32(2), got.LastUID, "Save must update the existing entry, not duplicate it")
 }
 
 func TestSyncStateRepository_Save_WithoutTimestamp_DefaultsToNow(t *testing.T) {
@@ -109,14 +109,14 @@ func TestSyncStateRepository_DeletingAccount_CascadesState(t *testing.T) {
 	stateRepo := sqlite.NewSyncStateRepository(db)
 
 	require.NoError(t, stateRepo.Save(ctx, domainsync.State{AccountID: "acc-1", Mailbox: "INBOX", LastUID: 5}))
-	// Kein AccountRepository.Delete mehr (Konten kommen aus ENV, kein
-	// CRUD) — das Löschen hier prüft ausschließlich die
-	// ON-DELETE-CASCADE-Eigenschaft des Schemas, deshalb direkt per SQL.
+	// No more AccountRepository.Delete (accounts come from ENV, no
+	// CRUD) — the deletion here exclusively tests the schema's
+	// ON DELETE CASCADE property, hence directly via SQL.
 	_, err := db.ExecContext(ctx, "DELETE FROM accounts WHERE id = ?", "acc-1")
 	require.NoError(t, err)
 
-	// ON DELETE CASCADE im Schema: mit dem Account verschwindet auch sein
-	// Sync-Fortschritt, kein verwaister Datensatz.
+	// ON DELETE CASCADE in the schema: the account's sync progress
+	// disappears along with it, no orphaned record.
 	got, err := stateRepo.Load(ctx, "acc-1", "INBOX")
 	require.NoError(t, err)
 	require.Zero(t, got.LastUID)

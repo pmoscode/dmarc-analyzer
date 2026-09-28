@@ -1,127 +1,127 @@
-# ADR 0002: Chart.js im Browser statt `analysis.ChartRenderer`-Port
+# ADR 0002: Chart.js in the browser instead of an `analysis.ChartRenderer` port
 
-- Status: angenommen
-- Datum: 2026-09-17 (Migrationsentscheidung), umgesetzt in `MIGRATIONSPLAN.md`
-  M0 (Durchstich) bis M5 (Port entfernt)
+- Status: accepted
+- Date: 2026-09-17 (migration decision), implemented in `MIGRATIONSPLAN.md`
+  M0 (spike) through M5 (port removed)
 
-## Kontext
+## Context
 
-Vor der Web-Migration lieferte `internal/domain/analysis.ChartRenderer`
-einen Port, den `internal/infra/charts` gegen
-[`go-chart/v2`](https://github.com/wcharczuk/go-chart) implementierte (`IMPLEMENTIERUNG.md` Abschnitt 8.2:
-"ChartRenderer als Port", gedacht als
-austauschbarer Adapter — z. B. später gegen native, interaktive
-Fyne-Widgets). In der Praxis:
+Before the web migration, `internal/domain/analysis.ChartRenderer`
+provided a port that `internal/infra/charts` implemented against
+[`go-chart/v2`](https://github.com/wcharczuk/go-chart) (`IMPLEMENTIERUNG.md`
+section 8.2: "ChartRenderer as a port", intended as a swappable adapter —
+e.g. later against native, interactive Fyne widgets). In practice:
 
-- Diagramme waren serverseitig gerenderte `image.Image`/PNGs ohne Tooltip,
-  ohne Ein-/Ausblenden von Datenreihen, ohne Zoom, ohne Klick-Drilldown.
-- `go-chart` kennt keinen Heatmap-Typ — `internal/infra/charts/heatmap.go`
-  zeichnete die Sendequelle-×-Tag-Matrix manuell über `image/draw`.
-- Die PNGs hatten einen fest weißen Hintergrund (`flattenOnWhite`), weil
-  `go-chart` keine Transparenz für den umgebenden Kartenhintergrund anbot —
-  im dunklen Systemmodus erschienen dadurch helle Kästen um jedes Diagramm.
-- `internal/infra/charts/renderer.go` enthielt mehrere reine
-  Umgehungslösungen für go-chart-Eigenheiten (Textumbruch, Ein-Wert-Donut,
-  transparente Ränder) ohne fachlichen Mehrwert.
+- Charts were server-rendered `image.Image`/PNGs with no tooltip, no
+  showing/hiding data series, no zoom, no click drill-down.
+- `go-chart` has no heatmap type — `internal/infra/charts/heatmap.go`
+  drew the source-×-day matrix manually via `image/draw`.
+- The PNGs had a fixed white background (`flattenOnWhite`), because
+  `go-chart` offered no transparency for the surrounding card
+  background — in dark system mode this showed up as bright boxes
+  around every chart.
+- `internal/infra/charts/renderer.go` contained several pure workarounds
+  for go-chart quirks (text wrapping, single-value donut, transparent
+  borders) with no business value.
 
-Mit dem Umstieg auf eine Web-Oberfläche (ADR 0001) fällt die ursprüngliche
-Motivation für den Port ("später gegen native, interaktive Fyne-Widgets
-tauschen") weg: Im Browser sind Diagramme grundsätzlich Client-Seite, nicht
-serverseitig gerenderte Bilder.
+With the move to a web UI (ADR 0001), the original motivation for the
+port ("swap it later for native, interactive Fyne widgets") goes away: in
+the browser, charts are inherently client-side, not server-rendered
+images.
 
-## Entscheidung
+## Decision
 
-Diagramme entstehen vollständig im Browser mit
+Charts are produced entirely in the browser with
 [Chart.js](https://www.chartjs.org/) (`internal/web/static/charts.js`),
-ergänzt um die Plugins `chartjs-chart-matrix` (Heatmap-Diagrammtyp, den
-Chart.js selbst nicht mitbringt) und `chartjs-plugin-zoom` (Zoom/Verschieben
-in der Zeitreihe). Der Server liefert ausschließlich aufbereitete
-JSON-Daten über eigene Endpunkte (`/api/diagramme/*`); alle
-Aggregations-, Filter- und Drill-down-Entscheidungen fallen in Go (`internal/app/statistics`,
-`internal/domain/analysis`), `charts.js` bleibt
-bewusst dünn (reine Darstellung, siehe `AGENTS.md`: "Diagrammlogik gehört
-nach Go").
+augmented with the plugins `chartjs-chart-matrix` (the heatmap chart
+type, which Chart.js itself doesn't include) and `chartjs-plugin-zoom`
+(zoom/pan in the time series). The server delivers only prepared JSON
+data via its own endpoints (`/api/diagramme/*`); all aggregation,
+filter, and drill-down decisions are made in Go
+(`internal/app/statistics`, `internal/domain/analysis`), and `charts.js`
+stays deliberately thin (pure presentation, see `AGENTS.md`: "Chart logic
+belongs in Go").
 
-Damit entfallen vollständig:
+This entirely removes:
 
-- `analysis.ChartRenderer` (Port, `internal/domain/analysis/charts.go`) —
-  die reinen Datentypen `DailyVolume`, `SourceVolume`, `Heatmap`,
-  `HeatmapCell` bleiben unverändert erhalten und werden jetzt direkt zu
-  JSON serialisiert statt an einen Bild-Renderer übergeben zu werden.
-  `HeatmapCell` bekam dafür in M2 zusätzlich ein `Total`-Feld (Nachrichten-
-  zahl je Zelle, für die Browser-Tooltips).
-- `internal/infra/charts` (die go-chart-Implementierung des Ports,
-  4 Dateien inkl. der manuellen Heatmap-Zeichnung).
-- `exportdata.WriteChartPNG` (PNG-Kodierung eines gerenderten Diagramm-Bilds
-  — ihr einziger Aufrufer war der jetzt gelöschte Fyne-Dashboard-PNG-Export
-  in `internal/ui/dashboard/view.go`).
-- `github.com/wcharczuk/go-chart/v2` aus `go.mod`.
+- `analysis.ChartRenderer` (port, `internal/domain/analysis/charts.go`) —
+  the plain data types `DailyVolume`, `SourceVolume`, `Heatmap`,
+  `HeatmapCell` remain unchanged and are now serialized directly to JSON
+  instead of being handed to an image renderer. `HeatmapCell` gained an
+  additional `Total` field for this in M2 (message count per cell, for
+  the browser tooltips).
+- `internal/infra/charts` (the go-chart implementation of the port, 4
+  files including the manual heatmap drawing).
+- `exportdata.WriteChartPNG` (PNG-encoding a rendered chart image — its
+  only caller was the now-deleted Fyne dashboard PNG export in
+  `internal/ui/dashboard/view.go`).
+- `github.com/wcharczuk/go-chart/v2` from `go.mod`.
 
-Diagramm-Export als Datei (PNG/CSV) bleibt als Funktion erhalten, jetzt aber
-rein clientseitig: `chart.toBase64Image()` für PNG, ein kleines
-JavaScript-Objekt aus denselben Daten wie die zugehörige Tabellenansicht
-für CSV (siehe `internal/web/static/charts.js`, `chartExports`-Registry) —
-kein serverseitiger Bild-Kodierungsschritt mehr nötig.
+Chart export as a file (PNG/CSV) remains as a feature, but is now purely
+client-side: `chart.toBase64Image()` for PNG, a small JavaScript object
+built from the same data as the associated table view for CSV (see
+`internal/web/static/charts.js`, the `chartExports` registry) — no
+server-side image-encoding step needed anymore.
 
-Erwogene Alternative war [Apache ECharts](https://echarts.apache.org/):
-bringt Heatmap, Zoom und Bild-Export bereits eingebaut mit, ist aber mit
-≈1 MB deutlich größer und hat ein eigenes Theme-System, das gegen die
-bestehende CSS-Variablen-Palette (`AGENTS.md`: "Diagrammfarben folgen der
-`dataviz`-Skill-Referenzpalette") hätte abgeglichen werden müssen (`MIGRATIONSPLAN.md` Entscheidung E-2). Chart.js +
-zwei kleine, gezielte
-Plugins wurde als schlankere Lösung vorgezogen; ECharts bleibt die
-dokumentierte Rückfallebene, falls sich die Plugin-Kombination als nicht
-tragfähig erweist — betroffen wären dann nur `charts.js` und die
-JSON-Form der Endpunkte, nicht die Go-Seite.
+A considered alternative was [Apache ECharts](https://echarts.apache.org/):
+it already comes with heatmap, zoom, and image export built in, but is
+noticeably larger at ≈1 MB and has its own theming system that would have
+needed to be reconciled with the existing CSS-variable palette
+(`AGENTS.md`: "Chart colors follow the `dataviz` skill's reference
+palette") (`MIGRATIONSPLAN.md` decision E-2). Chart.js plus two small,
+targeted plugins was chosen as the leaner solution; ECharts remains the
+documented fallback should the plugin combination prove untenable — in
+that case only `charts.js` and the JSON shape of the endpoints would be
+affected, not the Go side.
 
-## Konsequenzen
+## Consequences
 
-**Vorteile:**
+**Advantages:**
 
-- Echte Interaktivität: Tooltips, umschaltbare Legende, Zoom/Verschieben in
-  der Zeitreihe, Klick-Drilldown auf Tag/Quelle/Heatmap-Zelle/Disposition —
-  jeweils zu einer gefilterten Berichtsansicht (Server liefert die
-  Ziel-URLs fertig mit).
-- Diagramme passen sich automatisch an hell/dunkel an (Chart.js liest die
-  Farben aus denselben CSS-Variablen wie die restliche Oberfläche, siehe
-  `AGENTS.md`-Abschnitt zur Diagrammfarben-Palette) — kein fest weißer
-  Hintergrund mehr.
-- Deutlich weniger Code und keine reinen Bibliotheks-Umgehungslösungen (die gesamten go-chart-Workarounds sind mit dem
-  Paket verschwunden).
-- Kleinerer, CGO-freier Server-Build (siehe ADR 0001) — die
-  Diagramm-Bibliothek liegt jetzt als minifizierte JavaScript-Datei im
-  Repository (`internal/web/static/vendor/`, siehe
-  `docs/DEPENDENCIES.md`), nicht mehr als Go-Abhängigkeit.
+- Real interactivity: tooltips, toggleable legend, zoom/pan in the time
+  series, click drill-down on day/source/heatmap cell/disposition — each
+  leading to a filtered report view (the server supplies the target URLs
+  ready-made).
+- Charts automatically adapt to light/dark (Chart.js reads the colors
+  from the same CSS variables as the rest of the UI, see the `AGENTS.md`
+  section on the chart color palette) — no more fixed white background.
+- Noticeably less code and no pure library workarounds (all the
+  go-chart workarounds disappeared along with the package).
+- A smaller, CGO-free server build (see ADR 0001) — the charting library
+  now lives as a minified JavaScript file in the repository
+  (`internal/web/static/vendor/`, see `docs/DEPENDENCIES.md`), no longer
+  as a Go dependency.
 
-**Nachteile / bewusst in Kauf genommen:**
+**Disadvantages / deliberately accepted:**
 
-- Ein `<canvas>` ist für Screenreader unsichtbar — abgemildert durch eine
-  Kurzbeschreibung (`aria-label`) und eine zuschaltbare Tabellenansicht je
-  Diagramm (`<details><summary>Als Tabelle anzeigen</summary>...`), Drill-
-  down-Ziele stehen zusätzlich als normale Links in dieser Tabelle.
-- Mit Chart.js steckt echte Logik im JavaScript (Datenzuordnung, Farben,
-  Klick-Ziele), die reine `httptest`-Handler-Tests nicht sehen — dafür ist
-  laut `MIGRATIONSPLAN.md` Abschnitt 11 ein `chromedp`-Rauchtest (E-8)
-  vorgesehen (vier Diagramme gezeichnet, keine Konsolenfehler, ein
-  Drill-down-Klick funktioniert). In den Entwicklungsumgebungen, in denen
-  M2–M5 entstanden, war kein Chrome/Chromium verfügbar — der Rauchtest
-  bleibt bislang ungeschrieben und ist als offener Punkt in
-  `MIGRATIONSPLAN.md` vermerkt, nicht Teil dieser Entscheidung selbst.
-- Ein bereits einmal aufgetretener, undokumentiert gebliebener Fallstrick
-  mit `responsive: true`/`maintainAspectRatio: false` (Canvas ohne
-  Wrapper mit fester Höhe wächst unendlich) ist inzwischen in `AGENTS.md`
-  festgehalten — reine Chart.js-API-Falle, kein grundsätzliches
-  Gegenargument zur Entscheidung.
+- A `<canvas>` is invisible to screen readers — mitigated by a short
+  description (`aria-label`) and a toggleable table view per chart
+  (`<details><summary>Show as table</summary>...`); drill-down targets
+  are also available as regular links in that table.
+- With Chart.js, real logic lives in JavaScript (data mapping, colors,
+  click targets) that pure `httptest` handler tests can't see — for this,
+  `MIGRATIONSPLAN.md` section 11 plans a `chromedp` smoke test (E-8)
+  (four charts drawn, no console errors, one drill-down click works). In
+  the development environments where M2–M5 were built, no
+  Chrome/Chromium was available — the smoke test remains unwritten so
+  far and is noted as an open item in `MIGRATIONSPLAN.md`, not part of
+  this decision itself.
+- A pitfall with `responsive: true`/`maintainAspectRatio: false` that
+  had already come up once and stayed undocumented (a canvas with no
+  wrapper of fixed height grows unbounded) is now recorded in
+  `AGENTS.md` — a pure Chart.js API trap, not a fundamental argument
+  against the decision.
 
-## Alternativen
+## Alternatives
 
-- **`analysis.ChartRenderer`-Port beibehalten, nur Diagramme im Browser per
-  Bild-Tag einbetten:** hätte die eigentlichen Vorteile (Tooltips, Zoom,
-  Klick-Drilldown, automatische Hell/Dunkel-Anpassung) nicht erreicht —
-  wäre nur ein PNG im `<img>`-Tag statt im Fyne-Fenster gewesen.
-- **Apache ECharts:** siehe oben, als Rückfallebene dokumentiert, nicht
-  gewählt (Größe, eigenes Theme-System).
-- **D3.js (volle Kontrolle, kein fertiges Diagramm-Framework):** nicht
-  ernsthaft erwogen — deutlich mehr Code für dieselben vier Diagrammtypen,
-  ohne die Reifegrad-/Tooltip-/Zoom-Bausteine, die Chart.js bereits fertig
-  mitbringt.
+- **Keep the `analysis.ChartRenderer` port, just embed charts in the
+  browser via an image tag:** wouldn't have achieved the actual
+  benefits (tooltips, zoom, click drill-down, automatic light/dark
+  adaptation) — would just have been a PNG in an `<img>` tag instead of
+  in the Fyne window.
+- **Apache ECharts:** see above, documented as a fallback, not chosen
+  (size, its own theming system).
+- **D3.js (full control, no ready-made charting framework):** not
+  seriously considered — noticeably more code for the same four chart
+  types, without the maturity/tooltip/zoom building blocks Chart.js
+  already provides out of the box.

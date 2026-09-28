@@ -18,12 +18,11 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/infra/mailmime"
 )
 
-// newTestServerWithImporter baut einen Server mit einem echten
-// importfiles.UseCase (echter dmarcxml.Parser/mailmime.Decoder — beide
-// sind reine, I/O-freie Parser; ein Fake würde hier gerade das
-// interessante Verhalten verstecken: ob eine über POST /import
-// hochgeladene Beispieldatei tatsächlich als DMARC-Report erkannt und
-// gespeichert wird).
+// newTestServerWithImporter builds a server with a real
+// importfiles.UseCase (real dmarcxml.Parser/mailmime.Decoder — both are
+// pure, I/O-free parsers; a fake would hide exactly the interesting
+// behavior here: whether a sample file uploaded via POST /import is
+// actually recognized and saved as a DMARC report).
 func newTestServerWithImporter(t *testing.T) (*Server, *fakeReportRepository, *fakeFailedImportRepository) {
 	t.Helper()
 
@@ -48,9 +47,8 @@ func newTestServerWithImporter(t *testing.T) (*Server, *fakeReportRepository, *f
 	return srv, reports, failed
 }
 
-// multipartUpload baut eine multipart/form-data-Anfrage mit einer oder
-// mehreren Dateien unter dem Feldnamen "dateien" (siehe
-// handlers_import.go).
+// multipartUpload builds a multipart/form-data request with one or more
+// files under the field name "dateien" (see handlers_import.go).
 func multipartUpload(t *testing.T, csrfToken string, files map[string][]byte) (*bytes.Buffer, string) {
 	t.Helper()
 	body := &bytes.Buffer{}
@@ -111,7 +109,7 @@ func TestHandleImportSubmit_ValidXML_ImportsAndShowsResult(t *testing.T) {
 
 	html, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(html), "1 neu, 0 übersprungen, 0 fehlerhaft.")
+	require.Contains(t, string(html), "1 new, 0 skipped, 0 failed.")
 	require.Equal(t, 1, reports.count())
 }
 
@@ -122,7 +120,7 @@ func TestHandleImportSubmit_MultipleFiles_AggregatesResult(t *testing.T) {
 	sample := sampleReportXML(t)
 	body, contentType := multipartUpload(t, csrfTokenFor(t, srv, client), map[string][]byte{
 		"a.xml": sample,
-		"b.xml": append(append([]byte{}, sample...), []byte(" ")...), // minimal unterschiedlicher Inhalt
+		"b.xml": append(append([]byte{}, sample...), []byte(" ")...), // minimally different content
 	})
 
 	resp := postMultipart(t, client, srv.Addr(), body, contentType)
@@ -131,7 +129,7 @@ func TestHandleImportSubmit_MultipleFiles_AggregatesResult(t *testing.T) {
 
 	html, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(html), "2 neu, 0 übersprungen, 0 fehlerhaft.")
+	require.Contains(t, string(html), "2 new, 0 skipped, 0 failed.")
 	require.Equal(t, 2, reports.count())
 }
 
@@ -140,7 +138,7 @@ func TestHandleImportSubmit_CorruptFile_CountsAsFailed(t *testing.T) {
 	client := authenticatedClient(t, srv)
 
 	body, contentType := multipartUpload(t, csrfTokenFor(t, srv, client), map[string][]byte{
-		"kaputt.xml": []byte("das ist kein gueltiges dmarc-xml"),
+		"broken.xml": []byte("this is not valid dmarc xml"),
 	})
 
 	resp := postMultipart(t, client, srv.Addr(), body, contentType)
@@ -149,7 +147,7 @@ func TestHandleImportSubmit_CorruptFile_CountsAsFailed(t *testing.T) {
 
 	html, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(html), "0 neu, 0 übersprungen, 1 fehlerhaft.")
+	require.Contains(t, string(html), "0 new, 0 skipped, 1 failed.")
 	require.Equal(t, 1, failed.count())
 }
 
@@ -164,7 +162,7 @@ func TestHandleImportSubmit_NoFiles_ShowsError(t *testing.T) {
 
 	html, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(html), "Bitte mindestens eine Datei auswählen.")
+	require.Contains(t, string(html), "Please select at least one file.")
 }
 
 func TestHandleImportSubmit_FileTooLarge_CountsAsFailed(t *testing.T) {
@@ -172,7 +170,7 @@ func TestHandleImportSubmit_FileTooLarge_CountsAsFailed(t *testing.T) {
 	client := authenticatedClient(t, srv)
 
 	huge := bytes.Repeat([]byte("x"), maxImportFileSize+1)
-	body, contentType := multipartUpload(t, csrfTokenFor(t, srv, client), map[string][]byte{"riesig.xml": huge})
+	body, contentType := multipartUpload(t, csrfTokenFor(t, srv, client), map[string][]byte{"huge.xml": huge})
 
 	resp := postMultipart(t, client, srv.Addr(), body, contentType)
 	defer func() { _ = resp.Body.Close() }()
@@ -180,7 +178,7 @@ func TestHandleImportSubmit_FileTooLarge_CountsAsFailed(t *testing.T) {
 
 	html, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(html), "0 neu, 0 übersprungen, 1 fehlerhaft.")
+	require.Contains(t, string(html), "0 new, 0 skipped, 1 failed.")
 }
 
 func TestHandleImportSubmit_MissingCSRFToken_Returns403(t *testing.T) {
@@ -194,12 +192,11 @@ func TestHandleImportSubmit_MissingCSRFToken_Returns403(t *testing.T) {
 }
 
 func TestHandleImportSubmit_ZipWithMultipleReports_ImportsBoth(t *testing.T) {
-	// MIGRATIONSPLAN.md M4 "Fertig wenn": "Eine .zip mit mehreren Reports
-	// lässt sich per Drag & Drop importieren" — Drag & Drop selbst ist ein
-	// nativer Browser-/HTML-Mechanismus (nicht serverseitig testbar),
-	// hier aber der entscheidende Teil: ein hochgeladenes .zip mit
-	// mehreren enthaltenen Reports wird über den echten dmarcxml-Parser
-	// vollständig importiert.
+	// MIGRATIONSPLAN.md M4 "done when": "a .zip with several reports can
+	// be imported via drag & drop" — drag & drop itself is a native
+	// browser/HTML mechanism (not testable server-side), but this is the
+	// decisive part: an uploaded .zip containing several reports gets
+	// fully imported via the real dmarcxml parser.
 	srv, reports, _ := newTestServerWithImporter(t)
 	client := authenticatedClient(t, srv)
 
@@ -213,6 +210,6 @@ func TestHandleImportSubmit_ZipWithMultipleReports_ImportsBoth(t *testing.T) {
 
 	html, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(html), "2 neu, 0 übersprungen, 0 fehlerhaft.")
+	require.Contains(t, string(html), "2 new, 0 skipped, 0 failed.")
 	require.Equal(t, 2, reports.count())
 }

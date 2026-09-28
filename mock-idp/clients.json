@@ -2,7 +2,7 @@
   {
     "ClientId": "dmarc-analyzer",
     "ClientSecrets": ["local-test-secret"],
-    "Description": "Lokaler Test-Client für dmarc-analyzer (docker-compose.override.yml)",
+    "Description": "Local test client for dmarc-analyzer (docker-compose.override.yml)",
     "AllowedGrantTypes": ["authorization_code"],
     "RequirePkce": true,
     "RequireClientSecret": true,

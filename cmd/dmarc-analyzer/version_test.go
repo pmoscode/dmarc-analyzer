@@ -15,19 +15,19 @@ func TestCommitFromBuildSettings(t *testing.T) {
 		settings []debug.BuildSetting
 		want     string
 	}{
-		{name: "keine vcs-informationen", settings: nil, want: ""},
+		{name: "no vcs information", settings: nil, want: ""},
 		{
-			name:     "sauberer checkout",
+			name:     "clean checkout",
 			settings: []debug.BuildSetting{{Key: "vcs.revision", Value: "abc123"}, {Key: "vcs.modified", Value: "false"}},
 			want:     "abc123",
 		},
 		{
-			name:     "veränderter checkout",
+			name:     "modified checkout",
 			settings: []debug.BuildSetting{{Key: "vcs.revision", Value: "abc123"}, {Key: "vcs.modified", Value: "true"}},
 			want:     "abc123-dirty",
 		},
 		{
-			name:     "modified ohne revision",
+			name:     "modified without revision",
 			settings: []debug.BuildSetting{{Key: "vcs.modified", Value: "true"}},
 			want:     "",
 		},

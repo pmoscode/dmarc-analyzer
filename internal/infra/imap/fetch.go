@@ -10,12 +10,12 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/sync"
 )
 
-// FetchNew wählt das Postfach aus (EXAMINE, nicht SELECT — read-only, siehe
-// Adapter-Dokumentation) und liefert einen Iterator über alle Nachrichten
-// ab state.LastUID+1. Ändert sich UIDValidity gegenüber state (oder ist
-// state.UIDValidity 0, also ein erster Sync), wird stattdessen ab UID 1
-// neu gescannt — Duplikate fängt der UNIQUE-Index in der Persistenz ab
-// (IMPLEMENTIERUNG.md Abschnitt 7.1).
+// FetchNew selects the mailbox (EXAMINE, not SELECT — read-only, see
+// Adapter documentation) and returns an iterator over all messages from
+// state.LastUID+1 onward. If UIDValidity differs from state (or
+// state.UIDValidity is 0, i.e. a first sync), it rescans from UID 1
+// instead — duplicates are caught by the UNIQUE index in persistence
+// (IMPLEMENTIERUNG.md section 7.1).
 func (a *Adapter) FetchNew(ctx context.Context, state sync.State) (iter.Seq2[sync.RawMessage, error], sync.State, error) {
 	if a.client == nil {
 		return nil, state, errNotConnected
@@ -28,7 +28,7 @@ func (a *Adapter) FetchNew(ctx context.Context, state sync.State) (iter.Seq2[syn
 		return err
 	})
 	if selectErr != nil {
-		return nil, state, fmt.Errorf("postfach %q konnte nicht ausgewählt werden: %w", state.Mailbox, selectErr)
+		return nil, state, fmt.Errorf("failed to select mailbox %q: %w", state.Mailbox, selectErr)
 	}
 
 	rescan := state.UIDValidity == 0 || state.UIDValidity != selectData.UIDValidity
@@ -47,17 +47,16 @@ func (a *Adapter) FetchNew(ctx context.Context, state sync.State) (iter.Seq2[syn
 
 	fetchOptions := &imap.FetchOptions{
 		UID: true,
-		// Peek: true → BODY.PEEK[], das \Seen-Flag bleibt unberührt
-		// (IMPLEMENTIERUNG.md Abschnitt 7.1, Schritt 4).
+		// Peek: true → BODY.PEEK[], the \Seen flag stays untouched
+		// (IMPLEMENTIERUNG.md section 7.1, step 4).
 		BodySection: []*imap.FetchItemBodySection{{Peek: true}},
 	}
 	cmd := a.client.Fetch(imap.UIDSet{{Start: startUID, Stop: 0}}, fetchOptions)
 
-	// Ein abgebrochener Kontext schließt die Verbindung — das lässt ein
-	// gerade blockierendes cmd.Next() (Netzwerk-I/O, nicht selbst
-	// context-fähig) mit einem Fehler zurückkehren, statt auf ewig zu
-	// blockieren. stopWatch beendet den Watcher, sobald der Iterator
-	// fertig konsumiert wurde.
+	// A cancelled context closes the connection — this lets a currently
+	// blocking cmd.Next() (network I/O, not context-aware itself) return
+	// with an error instead of blocking forever. stopWatch ends the
+	// watcher once the iterator has been fully consumed.
 	stopWatch := make(chan struct{})
 	go func() {
 		select {
@@ -71,7 +70,7 @@ func (a *Adapter) FetchNew(ctx context.Context, state sync.State) (iter.Seq2[syn
 		defer close(stopWatch)
 		defer func() {
 			if err := cmd.Close(); err != nil && ctx.Err() == nil {
-				yield(sync.RawMessage{}, fmt.Errorf("fetch konnte nicht sauber abgeschlossen werden: %w", err))
+				yield(sync.RawMessage{}, fmt.Errorf("failed to cleanly complete fetch: %w", err))
 			}
 		}()
 
@@ -88,7 +87,7 @@ func (a *Adapter) FetchNew(ctx context.Context, state sync.State) (iter.Seq2[syn
 
 			buf, err := msgData.Collect()
 			if err != nil {
-				if !yield(sync.RawMessage{}, fmt.Errorf("nachricht konnte nicht gelesen werden: %w", err)) {
+				if !yield(sync.RawMessage{}, fmt.Errorf("failed to read message: %w", err)) {
 					return
 				}
 				continue

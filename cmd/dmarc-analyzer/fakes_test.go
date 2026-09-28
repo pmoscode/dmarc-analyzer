@@ -36,7 +36,7 @@ func (f *fakeReportRepository) Exists(_ context.Context, key report.Key) (bool, 
 }
 
 func (f *fakeReportRepository) FindByID(context.Context, report.ReportID) (*report.AggregateReport, error) {
-	return nil, nil //nolint:nilnil // im Test nicht benötigt
+	return nil, nil //nolint:nilnil // not needed in the test
 }
 
 func (f *fakeReportRepository) Query(context.Context, report.Query) (report.Page, error) {
@@ -45,8 +45,8 @@ func (f *fakeReportRepository) Query(context.Context, report.Query) (report.Page
 
 // --- domainsync.MessageDecoder -----------------------------------------
 
-// fakeDecoder behandelt jede Nachricht als genau einen Anhang mit dem
-// Nachrichteninhalt als Dateiname.
+// fakeDecoder treats every message as exactly one attachment with the
+// message content as its filename.
 type fakeDecoder struct{}
 
 func (fakeDecoder) Decode(data []byte) ([]domainsync.RawAttachment, error) {
@@ -55,8 +55,8 @@ func (fakeDecoder) Decode(data []byte) ([]domainsync.RawAttachment, error) {
 
 // --- domainsync.ReportParser --------------------------------------------
 
-// fakeParser akzeptiert jeden Anhang und liefert einen Report, dessen
-// ReportID dem Anhangsinhalt entspricht.
+// fakeParser accepts every attachment and returns a report whose
+// ReportID matches the attachment content.
 type fakeParser struct{}
 
 func (fakeParser) Supports(domainsync.RawAttachment) bool { return true }
@@ -115,7 +115,7 @@ func (f *fakeAccountRepository) FindAll(context.Context) ([]account.MailAccount,
 	return all, nil
 }
 
-var errNotFound = fakeErr("nicht gefunden")
+var errNotFound = fakeErr("not found")
 
 type fakeErr string
 

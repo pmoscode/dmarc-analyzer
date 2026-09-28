@@ -9,13 +9,13 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/failedrecords"
 )
 
-// failedRecordsPageSize ist die je Ladeschritt angeforderte Seitengröße —
-// dieselbe Lazy-Nachladelogik wie /berichte/domains/quellen.
+// failedRecordsPageSize is the page size requested per load step — the
+// same lazy-loading logic as /berichte/domains/quellen.
 const failedRecordsPageSize = 50
 
-// failedRecordsFilter fasst Filter und Sortierung von /fehlschlaege
-// zusammen: die geteilte Filterleiste (Zeitraum/Domain) plus Quell-IP
-// (wie /berichte) und ein Sortierfeld.
+// failedRecordsFilter combines the filter and sort order of
+// /fehlschlaege: the shared filter bar (period/domain) plus source IP
+// (like /berichte) and a sort field.
 type failedRecordsFilter struct {
 	Period    filterParams
 	SourceIP  string
@@ -66,10 +66,10 @@ func (f failedRecordsFilter) values() url.Values {
 	return v
 }
 
-// sortLink baut den Link für einen sortierbaren Spaltenkopf — anders als
-// reportsFilter.sortLink ohne Richtungsumkehr, es gibt hier nur genau
-// eine sinnvolle Richtung je Sortierfeld (neuester Bericht zuerst bzw.
-// Quell-IP aufsteigend).
+// sortLink builds the link for a sortable column header — unlike
+// reportsFilter.sortLink, without direction reversal: there's only ever
+// one sensible direction per sort field here (newest report first, or
+// source IP ascending).
 func (f failedRecordsFilter) sortLink(field failedrecords.SortField) string {
 	next := f
 	next.SortField = field
@@ -82,7 +82,7 @@ func failedRecordsPageURL(filter failedRecordsFilter, cursor string) string {
 	return "/fehlschlaege/seite?" + v.Encode()
 }
 
-// --- Vorlagendaten -------------------------------------------------------
+// --- Template data ---------------------------------------------------------
 
 type failedRecordRowView struct {
 	PeriodLabel string
@@ -140,7 +140,7 @@ type failedRecordsPageData struct {
 	SortDateURL     string
 	SortSourceIPURL string
 
-	// ExportURL: siehe reportsPageData.ExportURL.
+	// ExportURL: see reportsPageData.ExportURL.
 	ExportURL string
 
 	Rows failedRecordsRowsData
@@ -148,7 +148,7 @@ type failedRecordsPageData struct {
 
 func buildFailedRecordsPageData(filter failedRecordsFilter, page failedrecords.Page) failedRecordsPageData {
 	return failedRecordsPageData{
-		Title:           "Fehlschläge",
+		Title:           "Failures",
 		Domain:          filter.Period.Domain,
 		SourceIP:        filter.SourceIP,
 		PeriodOptions:   filter.Period.options(),
@@ -163,7 +163,7 @@ func buildFailedRecordsPageData(filter failedRecordsFilter, page failedrecords.P
 	}
 }
 
-// --- Handler --------------------------------------------------------------
+// --- Handlers ---------------------------------------------------------------
 
 func (s *Server) handleFailedRecords(w http.ResponseWriter, r *http.Request) {
 	filter := parseFailedRecordsFilter(r)
@@ -186,9 +186,9 @@ func (s *Server) handleFailedRecords(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleFailedRecordsPage liefert die nächste Seite als HTML-Fragment —
-// für den htmx-Aufruf des Ladeknopfs, kein voller Seitenaufbau (siehe
-// handleDomainsPage).
+// handleFailedRecordsPage returns the next page as an HTML fragment —
+// for the htmx call from the load-more button, not a full page build
+// (see handleDomainsPage).
 func (s *Server) handleFailedRecordsPage(w http.ResponseWriter, r *http.Request) {
 	filter := parseFailedRecordsFilter(r)
 	q, err := filter.query(r.URL.Query().Get("cursor"), failedRecordsPageSize)

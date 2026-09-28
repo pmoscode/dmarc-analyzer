@@ -5,9 +5,9 @@ import (
 	"time"
 )
 
-// fakePruner implementiert report.Pruner und merkt sich den zuletzt
-// übergebenen cutoff — für Tests, die prüfen, dass ApplyNow den
-// richtigen Zeitpunkt aus RetentionMonths berechnet.
+// fakePruner implements report.Pruner and remembers the last cutoff it
+// was given — for tests that verify ApplyNow computes the correct point
+// in time from RetentionMonths.
 type fakePruner struct {
 	deleted    int64
 	err        error

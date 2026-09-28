@@ -1,243 +1,239 @@
 # AGENTS.md
 
-Leitfaden für KI-Coding-Agenten in diesem Repository. Menschliche
-Mitwirkende finden dieselben Informationen ausführlicher in
-[`docs/architecture.md`](docs/architecture.md) (Architektur) und
-[`docs/features/`](docs/features/) (Feature-Dokumentation pro Domäne).
-`docs/archive/` enthält die Planungsdokumente der früheren
-Desktop-Ära — historischer Kontext, kein aktueller Stand mehr (siehe
+Guide for AI coding agents in this repository. Human contributors find the
+same information in more detail in
+[`docs/architecture.md`](docs/architecture.md) (architecture) and
+[`docs/features/`](docs/features/) (per-domain feature docs).
+`docs/archive/` contains the planning documents from the earlier
+desktop era — historical context, not the current state (see
 `docs/adr/0003-docker-nativ-oidc-statt-desktop-keychain.md`).
 
-## Worum es geht
+## What this is about
 
-DMARC Analyzer: ein Go-Programm, das als Docker-Container läuft, DMARC-
-Aggregate-Reports aus einem IMAP-Postfach holt, in SQLite speichert und
-über eine eingebettete Web-Oberfläche auswertet. Komplett über
-Umgebungsvariablen konfiguriert (`internal/infra/envconfig`, siehe
-`docs/features/deployment.md`), Zugriffsschutz per OIDC gegen einen
-Authentik-IdP (`docs/features/auth.md`). Genau ein IMAP-Konto pro
-Container, kein Konto-CRUD in der Oberfläche.
+DMARC Analyzer: a Go program that runs as a Docker container, fetches DMARC
+aggregate reports from an IMAP mailbox, stores them in SQLite, and evaluates
+them via an embedded web UI. Fully configured through environment variables
+(`internal/infra/envconfig`, see `docs/features/deployment.md`), access
+protected via OIDC against an Authentik IdP (`docs/features/auth.md`).
+Exactly one IMAP account per container, no account CRUD in the UI.
 
-## Sprachregel — wichtig, bricht sonst CI
+## Language rule — important, breaks CI otherwise
 
-- **Kommentare, Fehlertexte, Log-Meldungen, UI-Strings, Doku: Deutsch.**
-- **Go-Bezeichner (Pakete, Typen, Funktionen, Felder): Englisch.**
-- Deshalb ist `misspell` im Linter deaktiviert (`.golangci.yml`) — ein
-  englisches Wörterbuch würde bei jedem deutschen Kommentar Fehlalarm
-  schlagen. Nicht wieder aktivieren, ohne dieses Problem zu lösen.
+- **Comments, error messages, log messages, UI strings, docs: English.**
+- **Go identifiers (packages, types, functions, fields): English.**
+- `misspell` is therefore disabled in the linter (`.golangci.yml`) — this was
+  originally to avoid false positives from German comments. That reason no
+  longer applies now that the whole codebase is English; re-enabling
+  `misspell` is a reasonable follow-up, but do it deliberately (verify it
+  doesn't flag proper nouns/identifiers) rather than as a side effect of
+  this change.
 
-## Befehle
+## Commands
 
-Alles läuft über [Task](https://taskfile.dev/), nicht direkt über `go`:
+Everything runs through [Task](https://taskfile.dev/), not `go` directly:
 
 ```sh
-task check        # fmt + lint + test — vor jedem Commit, das hier auch die CI ausführt
+task check        # fmt + lint + test — before every commit; also what CI runs
 task test          # go test ./... -race
-task test:unit      # nur schnelle Tests (-short, ohne Zip-/Gzip-Bomben-Tests)
+task test:unit      # fast tests only (-short, without zip/gzip bomb tests)
 task lint           # golangci-lint run
-task build           # Binärdatei nach bin/
-task --list          # alle Tasks
+task build           # binary into bin/
+task --list          # all tasks
 ```
 
-`task check` **muss grün sein**, bevor eine Änderung als fertig gilt.
+`task check` **must be green** before a change counts as done.
 
-## Architektur — Abhängigkeitsrichtung ist bindend
+## Architecture — dependency direction is binding
 
-Clean Architecture, vier Schichten, Abhängigkeiten zeigen nur nach innen:
+Clean Architecture, four layers, dependencies point only inward:
 
 ```
 cmd/dmarc-analyzer  →  internal/web  →  internal/app  →  internal/domain
                         internal/infra ─────────────────↗
 ```
 
-- `internal/domain/*`: reine Fachlogik, **keine** Imports außerhalb der
-  Standardbibliothek. Kein `encoding/xml`-Import hier, kein SQL.
-- `internal/app/*`: Use Cases, hängen nur an domain-Ports (Interfaces).
-- `internal/infra/*`: Adapter, implementieren die domain-Ports gegen
-  konkrete Technik (SQLite, IMAP, dmarcxml, `envconfig` für ENV-Werte).
-- `internal/web/*`: Go-`html/template` + Chart.js (`static/charts.js`),
-  ruft ausschließlich Use Cases aus `internal/app` auf. Diagrammlogik
-  (Aggregation, Filter, Drill-down-Ziele) gehört nach Go — `charts.js`
-  bekommt fertig aufbereitete JSON-Daten und bleibt bewusst dünn. Enthält
-  außerdem den OIDC-Login-Flow (`auth.go`/`oidc.go`) — bewusst hier und
-  nicht in `internal/app`, weil Sitzungen/Cookies reine
-  Web-Ausliefer-Belange sind, keine Fachlogik.
-- `cmd/dmarc-analyzer`: einziger Ort, an dem Adapter mit Use Cases verdrahtet
-  werden (Composition Root) — liest hier auch die ENV-Konfiguration
+- `internal/domain/*`: pure business logic, **no** imports outside the
+  standard library. No `encoding/xml` import here, no SQL.
+- `internal/app/*`: use cases, depend only on domain ports (interfaces).
+- `internal/infra/*`: adapters, implement the domain ports against
+  concrete technology (SQLite, IMAP, dmarcxml, `envconfig` for ENV values).
+- `internal/web/*`: Go `html/template` + Chart.js (`static/charts.js`),
+  calls exclusively into use cases from `internal/app`. Chart logic
+  (aggregation, filters, drill-down targets) belongs in Go — `charts.js`
+  receives already-prepared JSON data and stays deliberately thin. Also
+  contains the OIDC login flow (`auth.go`/`oidc.go`) — deliberately here
+  and not in `internal/app`, because sessions/cookies are pure web-delivery
+  concerns, not business logic.
+- `cmd/dmarc-analyzer`: the only place where adapters are wired to use
+  cases (composition root) — also reads the ENV configuration here
   (`envconfig.Load()`).
 
-Details und Begründung (SOLID/DDD/Clean Code) in `docs/architecture.md`.
+Details and rationale (SOLID/DDD/Clean Code) in `docs/architecture.md`.
 
-## Web-Oberfläche: keine Inline-Skripte, jede Zustandsänderung per POST mit CSRF
+## Web UI: no inline scripts, every state change is a POST with CSRF
 
-- Content-Security-Policy verbietet `unsafe-inline` (siehe
-  `internal/web/middleware.go`, `middleware_test.go`) — jedes Verhalten
-  gehört in `internal/web/static/*.js`, nie in ein `<script>`-Tag oder ein
-  `onclick`-Attribut im Template.
-- Jede Zustandsänderung (Formular, Knopf mit Seiteneffekt) ist ein POST mit
-  CSRF-Token (`templateFuncs["csrfToken"]`, geprüft von `requireCSRF`) —
-  niemals ein GET mit Seiteneffekt.
-- Jede neue Seite/jeder neue Template-Zustand (leer, Fehler, gefüllt)
-  gehört mit `httptest` gerendert und als HTML geparst getestet — ein
-  Template-Fehler soll im Test auffallen, nicht erst im Browser.
+- The Content Security Policy forbids `unsafe-inline` (see
+  `internal/web/middleware.go`, `middleware_test.go`) — every behavior
+  belongs in `internal/web/static/*.js`, never in a `<script>` tag or an
+  `onclick` attribute in a template.
+- Every state change (form, button with a side effect) is a POST with a
+  CSRF token (`templateFuncs["csrfToken"]`, checked by `requireCSRF`) —
+  never a GET with a side effect.
+- Every new page/new template state (empty, error, populated) belongs
+  rendered with `httptest` and parsed as HTML in a test — a template
+  error should surface in the test, not first in the browser.
 
-## Namenskonvention: kein Package-Stutter
+## Naming convention: no package stutter
 
-Domänentypen heißen nicht `report.ReportKey`, sondern `report.Key` — sonst
-stuttert der qualifizierte Name (`report.ReportKey`). Ausnahme: wenn die
-Kurzform mit einem Feldnamen kollidieren würde (`report.ReportID` bleibt so,
-weil `AggregateReport.ID ID` unlesbar wäre — ebenso `account.AccountID`
-wegen `MailAccount.ID ID` — siehe Kommentar im jeweiligen Code).
-`golangci-lint` (revive `exported`-Regel) erzwingt das; nicht mit
-`//nolint` pauschal umgehen, sondern umbenennen, außer eine echte Kollision
-verhindert es.
+Domain types are not named `report.ReportKey`, but `report.Key` — otherwise
+the qualified name stutters (`report.ReportKey`). Exception: when the short
+form would collide with a field name (`report.ReportID` stays that way
+because `AggregateReport.ID ID` would be unreadable — likewise
+`account.AccountID` because of `MailAccount.ID ID` — see the comment in the
+respective code). `golangci-lint` (revive's `exported` rule) enforces this;
+don't blanket-suppress it with `//nolint`, rename instead, unless a real
+collision prevents it.
 
-## SQLite: IN-Klausel mit vielen Werten vermeiden
+## SQLite: avoid IN clauses with many values
 
-Eine `WHERE x IN (?, ?, ..., ?)`-Klausel mit einem Platzhalter je Zeile
-skaliert schlecht — bei 10.000 Werten dauerte allein das Vorbereiten des
-Statements >3s (gemessen in `internal/infra/sqlite`, siehe
-`reportrecords.go`). Wenn der Filterwert (hier: `report_id`) bereits
-bekannt ist, stattdessen über die Fremdschlüsselbeziehung joinen
+A `WHERE x IN (?, ?, ..., ?)` clause with one placeholder per row scales
+badly — with 10,000 values, just preparing the statement alone took >3s
+(measured in `internal/infra/sqlite`, see `reportrecords.go`). When the
+filter value (here: `report_id`) is already known, join over the foreign-key
+relationship instead
 (`JOIN records ON records.id = child.record_id WHERE records.report_id = ?`)
-statt vorher alle IDs zu laden und darüber eine IN-Klausel zu bauen. Bei
-neuen Batch-Ladefunktionen in `internal/infra/sqlite` immer mit
-realistisch großen Datenmengen testen (siehe `reportperf_test.go`), nicht
-nur mit einer Handvoll Testzeilen — dort fällt das Problem nicht auf.
+rather than first loading all IDs and building an IN clause from them. When
+adding new batch-loading functions in `internal/infra/sqlite`, always test
+with realistically large data volumes (see `reportperf_test.go`), not just a
+handful of test rows — the problem doesn't show up there.
 
-## Abhängigkeiten
+## Dependencies
 
-**Nichts in `go.mod` aufnehmen, das nicht tatsächlich importiert wird.**
-`go.mod` wächst organisch, wenn Code eine Bibliothek wirklich importiert —
-nicht vorab. Konkret gepinnte Versionen stehen in `docs/DEPENDENCIES.md`,
-nicht in `go.mod`. `task tidy` entfernt ungenutzte Requires ohnehin wieder.
+**Don't add anything to `go.mod` that isn't actually imported.** `go.mod`
+grows organically when code genuinely imports a library — not ahead of
+time. Concrete pinned versions live in `docs/DEPENDENCIES.md`, not in
+`go.mod`. `task tidy` removes unused requires anyway.
 
 ## Tests
 
-- `github.com/stretchr/testify/require` für Assertions, keine eigenen
-  `if err != nil { t.Fatalf(...) }`-Ketten.
-- Table-driven mit `t.Run(...)`, wo mehrere Fälle dieselbe Logik prüfen.
-- `t.Parallel()`, außer der Test nutzt `t.Setenv()` (inkompatibel).
-- Langsame Tests (> ~1 s, z. B. Zip-/Gzip-Bomben mit >100 MB Testdaten) mit
-  `if testing.Short() { t.Skip(...) }` markieren, damit `task test:unit`
-  schnell bleibt.
-- Fixtures für den DMARC-Parser: `testdata/reports/<stil>/...`, IPs aus dem
-  RFC-5737-Bereich (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`),
-  Domains als `example.com`/`example.org` — nie echte Adressen oder Domains.
-- `internal/web`-Tests gegen OIDC-geschützte Routen brauchen einen echten
-  Server: `New(ctx, deps, opts)` macht beim Start eine echte
-  OIDC-Discovery-Anfrage gegen `opts.OIDC.IssuerURL`. Dafür gibt es
-  `internal/web/fakeoidc_test.go` (`newFakeOIDCProvider`) — ein
-  minimaler, lokaler Identity-Provider (Discovery/JWKS/Authorize/Token,
-  echt signierte ID-Tokens), kein Mock der Client-Logik. Siehe
+- `github.com/stretchr/testify/require` for assertions, no hand-rolled
+  `if err != nil { t.Fatalf(...) }` chains.
+- Table-driven with `t.Run(...)` where several cases check the same logic.
+- `t.Parallel()`, unless the test uses `t.Setenv()` (incompatible).
+- Mark slow tests (> ~1 s, e.g. zip/gzip bombs with >100 MB of test data)
+  with `if testing.Short() { t.Skip(...) }` so `task test:unit` stays fast.
+- Fixtures for the DMARC parser: `testdata/reports/<style>/...`, IPs from
+  the RFC 5737 range (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`),
+  domains as `example.com`/`example.org` — never real addresses or domains.
+- `internal/web` tests against OIDC-protected routes need a real server:
+  `New(ctx, deps, opts)` makes a real OIDC discovery request against
+  `opts.OIDC.IssuerURL` at startup. For this there's
+  `internal/web/fakeoidc_test.go` (`newFakeOIDCProvider`) — a minimal,
+  local identity provider (discovery/JWKS/authorize/token, genuinely
+  signed ID tokens), not a mock of the client logic. See
   `server_test.go` (`newTestServer`, `loginViaFakeOIDC`,
-  `beginFakeOIDCLogin`) für das Muster.
+  `beginFakeOIDCLogin`) for the pattern.
 
-## Sonst noch wichtig
+## Other important things
 
-- **Nicht selbstständig committen.** Änderungen fertigstellen, `git status`/
-  `git diff` zeigen, aber `git commit` nur auf ausdrückliche Anweisung.
-- RFC 7489 ist die fachliche Referenz für alles rund um DMARC-Aggregate-
-  Reports (Feldnamen, Enum-Werte, Defaults wie `pct=100` oder
-  `adkim/aspf=r`, wenn das Feld fehlt).
-- Unbekannte/RFC-abweichende Enum-Werte werden nie verworfen, sondern auf
-  einen `Unknown`-Wert abgebildet — Provider halten sich nicht immer an den
-  RFC, der Import darf daran nicht scheitern.
+- **Don't commit on your own.** Finish changes, show `git status`/
+  `git diff`, but only run `git commit` on explicit instruction.
+- RFC 7489 is the authoritative reference for everything around DMARC
+  aggregate reports (field names, enum values, defaults like `pct=100` or
+  `adkim/aspf=r` when the field is missing).
+- Unknown/RFC-deviating enum values are never discarded, but mapped to an
+  `Unknown` value — providers don't always follow the RFC, and import must
+  not fail because of that.
 
-## Maskierte Typen (Secret & Co.): `%#v` nicht vergessen
+## Masked types (Secret & co.): don't forget `%#v`
 
-`String()`/`MarshalJSON()` reichen nicht, um einen Wert wirklich
-unauslesbar zu machen — `%#v` benutzt `fmt.GoStringer` (`GoString()`),
-nicht `fmt.Stringer`. Ohne eigene `GoString()`-Methode zeigt `%#v` bei
-einem Struct mit einem `[]byte`-Feld die Rohbytes hex-kodiert (trivial
-rückführbar), obwohl `%v`/`%+v` bereits korrekt maskiert sind — gefunden in
-`internal/domain/account.Secret` (siehe `secret.go`/`secret_test.go`). Bei
-jedem neuen maskierten Typ: `GoString()` mit ergänzen, und im Test nicht
-nur auf den Klartext-Substring prüfen, sondern zusätzlich auf die
-hex-kodierte Form (`encoding/hex.EncodeToString`) — sonst fällt genau diese
-Lücke im Test nicht auf.
+`String()`/`MarshalJSON()` aren't enough to make a value truly unreadable —
+`%#v` uses `fmt.GoStringer` (`GoString()`), not `fmt.Stringer`. Without a
+custom `GoString()` method, `%#v` on a struct with a `[]byte` field shows
+the raw bytes hex-encoded (trivially reversible), even though `%v`/`%+v`
+already mask correctly — found in `internal/domain/account.Secret` (see
+`secret.go`/`secret_test.go`). For every new masked type: add a
+`GoString()` too, and in the test don't just check for the plaintext
+substring, but also for the hex-encoded form
+(`encoding/hex.EncodeToString`) — otherwise this exact gap won't show up in
+the test.
 
-## go-imap/v2 ist Beta — bekannte Fallstricke
+## go-imap/v2 is beta — known pitfalls
 
-- `imapmemserver.User.Append(mailbox, reader, nil)` **panickt** (Nil-Pointer,
-  `mailbox.go: appendBytes` liest `options.Time`/`options.Flags` ungeprüft).
-  Immer `&imap.AppendOptions{}` statt `nil` übergeben. Siehe
+- `imapmemserver.User.Append(mailbox, reader, nil)` **panics** (nil pointer,
+  `mailbox.go: appendBytes` reads `options.Time`/`options.Flags` without
+  checking). Always pass `&imap.AppendOptions{}` instead of `nil`. See
   `internal/infra/imap/testserver_test.go`.
-- Die `Dial*`-Funktionen in `imapclient` sind nicht context-fähig. Eigene
-  Verbindung per `net.Dialer`/`tls.Dialer` mit `DialContext` aufbauen und an
-  `imapclient.New(conn, opts)` übergeben (siehe `dial.go`); blockierende
-  Befehle (`Login().Wait()`, `Fetch()`/`Next()`) über `runCtx()` context-fähig
-  machen (schließt die Verbindung bei `ctx.Done()`, das lässt den
-  blockierenden Aufruf mit einem Fehler zurückkehren).
-- Bei jedem `go get` innerhalb dieses Moduls: `go mod tidy` nicht vergessen —
-  sonst bleiben frisch direkt importierte Pakete fälschlich als
-  `// indirect` markiert (passiert, wenn `go get` mehrere transitive
-  Abhängigkeiten in einem Rutsch auflöst).
+- The `Dial*` functions in `imapclient` aren't context-aware. Build your own
+  connection via `net.Dialer`/`tls.Dialer` with `DialContext` and hand it to
+  `imapclient.New(conn, opts)` (see `dial.go`); make blocking commands
+  (`Login().Wait()`, `Fetch()`/`Next()`) context-aware via `runCtx()`
+  (closes the connection on `ctx.Done()`, which makes the blocking call
+  return with an error).
+- On every `go get` within this module: don't forget `go mod tidy` —
+  otherwise freshly, directly imported packages incorrectly stay marked as
+  `// indirect` (happens when `go get` resolves several transitive
+  dependencies in one go).
 
-## Sitzungs-Cookies in Tests: `net/http/cookiejar` verwirft Secure-Cookies auf `http://`-Testservern
+## Session cookies in tests: `net/http/cookiejar` drops Secure cookies on `http://` test servers
 
-`auth.go` setzt das Sitzungs-Cookie mit `Secure: true` (Produktionsbetrieb
-läuft hinter einem TLS-terminierenden Reverse-Proxy). `net/http/cookiejar`
-setzt RFC 6265 korrekt um: ein per `SetCookies` gespeichertes
-Secure-Cookie wird bei einem späteren `Cookies(u)`-Aufruf für eine
-`http://`-URL **stillschweigend nicht zurückgegeben** — ein mit
-`http.Client{Jar: cookiejar.New(nil)}` gebauter Testclient verliert die
-Sitzung dadurch nach dem ersten Redirect, ohne dass ein Fehler auftritt
-(einfach ein 303 zu `/anmelden` statt der erwarteten Seite). Zwei
-Lösungen, je nach Testart: `internal/web/api_charts_test.go`
-(`sessionTransport`) umgeht das Cookie-Handling komplett und injiziert das
-Cookie über einen eigenen `http.RoundTripper` — für Handler-Tests, die
-keine echte Anmeldung durchlaufen (`authenticatedClient`). Für Tests, die
-den echten OIDC-Redirect-Tanz durchlaufen müssen (`server_test.go`,
-`testCookieJar`), ein bewusst vereinfachter `http.CookieJar`, der
-Secure/Domain/Path ignoriert. Beide Muster nicht durch einen
-gewöhnlichen `cookiejar.New(nil)` ersetzen.
+`auth.go` sets the session cookie with `Secure: true` (production runs
+behind a TLS-terminating reverse proxy). `net/http/cookiejar` correctly
+implements RFC 6265: a Secure cookie stored via `SetCookies` is **silently
+not returned** on a later `Cookies(u)` call for an `http://` URL — a test
+client built with `http.Client{Jar: cookiejar.New(nil)}` therefore loses
+the session after the first redirect, with no error occurring (just a 303
+to `/anmelden` instead of the expected page). Two solutions, depending on
+the kind of test: `internal/web/api_charts_test.go` (`sessionTransport`)
+bypasses cookie handling entirely and injects the cookie via a custom
+`http.RoundTripper` — for handler tests that don't go through a real login
+(`authenticatedClient`). For tests that must go through the real OIDC
+redirect dance (`server_test.go`, `testCookieJar`), a deliberately
+simplified `http.CookieJar` that ignores Secure/Domain/Path. Don't replace
+either pattern with a plain `cookiejar.New(nil)`.
 
-## Diagrammfarben (`internal/web/static/app.css`) folgen der `dataviz`-Skill-Referenzpalette
+## Chart colors (`internal/web/static/app.css`) follow the `dataviz` skill's reference palette
 
-Die konkreten Hex-Werte in `:root`/`prefers-color-scheme: dark`
-(Primärblau `#2a78d6`/`#3987e5`, Status-Grün/-Gelb/-Rot
-`#0ca30c`/`#fab219`/`#d03b3b`) stammen unverändert aus der
-Referenzpalette der `dataviz`-Skill (`references/palette.md`) — **nicht**
-frei erfunden. Dieselben Statusfarben verwendet `internal/web/static/
-charts.js` (Pass/Fail/Disposition-Diagramme) über dieselben CSS-Variablen
-(`cssVar("--status-good")` usw.) — Oberfläche und Diagramme sprechen
-dadurch dieselbe Farbsprache. Vor einer Änderung dieser Werte:
-`dataviz`-Skill laden und `scripts/validate_palette.js` gegen die neuen
-Werte laufen lassen (nicht nach Auge entscheiden) — siehe dortige
-Anleitung. Statusfarben sind laut Skill bewusst **modusunabhängig fest**
-(nicht pro hell/dunkel verschieden), Primärfarbe/Oberflächen dagegen schon.
+The concrete hex values in `:root`/`prefers-color-scheme: dark` (primary
+blue `#2a78d6`/`#3987e5`, status green/yellow/red
+`#0ca30c`/`#fab219`/`#d03b3b`) come unchanged from the reference palette of
+the `dataviz` skill (`references/palette.md`) — **not** invented freely.
+`internal/web/static/charts.js` uses the same status colors (pass/fail/
+disposition charts) via the same CSS variables (`cssVar("--status-good")`
+etc.) — the UI and charts speak the same color language as a result. Before
+changing these values: load the `dataviz` skill and run
+`scripts/validate_palette.js` against the new values (don't decide by eye)
+— see the instructions there. Per the skill, status colors are deliberately
+**fixed regardless of mode** (not different per light/dark), while
+primary color/surfaces do vary.
 
-## Chart.js `responsive: true` + `maintainAspectRatio: false`: Canvas braucht einen Elternknoten mit fester Höhe
+## Chart.js `responsive: true` + `maintainAspectRatio: false`: the canvas needs a parent with a fixed height
 
-Chart.js beobachtet im responsiven Modus per `ResizeObserver` den
-**direkten Elternknoten** des `<canvas>`, um dessen Höhe/Breite
-anzupassen. Hat dieser Elternknoten selbst keine explizite, vom Canvas
-unabhängige Höhe (z. B. weil er wie eine gewöhnliche `.chart-card` nur
-`padding`/`border` setzt und seine Höhe sonst "auto", also vom Inhalt
-abgeleitet ist), entsteht eine Rückkopplungsschleife: das Canvas wächst
-→ der Elternknoten wächst mit, weil seine Höhe vom Canvas-Inhalt abhängt
-→ der ResizeObserver sieht die neue (größere) Elternhöhe und vergrößert
-das Canvas erneut → unendliches Wachstum nach unten, in der Praxis als
-"ein Diagramm expandiert beim Laden der Seite endlos" sichtbar (gefunden
-auf dem Dashboard beim `chart-verlauf`-Diagramm, das direktes Kind von
-`.chart-card` war).
+In responsive mode, Chart.js observes the **direct parent node** of the
+`<canvas>` via `ResizeObserver` to adjust its height/width. If that parent
+node has no explicit height independent of the canvas itself (e.g. because,
+like an ordinary `.chart-card`, it only sets `padding`/`border` and its
+height is otherwise "auto", i.e. derived from its content), a feedback loop
+results: the canvas grows → the parent node grows with it, because its
+height depends on the canvas content → the ResizeObserver sees the new
+(larger) parent height and grows the canvas again → unbounded downward
+growth, visible in practice as "a chart expands endlessly while the page
+loads" (found on the dashboard with the `chart-verlauf` chart, which was a
+direct child of `.chart-card`).
 
-Ein direktes `canvas.style.height = "…px"` in JavaScript **behebt das
-nicht** — im Gegenteil, es kollidiert mit Chart.js' eigener Verwaltung
-von Canvas-Breite/-Höhe und kann die Schleife sogar erst auslösen. Die
-Höhe gehört stattdessen auf einen eigenen Wrapper-`<div>` als direkten
-Elternknoten des Canvas (`position: relative` plus feste oder dynamisch
-per JS gesetzte Höhe), niemals auf das Canvas selbst. Siehe
-`internal/web/static/app.css` (`.chart-canvas-wrap`, mit ausführlichem
-Kommentar) und `internal/web/templates/pages/dashboard.html` — jedes der
-vier Dashboard-Diagramme hat seinen eigenen `<div class="chart-canvas-
-wrap" id="chart-<name>-wrap">` um das `<canvas>`. Bei fester Höhe (hier:
-Nachrichtenvolumen, Disposition) reicht CSS; bei datenabhängiger Höhe
-(hier: Top-Sendequellen, Heatmap — mehr Zeilen/Spalten brauchen mehr
-Platz) setzt `internal/web/static/charts.js` die Höhe zur Laufzeit per
-`document.getElementById("chart-<name>-wrap").style.height = …` auf den
-Wrapper, nicht auf das Canvas. Bei jedem neuen Chart.js-Diagramm mit
-`maintainAspectRatio: false` dieses Muster übernehmen, sonst tritt der
-Bug erneut auf.
-
+Setting `canvas.style.height = "…px"` directly in JavaScript **does not fix
+this** — on the contrary, it collides with Chart.js's own management of
+canvas width/height and can even trigger the loop. The height instead
+belongs on a dedicated wrapper `<div>` as the canvas's direct parent node
+(`position: relative` plus a fixed height, or one set dynamically via JS),
+never on the canvas itself. See `internal/web/static/app.css`
+(`.chart-canvas-wrap`, with a detailed comment) and
+`internal/web/templates/pages/dashboard.html` — each of the four dashboard
+charts has its own `<div class="chart-canvas-wrap" id="chart-<name>-wrap">`
+around the `<canvas>`. For a fixed height (here: message volume,
+disposition), CSS is enough; for a data-dependent height (here: top
+sending sources, heatmap — more rows/columns need more space)
+`internal/web/static/charts.js` sets the height at runtime via
+`document.getElementById("chart-<name>-wrap").style.height = …` on the
+wrapper, not on the canvas. Adopt this pattern for every new Chart.js chart
+with `maintainAspectRatio: false`, otherwise the bug recurs.

@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1
 
-# Build-Stage: CGO_ENABLED=0 funktioniert seit dem Umstieg auf die
-# eingebettete Web-Oberfläche (ADR 0001) für das gesamte Modul —
-# modernc.org/sqlite ist reines Go, keine native Toolchain nötig.
+# Build stage: CGO_ENABLED=0 has worked for the whole module since the
+# move to the embedded web UI (ADR 0001) — modernc.org/sqlite is pure
+# Go, no native toolchain needed.
 FROM golang:1.27-alpine AS build
 
 WORKDIR /src
@@ -12,8 +12,8 @@ RUN go mod download
 
 COPY . .
 
-# COMMIT muss als Build-Arg kommen: .git ist per .dockerignore
-# ausgeschlossen, "go build" kann die Revision hier nicht selbst einbetten.
+# COMMIT must come in as a build arg: .git is excluded via
+# .dockerignore, so "go build" can't embed the revision itself here.
 ARG VERSION=dev
 ARG COMMIT=""
 RUN CGO_ENABLED=0 go build \
@@ -21,21 +21,21 @@ RUN CGO_ENABLED=0 go build \
     -o /out/dmarc-analyzer \
     ./cmd/dmarc-analyzer
 
-# Leeres /data-Verzeichnis hier anlegen, nicht in der Runtime-Stage: die
-# hat keine Shell (distroless), aber COPY --chown kann ein bereits
-# angelegtes Verzeichnis mit der richtigen Eigentümerschaft übernehmen.
+# Create the empty /data directory here, not in the runtime stage: that
+# stage has no shell (distroless), but COPY --chown can take over an
+# already-created directory with the right ownership.
 RUN mkdir -p /data-empty
 
-# Runtime-Stage: distroless statt Alpine — kein Shell/Paketmanager im
-# fertigen Image, läuft bereits als nicht-root (nonroot:nonroot, UID
-# 65532), reduziert die Angriffsfläche für einen Dienst, der übers
-# Netzwerk erreichbar ist (siehe docs/features/auth.md).
+# Runtime stage: distroless instead of Alpine — no shell/package manager
+# in the final image, already runs as non-root (nonroot:nonroot, UID
+# 65532), which reduces the attack surface for a service reachable over
+# the network (see docs/features/auth.md).
 FROM gcr.io/distroless/static-debian12:nonroot
 
-# Version/Commit zusätzlich als OCI-Labels, damit sie sich per
-# "docker image inspect" (bzw. "task docker:version") auch ohne
-# laufenden Container ablesen lassen. In der CI überschreibt
-# docker/metadata-action diese Labels mit denselben Werten.
+# Version/commit also as OCI labels, so they can be read via
+# "docker image inspect" (or "task docker:version") without a running
+# container too. In CI, docker/metadata-action overwrites these labels
+# with the same values.
 ARG VERSION=dev
 ARG COMMIT=""
 LABEL org.opencontainers.image.title="dmarc-analyzer" \
@@ -44,12 +44,12 @@ LABEL org.opencontainers.image.title="dmarc-analyzer" \
 
 COPY --from=build /out/dmarc-analyzer /dmarc-analyzer
 
-# DMARC_DATA_DIR (siehe internal/infra/envconfig) — Datenbank liegt hier,
-# als Volume zu mounten, damit sie einen Container-Neustart übersteht.
-# --chown=nonroot:nonroot ist nötig, weil ein von Docker automatisch
-# angelegtes Volume/Verzeichnis sonst root:root gehört — der Prozess
-# läuft aber als nonroot (UID 65532) und könnte sonst keine Datenbank
-# anlegen (SQLITE_CANTOPEN, per docker run tatsächlich reproduziert).
+# DMARC_DATA_DIR (see internal/infra/envconfig) — the database lives
+# here; mount it as a volume so it survives a container restart.
+# --chown=nonroot:nonroot is needed because a volume/directory Docker
+# creates automatically would otherwise be owned by root:root — but the
+# process runs as nonroot (UID 65532) and couldn't create a database
+# otherwise (SQLITE_CANTOPEN, actually reproduced via docker run).
 COPY --from=build --chown=nonroot:nonroot /data-empty /data
 VOLUME ["/data"]
 ENV DMARC_DATA_DIR=/data
@@ -57,8 +57,8 @@ ENV DMARC_LISTEN_ADDR=:8080
 
 EXPOSE 8080
 
-# Kein curl/wget im Image (distroless) — healthcheck ist ein eigener
-# Unterbefehl derselben Binärdatei (siehe cmd_healthcheck.go).
+# No curl/wget in the image (distroless) — the healthcheck is its own
+# subcommand of the same binary (see cmd_healthcheck.go).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD ["/dmarc-analyzer", "healthcheck"]
 

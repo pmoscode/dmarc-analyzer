@@ -10,17 +10,15 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/app/importfiles"
 )
 
-// maxImportFileSize begrenzt eine einzelne hochgeladene Datei
-// (MIGRATIONSPLAN.md Abschnitt 5: "Uploads: Größenbegrenzung per
-// http.MaxBytesReader (Vorschlag: 50 MB je Datei)"). Das 100-MB-
-// Entpacklimit für Zip-/Gzip-Bomben aus AP 1 greift innerhalb des
-// Parsers zusätzlich, unabhängig von dieser Obergrenze für die
-// komprimierte Upload-Größe.
+// maxImportFileSize limits a single uploaded file (MIGRATIONSPLAN.md
+// section 5: "uploads: size limit via http.MaxBytesReader (suggestion:
+// 50 MB per file)"). The 100 MB unpack limit for zip/gzip bombs from AP 1
+// additionally applies inside the parser, independent of this cap on the
+// compressed upload size.
 const maxImportFileSize = 50 << 20
 
-// maxImportRequestSize begrenzt die gesamte Multipart-Anfrage (mehrere
-// Dateien auf einmal) — großzügiger als eine einzelne Datei, aber nicht
-// unbegrenzt.
+// maxImportRequestSize limits the entire multipart request (several
+// files at once) — more generous than a single file, but not unlimited.
 const maxImportRequestSize = 300 << 20
 
 type importPageData struct {
@@ -34,11 +32,11 @@ type importPageData struct {
 	Failed    int
 }
 
-// handleImportForm zeigt die Import-Seite mit Drag-&-Drop-Bereich
-// (MIGRATIONSPLAN.md Erweiterung 9.3/E-6: "Datei-Import per Upload/Drag
-// & Drop"). Ergebnis eines vorherigen Uploads kommt als Query-Parameter
-// nach dem Redirect von handleImportSubmit — derselbe zustandslose
-// Flash-Mechanismus wie /einstellungen.
+// handleImportForm shows the import page with a drag-and-drop area
+// (MIGRATIONSPLAN.md extension 9.3/E-6: "file import via upload/drag &
+// drop"). The result of a previous upload arrives as a query parameter
+// after the redirect from handleImportSubmit — the same stateless flash
+// mechanism as /einstellungen.
 func (s *Server) handleImportForm(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	data := importPageData{
@@ -69,21 +67,20 @@ func redirectToImportWithError(w http.ResponseWriter, r *http.Request, message s
 	http.Redirect(w, r, "/import?"+v.Encode(), http.StatusSeeOther)
 }
 
-// handleImportSubmit verarbeitet einen oder mehrere hochgeladene Dateien
-// (MIGRATIONSPLAN.md Abschnitt 7: "POST /import"). Jede Datei landet
-// über importfiles.UseCase.ImportData direkt aus dem Speicher im Import
-// — kein Zwischenschritt über die Festplatte, anders als der
-// CLI-Unterbefehl "import" (der mit Dateipfaden arbeitet).
+// handleImportSubmit processes one or more uploaded files
+// (MIGRATIONSPLAN.md section 7: "POST /import"). Every file goes through
+// importfiles.UseCase.ImportData directly from memory into the import —
+// no intermediate step via disk, unlike the CLI subcommand "import"
+// (which works with file paths).
 func (s *Server) handleImportSubmit(w http.ResponseWriter, r *http.Request) {
-	// r.Body ist bereits über MaxBytesReader auf maxImportRequestSize
-	// begrenzt — ParseMultipartForm liest also nie mehr als das,
-	// unabhängig vom hier übergebenen maxMemory-Wert (der nur steuert, ab
-	// wann Go zusätzlich auf temporäre Dateien statt reinen Speicher
-	// ausweicht).
+	// r.Body is already limited to maxImportRequestSize via
+	// MaxBytesReader — so ParseMultipartForm never reads more than that,
+	// regardless of the maxMemory value passed here (which only controls
+	// when Go additionally spills to temp files instead of pure memory).
 	r.Body = http.MaxBytesReader(w, r.Body, maxImportRequestSize)
-	//nolint:gosec // G120: siehe MaxBytesReader-Begrenzung direkt darüber.
+	//nolint:gosec // G120: see the MaxBytesReader limit directly above.
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		redirectToImportWithError(w, r, "Die Datei(en) konnten nicht gelesen werden — insgesamt zu groß?")
+		redirectToImportWithError(w, r, "Could not read the file(s) — too large in total?")
 		return
 	}
 	defer func() {
@@ -94,7 +91,7 @@ func (s *Server) handleImportSubmit(w http.ResponseWriter, r *http.Request) {
 
 	files := r.MultipartForm.File["dateien"]
 	if len(files) == 0 {
-		redirectToImportWithError(w, r, "Bitte mindestens eine Datei auswählen.")
+		redirectToImportWithError(w, r, "Please select at least one file.")
 		return
 	}
 
@@ -102,7 +99,7 @@ func (s *Server) handleImportSubmit(w http.ResponseWriter, r *http.Request) {
 	for _, fh := range files {
 		if fh.Size > maxImportFileSize {
 			total.Failed++
-			total.Errors = append(total.Errors, fmt.Errorf("datei %q überschreitet die maximale größe", fh.Filename))
+			total.Errors = append(total.Errors, fmt.Errorf("file %q exceeds the maximum size", fh.Filename))
 			continue
 		}
 

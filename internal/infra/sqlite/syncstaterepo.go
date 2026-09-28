@@ -11,21 +11,21 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/sync"
 )
 
-// SyncStateRepository implementiert sync.StateRepository gegen SQLite.
+// SyncStateRepository implements sync.StateRepository against SQLite.
 type SyncStateRepository struct {
 	db *sql.DB
 }
 
 var _ sync.StateRepository = (*SyncStateRepository)(nil)
 
-// NewSyncStateRepository erzeugt ein einsatzbereites Repository.
+// NewSyncStateRepository creates a ready-to-use repository.
 func NewSyncStateRepository(db *sql.DB) *SyncStateRepository {
 	return &SyncStateRepository{db: db}
 }
 
-// Load liefert den gespeicherten Fortschritt, oder den Nullwert (ohne
-// Fehler), wenn noch keiner existiert — ein erster Sync ist kein
-// Fehlerfall (siehe Port-Dokumentation in domain/sync/state.go).
+// Load returns the stored progress, or the zero value (without an
+// error) if none exists yet — a first sync is not an error case (see the
+// port documentation in domain/sync/state.go).
 func (r *SyncStateRepository) Load(ctx context.Context, accountID account.AccountID, mailbox string) (sync.State, error) {
 	const stmt = `
 		SELECT uid_validity, last_uid, last_sync_at
@@ -38,16 +38,16 @@ func (r *SyncStateRepository) Load(ctx context.Context, accountID account.Accoun
 		return sync.State{AccountID: accountID, Mailbox: mailbox}, nil
 	}
 	if err != nil {
-		return sync.State{}, fmt.Errorf("sync-state für konto %q, postfach %q konnte nicht geladen werden: %w", accountID, mailbox, err)
+		return sync.State{}, fmt.Errorf("could not load sync state for account %q, mailbox %q: %w", accountID, mailbox, err)
 	}
 
 	uidValidity32, err := toUint32(uidValidity)
 	if err != nil {
-		return sync.State{}, fmt.Errorf("gespeicherte uid_validity ist ungültig: %w", err)
+		return sync.State{}, fmt.Errorf("stored uid_validity is invalid: %w", err)
 	}
 	lastUID32, err := toUint32(lastUID)
 	if err != nil {
-		return sync.State{}, fmt.Errorf("gespeicherte last_uid ist ungültig: %w", err)
+		return sync.State{}, fmt.Errorf("stored last_uid is invalid: %w", err)
 	}
 
 	state := sync.State{
@@ -59,16 +59,16 @@ func (r *SyncStateRepository) Load(ctx context.Context, accountID account.Accoun
 	if lastSyncAt.Valid {
 		t, err := time.Parse(time.RFC3339Nano, lastSyncAt.String)
 		if err != nil {
-			return sync.State{}, fmt.Errorf("gespeichertes last_sync_at ist ungültig: %w", err)
+			return sync.State{}, fmt.Errorf("stored last_sync_at is invalid: %w", err)
 		}
 		state.LastSyncAt = t
 	}
 	return state, nil
 }
 
-// Save schreibt den Fortschritt fort (UPSERT über account_id+mailbox).
-// LastSyncAt wird, falls nicht gesetzt, auf jetzt (UTC) gesetzt — ein Save
-// ohne Zeitstempel würde sonst fälschlich "nie synchronisiert" bedeuten.
+// Save persists the progress (UPSERT on account_id+mailbox). LastSyncAt
+// is set to now (UTC) if not already set — a Save without a timestamp
+// would otherwise incorrectly mean "never synchronized".
 func (r *SyncStateRepository) Save(ctx context.Context, state sync.State) error {
 	lastSyncAt := state.LastSyncAt
 	if lastSyncAt.IsZero() {
@@ -88,7 +88,7 @@ func (r *SyncStateRepository) Save(ctx context.Context, state sync.State) error 
 		lastSyncAt.UTC().Format(time.RFC3339Nano),
 	)
 	if err != nil {
-		return fmt.Errorf("sync-state für konto %q, postfach %q konnte nicht gespeichert werden: %w", state.AccountID, state.Mailbox, err)
+		return fmt.Errorf("could not save sync state for account %q, mailbox %q: %w", state.AccountID, state.Mailbox, err)
 	}
 	return nil
 }

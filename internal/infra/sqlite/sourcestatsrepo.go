@@ -18,22 +18,22 @@ const (
 	maxSourcePageSize     = 500
 )
 
-// SourceStatsRepository implementiert sources.Repository gegen SQLite:
-// nach Quell-IP gruppierte SQL-Aggregation über records, analog zu
-// StatisticsRepository — Enrichment (PTR/Diensterkennung) füllt die
-// Anwendungsschicht nach (siehe domain/sources.Stat.Enrichment).
+// SourceStatsRepository implements sources.Repository against SQLite:
+// SQL aggregation over records grouped by source IP, analogous to
+// StatisticsRepository — enrichment (PTR/service detection) is filled in
+// afterwards by the application layer (see domain/sources.Stat.Enrichment).
 type SourceStatsRepository struct {
 	db *sql.DB
 }
 
 var _ sources.Repository = (*SourceStatsRepository)(nil)
 
-// NewSourceStatsRepository erzeugt ein einsatzbereites Repository.
+// NewSourceStatsRepository creates a ready-to-use repository.
 func NewSourceStatsRepository(db *sql.DB) *SourceStatsRepository {
 	return &SourceStatsRepository{db: db}
 }
 
-// Query liefert eine Seite nach Quell-IP aggregierter Statistiken.
+// Query returns a page of statistics aggregated by source IP.
 func (r *SourceStatsRepository) Query(ctx context.Context, q sources.Query) (sources.Page, error) {
 	limit := q.Limit
 	if limit <= 0 {
@@ -55,9 +55,8 @@ func (r *SourceStatsRepository) Query(ctx context.Context, q sources.Query) (sou
 	}
 	args = append(args, cursorArgs...)
 
-	// limit+1: ein zusätzliches Ergebnis anfordern, um ohne separates
-	// COUNT(*) zu erkennen, ob eine weitere Seite existiert (wie
-	// reportquery.go).
+	// limit+1: request one extra result to detect whether another page
+	// exists without a separate COUNT(*) (like reportquery.go).
 	args = append(args, limit+1)
 
 	query := fmt.Sprintf(`
@@ -80,7 +79,7 @@ func (r *SourceStatsRepository) Query(ctx context.Context, q sources.Query) (sou
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return sources.Page{}, fmt.Errorf("sendequellen konnten nicht aggregiert werden: %w", err)
+		return sources.Page{}, fmt.Errorf("could not aggregate sending sources: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -89,11 +88,11 @@ func (r *SourceStatsRepository) Query(ctx context.Context, q sources.Query) (sou
 		var rawIP string
 		var total, passed, dkimPassed, spfPassed, firstSeen, lastSeen int64
 		if err := rows.Scan(&rawIP, &total, &passed, &dkimPassed, &spfPassed, &firstSeen, &lastSeen); err != nil {
-			return sources.Page{}, fmt.Errorf("sendequellen-zeile konnte nicht gelesen werden: %w", err)
+			return sources.Page{}, fmt.Errorf("could not read sending-source row: %w", err)
 		}
 		ip, err := report.NewSourceIP(rawIP)
 		if err != nil {
-			return sources.Page{}, fmt.Errorf("gespeicherte quell-ip %q ist ungültig: %w", rawIP, err)
+			return sources.Page{}, fmt.Errorf("stored source IP %q is invalid: %w", rawIP, err)
 		}
 		stats = append(stats, sources.Stat{
 			SourceIP:     ip,
@@ -106,7 +105,7 @@ func (r *SourceStatsRepository) Query(ctx context.Context, q sources.Query) (sou
 		})
 	}
 	if err := rows.Err(); err != nil {
-		return sources.Page{}, fmt.Errorf("sendequellen konnten nicht vollständig gelesen werden: %w", err)
+		return sources.Page{}, fmt.Errorf("could not fully read sending sources: %w", err)
 	}
 
 	page := sources.Page{Stats: stats}
@@ -133,11 +132,11 @@ func sourcesWhere(q sources.Query) ([]string, []any) {
 	return clauses, args
 }
 
-// sourcesOrderAndCursor liefert die ORDER-BY-Klausel sowie — falls
-// q.Cursor gesetzt ist — die WHERE-Klausel und Parameter für die zweite
-// und folgende Seiten. Da source_ip nach der Gruppierung je Zeile
-// eindeutig ist, braucht der Keyset-Vergleich (anders als
-// reportquery.go) keine zusätzliche ID-Spalte als Tiebreaker.
+// sourcesOrderAndCursor returns the ORDER BY clause and — if q.Cursor is
+// set — the WHERE clause and parameters for the second and subsequent
+// pages. Since source_ip is unique per row after grouping, the keyset
+// comparison (unlike reportquery.go) doesn't need an extra ID column as a
+// tiebreaker.
 func sourcesOrderAndCursor(q sources.Query) (orderBy, cursorSQL string, args []any, err error) {
 	var cur sourceCursor
 	if q.Cursor != "" {
@@ -156,7 +155,7 @@ func sourcesOrderAndCursor(q sources.Query) (orderBy, cursorSQL string, args []a
 		return orderBy, cursorSQL, args, nil
 	}
 
-	// Standard: SortByVolume, größte Quelle zuerst.
+	// Default: SortByVolume, largest source first.
 	orderBy = "ORDER BY total DESC, source_ip DESC"
 	if q.Cursor != "" {
 		cursorSQL = "WHERE (total, source_ip) < (?, ?)"
@@ -165,7 +164,7 @@ func sourcesOrderAndCursor(q sources.Query) (orderBy, cursorSQL string, args []a
 	return orderBy, cursorSQL, args, nil
 }
 
-// sourceCursor ist die interne, typisierte Form von sources.Query.Cursor /
+// sourceCursor is the internal, typed form of sources.Query.Cursor /
 // sources.Page.NextCursor.
 type sourceCursor struct {
 	SourceIP string `json:"ip"`
@@ -175,7 +174,7 @@ type sourceCursor struct {
 func (c sourceCursor) encode() string {
 	data, err := json.Marshal(c)
 	if err != nil {
-		panic(fmt.Sprintf("sourceCursor konnte nicht kodiert werden: %v", err))
+		panic(fmt.Sprintf("sourceCursor could not be encoded: %v", err))
 	}
 	return base64.RawURLEncoding.EncodeToString(data)
 }
@@ -184,10 +183,10 @@ func decodeSourceCursor(s string) (sourceCursor, error) {
 	var c sourceCursor
 	data, err := base64.RawURLEncoding.DecodeString(s)
 	if err != nil {
-		return sourceCursor{}, fmt.Errorf("cursor konnte nicht dekodiert werden: %w", err)
+		return sourceCursor{}, fmt.Errorf("could not decode cursor: %w", err)
 	}
 	if err := json.Unmarshal(data, &c); err != nil {
-		return sourceCursor{}, fmt.Errorf("cursor hat ein ungültiges format: %w", err)
+		return sourceCursor{}, fmt.Errorf("cursor has an invalid format: %w", err)
 	}
 	return c, nil
 }

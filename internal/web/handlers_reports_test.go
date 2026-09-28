@@ -81,7 +81,7 @@ func TestHandleReports_EmptyResult_ShowsEmptyState(t *testing.T) {
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(body), "Keine Berichte")
+	require.Contains(t, string(body), "No reports")
 }
 
 func TestHandleReports_FilterParamsReachRepository(t *testing.T) {
@@ -132,7 +132,7 @@ func TestHandleReports_DrilldownVonBis_UsesAbsolutePeriod(t *testing.T) {
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.Contains(t, string(body), "2026-09-01")
-	require.Contains(t, string(body), `<a href="/berichte" class="filter-reset">Filter zurücksetzen</a>`)
+	require.Contains(t, string(body), `<a href="/berichte" class="filter-reset">Reset filter</a>`)
 }
 
 func TestHandleReports_RendersFilterResetLink(t *testing.T) {
@@ -146,7 +146,7 @@ func TestHandleReports_RendersFilterResetLink(t *testing.T) {
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(body), `<a href="/berichte" class="filter-reset">Filter zurücksetzen</a>`)
+	require.Contains(t, string(body), `<a href="/berichte" class="filter-reset">Reset filter</a>`)
 }
 
 func TestHandleReports_QueryError_Returns500(t *testing.T) {
@@ -177,7 +177,7 @@ func TestHandleReportsPage_ReturnsFragmentWithNextCursor(t *testing.T) {
 	html := string(body)
 	require.Contains(t, html, `href="/berichte/1"`)
 	require.Contains(t, html, "cursor=next-cursor")
-	// Das Fragment ist NICHT die volle Seite — kein <html>/<head>.
+	// The fragment is NOT the full page — no <html>/<head>.
 	require.NotContains(t, html, "<html")
 }
 
@@ -191,7 +191,7 @@ func TestHandleReportsPage_NoMorePages_OmitsLoadMoreButton(t *testing.T) {
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.NotContains(t, string(body), "Weitere laden")
+	require.NotContains(t, string(body), "Load more")
 }
 
 func TestHandleReportDetail_RendersMetadataPolicyAndRecords(t *testing.T) {
@@ -262,7 +262,7 @@ func TestHandleReportDetail_RendersRawAuthResultDetail(t *testing.T) {
 	require.Contains(t, html, "mfrom")
 	require.Contains(t, html, "forwarded")
 	require.Contains(t, html, "bekannter Verteiler")
-	require.Contains(t, html, `<a href="/berichte/42?nur_fehler=1" class="filter-reset">Nur fehlgeschlagene anzeigen</a>`)
+	require.Contains(t, html, `<a href="/berichte/42?nur_fehler=1" class="filter-reset">Show only failed</a>`)
 }
 
 func TestHandleReportDetail_OnlyFailedToggle_FiltersPassingRecords(t *testing.T) {
@@ -292,7 +292,7 @@ func TestHandleReportDetail_OnlyFailedToggle_FiltersPassingRecords(t *testing.T)
 
 	require.Contains(t, html, "198.51.100.1")
 	require.NotContains(t, html, "203.0.113.1")
-	require.Contains(t, html, `<a href="/berichte/42" class="filter-reset">Alle anzeigen</a>`)
+	require.Contains(t, html, `<a href="/berichte/42" class="filter-reset">Show all</a>`)
 }
 
 func TestHandleReportDetail_OnlyFailedToggle_EmptyState(t *testing.T) {
@@ -314,7 +314,7 @@ func TestHandleReportDetail_OnlyFailedToggle_EmptyState(t *testing.T) {
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(body), "Keine fehlgeschlagenen Sendequellen in diesem Bericht.")
+	require.Contains(t, string(body), "No failed sending sources in this report.")
 }
 
 func TestHandleReportDetail_UnknownID_Returns500(t *testing.T) {
@@ -332,7 +332,7 @@ func TestHandleReportDetail_NonNumericID_Returns404(t *testing.T) {
 	srv := newTestServerWithReports(t, repo)
 	client := authenticatedClient(t, srv)
 
-	resp := httpGet(t, client, "http://"+srv.Addr()+"/berichte/nicht-numerisch")
+	resp := httpGet(t, client, "http://"+srv.Addr()+"/berichte/not-numeric")
 	defer func() { _ = resp.Body.Close() }()
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 }

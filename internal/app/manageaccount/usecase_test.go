@@ -14,7 +14,7 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/sync"
 )
 
-var errTest = errors.New("testfehler")
+var errTest = errors.New("test error")
 
 type fakeAccountRepository struct {
 	accounts map[account.AccountID]account.MailAccount
@@ -84,7 +84,7 @@ func TestTestConnectionByID_Success_ClosesConnection(t *testing.T) {
 
 	err := uc.TestConnectionByID(context.Background(), "acc-1")
 	require.NoError(t, err)
-	require.True(t, source.closed, "Verbindungstest muss die Verbindung wieder schließen")
+	require.True(t, source.closed, "connection test must close the connection again")
 }
 
 func TestTestConnectionByID_ConnectFails_ReturnsError(t *testing.T) {

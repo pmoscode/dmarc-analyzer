@@ -9,22 +9,22 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/report"
 )
 
-// StatisticsRepository implementiert analysis.Repository gegen SQLite: die
-// Kennzahlen werden per SQL-Aggregation berechnet, nicht durch Laden
-// einzelner Records nach Go (siehe UMSETZUNGSPLAN.md AP 2, "Aggregationen
-// für die Kennzahlen ... bewusst nicht in AP 2").
+// StatisticsRepository implements analysis.Repository against SQLite:
+// the metrics are computed via SQL aggregation, not by loading individual
+// records into Go (see UMSETZUNGSPLAN.md AP 2, "aggregations for the
+// metrics ... deliberately not in AP 2").
 type StatisticsRepository struct {
 	db *sql.DB
 }
 
 var _ analysis.Repository = (*StatisticsRepository)(nil)
 
-// NewStatisticsRepository erzeugt ein einsatzbereites Repository.
+// NewStatisticsRepository creates a ready-to-use repository.
 func NewStatisticsRepository(db *sql.DB) *StatisticsRepository {
 	return &StatisticsRepository{db: db}
 }
 
-// Compute berechnet die Statistics für q per SQL-Aggregation.
+// Compute calculates the Statistics for q via SQL aggregation.
 func (r *StatisticsRepository) Compute(ctx context.Context, q analysis.Query) (analysis.Statistics, error) {
 	where, args := statsWhere(q)
 
@@ -68,7 +68,7 @@ func (r *StatisticsRepository) computeTotals(ctx context.Context, where string, 
 	var total, passTotal, dkimPassTotal, spfPassTotal, distinctSources int64
 	err := r.db.QueryRowContext(ctx, query, args...).Scan(&total, &passTotal, &dkimPassTotal, &spfPassTotal, &distinctSources)
 	if err != nil {
-		return analysis.Statistics{}, fmt.Errorf("kennzahlen konnten nicht berechnet werden: %w", err)
+		return analysis.Statistics{}, fmt.Errorf("could not calculate metrics: %w", err)
 	}
 
 	return analysis.Statistics{
@@ -90,7 +90,7 @@ func (r *StatisticsRepository) computeVolumeByDisposition(ctx context.Context, w
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("verteilung nach disposition konnte nicht berechnet werden: %w", err)
+		return nil, fmt.Errorf("could not calculate distribution by disposition: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -99,18 +99,18 @@ func (r *StatisticsRepository) computeVolumeByDisposition(ctx context.Context, w
 		var raw string
 		var count int64
 		if err := rows.Scan(&raw, &count); err != nil {
-			return nil, fmt.Errorf("disposition-zeile konnte nicht gelesen werden: %w", err)
+			return nil, fmt.Errorf("could not read disposition row: %w", err)
 		}
 		result[report.ParseDisposition(raw)] += int(count)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("verteilung nach disposition konnte nicht vollständig gelesen werden: %w", err)
+		return nil, fmt.Errorf("could not fully read distribution by disposition: %w", err)
 	}
 	return result, nil
 }
 
-// rate liefert part/total, oder 0 wenn total 0 ist (keine Division durch
-// Null, kein NaN im Dashboard).
+// rate returns part/total, or 0 if total is 0 (no division by zero, no
+// NaN on the dashboard).
 func rate(part, total int64) float64 {
 	if total == 0 {
 		return 0

@@ -1,6 +1,6 @@
-// Package report enthält das Aggregate Root AggregateReport und seine
-// Value Objects — reine Fachlogik, keine Abhängigkeiten außerhalb der
-// Standardbibliothek (IMPLEMENTIERUNG.md Abschnitt 6.1).
+// Package report contains the aggregate root AggregateReport and its
+// value objects — pure domain logic, no dependencies outside the standard
+// library (IMPLEMENTIERUNG.md section 6.1).
 package report
 
 import (
@@ -8,34 +8,33 @@ import (
 	"time"
 )
 
-// ReportID ist der surrogate Primärschlüssel eines gespeicherten Reports,
-// vergeben von der Persistenzschicht. Der Nullwert bedeutet "noch nicht
-// gespeichert" — Parser und andere Erzeuger außerhalb der Persistenz lassen
-// dieses Feld unbesetzt.
+// ReportID is the surrogate primary key of a stored report, assigned by
+// the persistence layer. The zero value means "not yet saved" — parsers
+// and other producers outside persistence leave this field unset.
 //
-// Umbenennung zu "ID" würde mit dem Feld AggregateReport.ID kollidieren
-// (Feld und Typ hießen dann identisch "ID ID") — schlechter lesbar als
-// der bewusst in Kauf genommene Stutter.
+// Renaming to "ID" would collide with the AggregateReport.ID field (field
+// and type would both be called "ID ID") — less readable than the
+// deliberately accepted stutter.
 //
-//nolint:revive // "ReportID" stuttert als report.ReportID, aber eine
+//nolint:revive // "ReportID" stutters as report.ReportID, but a
 type ReportID int64
 
-// Metadata sind die Rahmendaten eines Reports (Element "report_metadata"):
-// wer berichtet, worüber, für welchen Zeitraum.
+// Metadata is the framing data of a report (element "report_metadata"):
+// who is reporting, about what, for which period.
 type Metadata struct {
 	OrgName          string
 	Email            string
 	ExtraContactInfo string
-	// ReportID ist die vom berichtenden Empfänger vergebene Kennung
-	// (Element "report_id") — ein String, nicht zu verwechseln mit dem
+	// ReportID is the identifier assigned by the reporting recipient
+	// (element "report_id") — a string, not to be confused with the
 	// surrogate AggregateReport.ID.
 	ReportID string
 	Range    DateRange
 	Errors   []string
 }
 
-// SourceReference beschreibt die Herkunft eines Reports: über welches
-// Konto und welche Nachricht er ins System gelangt ist.
+// SourceReference describes the origin of a report: via which account and
+// which message it entered the system.
 type SourceReference struct {
 	AccountID  string
 	Mailbox    string
@@ -43,9 +42,9 @@ type SourceReference struct {
 	Filename   string
 }
 
-// AggregateReport ist das Aggregate Root eines DMARC-Berichts. Records
-// existieren nur im Kontext ihres Reports und werden ausschließlich über
-// ihn geladen und gespeichert (IMPLEMENTIERUNG.md Abschnitt 6.1).
+// AggregateReport is the aggregate root of a DMARC report. Records only
+// exist in the context of their report and are loaded and saved
+// exclusively through it (IMPLEMENTIERUNG.md section 6.1).
 type AggregateReport struct {
 	ID         ReportID
 	Metadata   Metadata
@@ -55,10 +54,10 @@ type AggregateReport struct {
 	SourceRef  SourceReference
 }
 
-// NewAggregateReport erzwingt die Invarianten aus IMPLEMENTIERUNG.md
-// Abschnitt 6.2: ein Report ohne ReportID oder ohne gültigen Zeitraum ist
-// ungültig. Count- und Percentage-Invarianten sind bereits durch NewRecord
-// und NewPublishedPolicy erzwungen, bevor ihre Werte hier ankommen.
+// NewAggregateReport enforces the invariants from IMPLEMENTIERUNG.md
+// section 6.2: a report without a ReportID or without a valid date range
+// is invalid. Count and percentage invariants are already enforced by
+// NewRecord and NewPublishedPolicy before their values arrive here.
 func NewAggregateReport(
 	metadata Metadata,
 	policy PublishedPolicy,
@@ -82,8 +81,8 @@ func NewAggregateReport(
 	}, nil
 }
 
-// Key liefert die fachliche Identität des Reports für Deduplizierung
-// (IMPLEMENTIERUNG.md Abschnitt 6.3): (OrgName, ReportID, DateRange.Begin).
+// Key returns the business identity of the report for deduplication
+// (IMPLEMENTIERUNG.md section 6.3): (OrgName, ReportID, DateRange.Begin).
 func (r *AggregateReport) Key() Key {
 	return Key{
 		OrgName:   r.Metadata.OrgName,

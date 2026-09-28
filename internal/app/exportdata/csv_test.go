@@ -116,8 +116,8 @@ func TestWriteRecordsCSV_NoRecords_OnlyHeader(t *testing.T) {
 	require.Len(t, rows, 1)
 }
 
-// failingWriter liefert bei jedem Write einen Fehler — prüft, dass
-// Schreibfehler durchgereicht werden, statt still ignoriert zu werden.
+// failingWriter returns an error on every Write — verifies that write
+// errors are propagated instead of being silently ignored.
 type failingWriter struct{}
 
 func (failingWriter) Write([]byte) (int, error) {

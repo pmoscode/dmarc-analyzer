@@ -6,67 +6,67 @@ import (
 	"time"
 )
 
-// ErrDuplicate wird von Save zurückgegeben, wenn bereits ein Report mit
-// derselben fachlichen Identität (Key) gespeichert ist. Als Sentinel-Fehler
-// im Domänen-Port definiert, nicht im SQLite-Adapter — Aufrufer aus der
-// Anwendungsschicht (z. B. syncreports) dürfen an Ports hängen, aber nicht
-// an konkrete Infra-Pakete (DIP, IMPLEMENTIERUNG.md Abschnitt 4.2). Ein
-// Aufrufer prüft i. d. R. vorher per Exists — dieser Fehler ist die letzte
-// Verteidigungslinie gegen eine Race Condition zwischen Exists und Save.
-var ErrDuplicate = errors.New("report mit dieser org_name/report_id/date_begin-kombination existiert bereits")
+// ErrDuplicate is returned by Save when a report with the same business
+// identity (Key) is already saved. Defined as a sentinel error in the
+// domain port, not in the SQLite adapter — callers from the application
+// layer (e.g. syncreports) may depend on ports, but not on concrete infra
+// packages (DIP, IMPLEMENTIERUNG.md section 4.2). A caller usually checks
+// beforehand via Exists — this error is the last line of defense against
+// a race condition between Exists and Save.
+var ErrDuplicate = errors.New("a report with this org_name/report_id/date_begin combination already exists")
 
-// Key ist die fachliche Identität eines Reports:
-// (OrgName, ReportID, DateRange.Begin) — siehe IMPLEMENTIERUNG.md
-// Abschnitt 6.3. Grundlage für Deduplizierung beim Import.
+// Key is the business identity of a report: (OrgName, ReportID,
+// DateRange.Begin) — see IMPLEMENTIERUNG.md section 6.3. The basis for
+// deduplication during import.
 type Key struct {
 	OrgName   string
 	ReportID  string
 	DateBegin time.Time
 }
 
-// SortField ist ein Sortierschlüssel für Query.
+// SortField is a sort key for Query.
 type SortField string
 
-// Sortierschlüssel für Query.SortField.
+// Sort keys for Query.SortField.
 const (
 	SortByDateBegin SortField = "date_begin"
 	SortByOrgName   SortField = "org_name"
 	SortByDomain    SortField = "domain"
 )
 
-// SortDirection ist die Sortierrichtung für Query.
+// SortDirection is the sort direction for Query.
 type SortDirection string
 
-// Sortierrichtungen für Query.SortDirection.
+// Sort directions for Query.SortDirection.
 const (
 	SortAscending  SortDirection = "asc"
 	SortDescending SortDirection = "desc"
 )
 
-// GroupBy ist die Gruppierungsdimension für Query.
+// GroupBy is the grouping dimension for Query.
 type GroupBy string
 
-// Gruppierungsdimensionen für Query.GroupBy. Wirkt als zusätzlicher,
-// primärer Sortierschlüssel (gleiche Gruppe steht zusammen), nicht als
-// SQL-Aggregation — Query liefert weiterhin eine Seite von AggregateReport,
-// keine aggregierten Kennzahlen. Echte Aggregationen (Kennzahlen,
-// Gruppierung über Records statt Reports) sind ein eigener,
-// anwendungsseitiger Anwendungsfall (AP 4/6), kein Teil dieses Ports.
+// Grouping dimensions for Query.GroupBy. Acts as an additional, primary
+// sort key (same group stands together), not as a SQL aggregation —
+// Query still returns a page of AggregateReport, not aggregated metrics.
+// Real aggregations (metrics, grouping over records instead of reports)
+// are a separate, application-side use case (work package 4/6), not part
+// of this port.
 const (
 	GroupByNone   GroupBy = ""
 	GroupByDomain GroupBy = "domain"
 	GroupByOrg    GroupBy = "org"
-	// GroupBySourceIP gruppiert nach Quell-IP eines Records — das ist eine
-	// Eigenschaft von Records, nicht von Reports, und lässt sich auf eine
-	// Seite von AggregateReport-Werten nicht sinnvoll abbilden. Adapter
-	// lehnen diesen Wert mit einem Fehler ab (siehe reportquery.go).
+	// GroupBySourceIP groups by a record's source IP — that's a property
+	// of records, not of reports, and can't be meaningfully mapped onto a
+	// page of AggregateReport values. Adapters reject this value with an
+	// error (see reportquery.go).
 	GroupBySourceIP GroupBy = "source_ip"
 )
 
-// Query filtert, sortiert und gruppiert gespeicherte Reports. Die Umsetzung
-// (Filtern/Sortieren/Gruppieren in SQL statt in Go, Keyset- statt
-// Offset-Pagination) ist in UMSETZUNGSPLAN.md Abschnitt 3.3 festgelegt und
-// betrifft den Adapter (AP 2), nicht diesen Port.
+// Query filters, sorts and groups saved reports. The implementation
+// (filtering/sorting/grouping in SQL instead of in Go, keyset instead of
+// offset pagination) is fixed in UMSETZUNGSPLAN.md section 3.3 and
+// concerns the adapter (work package 2), not this port.
 type Query struct {
 	Period        *DateRange
 	Domain        string
@@ -76,50 +76,51 @@ type Query struct {
 	SortField     SortField
 	SortDirection SortDirection
 	GroupBy       GroupBy
-	// Limit begrenzt die Seitengröße. 0 bedeutet: Standardgröße des Adapters.
+	// Limit caps the page size. 0 means: the adapter's default size.
 	Limit int
-	// Cursor ist ein opaker Keyset-Cursor aus Page.NextCursor, leer für die
-	// erste Seite.
+	// Cursor is an opaque keyset cursor from Page.NextCursor, empty for
+	// the first page.
 	Cursor string
 }
 
-// Page ist eine Seite von Abfrageergebnissen.
+// Page is a page of query results.
 type Page struct {
 	Reports []AggregateReport
-	// NextCursor ist leer, wenn keine weitere Seite existiert.
+	// NextCursor is empty when no further page exists.
 	NextCursor string
 }
 
-// Repository ist der Port zur Persistenz von AggregateReport
-// (IMPLEMENTIERUNG.md Abschnitt 6.4). Implementiert in AP 2 gegen SQLite.
+// Repository is the port for persisting AggregateReport
+// (IMPLEMENTIERUNG.md section 6.4). Implemented against SQLite in work
+// package 2.
 type Repository interface {
-	// Save speichert einen Report vollständig oder gar nicht (Transaktion).
+	// Save saves a report completely or not at all (transaction).
 	Save(ctx context.Context, r *AggregateReport) error
-	// Exists prüft die fachliche Identität, Grundlage der Deduplizierung.
+	// Exists checks the business identity, the basis of deduplication.
 	Exists(ctx context.Context, key Key) (bool, error)
-	// FindByID lädt einen Report vollständig, inklusive aller Records —
-	// für die Bericht-Detailansicht (IMPLEMENTIERUNG.md Abschnitt 10.1).
+	// FindByID loads a report completely, including all records — for the
+	// report detail view (IMPLEMENTIERUNG.md section 10.1).
 	FindByID(ctx context.Context, id ReportID) (*AggregateReport, error)
-	// Query liefert eine Seite von Reports für die Berichtstabelle. Die
-	// zurückgegebenen AggregateReport-Werte haben bewusst ein leeres
-	// Records-Feld: die Tabelle zeigt eine Zeile pro Report, nicht pro
-	// Record, ein Laden aller Records jeder sichtbaren Seite wäre reine
-	// Verschwendung (siehe IMPLEMENTIERUNG.md Abschnitt 10.4 zur
-	// Lazy-Datenquelle). Records eines einzelnen Reports lädt FindByID.
+	// Query returns a page of reports for the reports table. The returned
+	// AggregateReport values deliberately have an empty Records field: the
+	// table shows one row per report, not per record, loading all records
+	// of every visible page would be pure waste (see IMPLEMENTIERUNG.md
+	// section 10.4 on the lazy data source). FindByID loads the records of
+	// a single report.
 	Query(ctx context.Context, q Query) (Page, error)
 }
 
-// Pruner ist ein optionaler Zusatz-Port zu Repository für die
-// Aufbewahrungsrichtlinie (AP 7, IMPLEMENTIERUNG.md O-7) — bewusst
-// getrennt von Repository statt einer weiteren Methode dort: Löschen nach
-// Alter ist eine reine Wartungsoperation, die nur internal/app/retention
-// braucht, nicht jeder Aufrufer von Repository (dieselbe Zuschnitt-Idee
-// wie domain/sync.MultiReportParser/MailboxLister). sqlite.ReportRepository
-// implementiert Pruner zusätzlich zu Repository.
+// Pruner is an optional additional port to Repository for the retention
+// policy (work package 7, IMPLEMENTIERUNG.md O-7) — deliberately separate
+// from Repository instead of another method there: deleting by age is a
+// pure maintenance operation that only internal/app/retention needs, not
+// every caller of Repository (the same slicing idea as
+// domain/sync.MultiReportParser/MailboxLister). sqlite.ReportRepository
+// implements Pruner in addition to Repository.
 type Pruner interface {
-	// DeleteOlderThan löscht alle Reports, deren Berichtszeitraum
-	// vollständig vor cutoff endet (DateRange.End < cutoff), und liefert
-	// die Anzahl gelöschter Reports. Löscht über die ON DELETE CASCADE-
-	// Fremdschlüssel auch Records, report_errors und raw_reports mit.
+	// DeleteOlderThan deletes all reports whose report period ends
+	// entirely before cutoff (DateRange.End < cutoff), and returns the
+	// number of deleted reports. Also deletes records, report_errors and
+	// raw_reports via the ON DELETE CASCADE foreign keys.
 	DeleteOlderThan(ctx context.Context, cutoff time.Time) (int64, error)
 }

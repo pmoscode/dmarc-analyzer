@@ -44,7 +44,7 @@ func TestList_ForwardsQueryAndResult(t *testing.T) {
 	got, err := uc.List(context.Background(), q)
 	require.NoError(t, err)
 	require.Equal(t, want, got)
-	require.Equal(t, q, repo.lastQuery, "Query muss unverändert durchgereicht werden")
+	require.Equal(t, q, repo.lastQuery, "query must be passed through unchanged")
 }
 
 func TestList_ForwardsError(t *testing.T) {

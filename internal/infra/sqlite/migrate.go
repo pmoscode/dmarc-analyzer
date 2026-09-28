@@ -14,17 +14,16 @@ import (
 //go:embed migrations/*.sql
 var migrationsFS embed.FS
 
-// migration ist eine einzelne, nummerierte Schemaänderung.
+// migration is a single, numbered schema change.
 type migration struct {
 	version int
 	name    string
 	sql     string
 }
 
-// Migrate wendet alle noch nicht angewendeten Migrationen aus
-// migrations/*.sql der Reihe nach an, innerhalb je einer eigenen
-// Transaktion. Eigener, kleiner Migrator statt eines zusätzlichen
-// Dependencys (IMPLEMENTIERUNG.md Abschnitt 8.2).
+// Migrate applies all not-yet-applied migrations from migrations/*.sql in
+// order, each within its own transaction. A small home-grown migrator
+// instead of an extra dependency (IMPLEMENTIERUNG.md section 8.2).
 func Migrate(ctx context.Context, db *sql.DB) error {
 	if err := ensureMigrationsTable(ctx, db); err != nil {
 		return err
@@ -45,7 +44,7 @@ func Migrate(ctx context.Context, db *sql.DB) error {
 			continue
 		}
 		if err := applyMigration(ctx, db, m); err != nil {
-			return fmt.Errorf("migration %04d_%s fehlgeschlagen: %w", m.version, m.name, err)
+			return fmt.Errorf("migration %04d_%s failed: %w", m.version, m.name, err)
 		}
 	}
 
@@ -60,17 +59,17 @@ func ensureMigrationsTable(ctx context.Context, db *sql.DB) error {
 			applied_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 		)`
 	if _, err := db.ExecContext(ctx, stmt); err != nil {
-		return fmt.Errorf("schema_migrations konnte nicht angelegt werden: %w", err)
+		return fmt.Errorf("could not create schema_migrations: %w", err)
 	}
 	return nil
 }
 
-// loadMigrations liest alle *.sql-Dateien aus migrations/ und sortiert sie
-// nach ihrer führenden Versionsnummer (Dateiname "0001_init.sql" → 1).
+// loadMigrations reads all *.sql files from migrations/ and sorts them by
+// their leading version number (filename "0001_init.sql" → 1).
 func loadMigrations() ([]migration, error) {
 	entries, err := fs.ReadDir(migrationsFS, "migrations")
 	if err != nil {
-		return nil, fmt.Errorf("migrations-verzeichnis konnte nicht gelesen werden: %w", err)
+		return nil, fmt.Errorf("could not read migrations directory: %w", err)
 	}
 
 	migrations := make([]migration, 0, len(entries))
@@ -86,7 +85,7 @@ func loadMigrations() ([]migration, error) {
 
 		content, err := migrationsFS.ReadFile("migrations/" + entry.Name())
 		if err != nil {
-			return nil, fmt.Errorf("migration %q konnte nicht gelesen werden: %w", entry.Name(), err)
+			return nil, fmt.Errorf("could not read migration %q: %w", entry.Name(), err)
 		}
 
 		migrations = append(migrations, migration{version: version, name: name, sql: string(content)})
@@ -96,17 +95,17 @@ func loadMigrations() ([]migration, error) {
 	return migrations, nil
 }
 
-// parseMigrationFilename erwartet das Format "<vierstellige-Nummer>_<name>.sql".
+// parseMigrationFilename expects the format "<four-digit-number>_<name>.sql".
 func parseMigrationFilename(filename string) (version int, name string, err error) {
 	base := strings.TrimSuffix(filename, ".sql")
 	prefix, rest, found := strings.Cut(base, "_")
 	if !found {
-		return 0, "", fmt.Errorf("migrationsdatei %q folgt nicht dem schema <nummer>_<name>.sql", filename)
+		return 0, "", fmt.Errorf("migration file %q does not follow the <number>_<name>.sql scheme", filename)
 	}
 
 	version, err = strconv.Atoi(prefix)
 	if err != nil {
-		return 0, "", fmt.Errorf("migrationsdatei %q hat keine gültige versionsnummer: %w", filename, err)
+		return 0, "", fmt.Errorf("migration file %q does not have a valid version number: %w", filename, err)
 	}
 
 	return version, rest, nil
@@ -115,7 +114,7 @@ func parseMigrationFilename(filename string) (version int, name string, err erro
 func appliedVersions(ctx context.Context, db *sql.DB) (map[int]bool, error) {
 	rows, err := db.QueryContext(ctx, "SELECT version FROM schema_migrations")
 	if err != nil {
-		return nil, fmt.Errorf("angewendete migrationen konnten nicht gelesen werden: %w", err)
+		return nil, fmt.Errorf("could not read applied migrations: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -123,12 +122,12 @@ func appliedVersions(ctx context.Context, db *sql.DB) (map[int]bool, error) {
 	for rows.Next() {
 		var version int
 		if err := rows.Scan(&version); err != nil {
-			return nil, fmt.Errorf("migrationsversion konnte nicht gelesen werden: %w", err)
+			return nil, fmt.Errorf("could not read migration version: %w", err)
 		}
 		applied[version] = true
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("migrationen konnten nicht vollständig gelesen werden: %w", err)
+		return nil, fmt.Errorf("could not fully read migrations: %w", err)
 	}
 
 	return applied, nil
@@ -137,23 +136,23 @@ func appliedVersions(ctx context.Context, db *sql.DB) (map[int]bool, error) {
 func applyMigration(ctx context.Context, db *sql.DB, m migration) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("transaktion konnte nicht gestartet werden: %w", err)
+		return fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer func() { _ = tx.Rollback() }() // no-op, wenn bereits committed
+	defer func() { _ = tx.Rollback() }() // no-op if already committed
 
 	if _, err := tx.ExecContext(ctx, m.sql); err != nil {
-		return fmt.Errorf("sql konnte nicht ausgeführt werden: %w", err)
+		return fmt.Errorf("could not execute sql: %w", err)
 	}
 
 	if _, err := tx.ExecContext(ctx,
 		"INSERT INTO schema_migrations (version, name) VALUES (?, ?)",
 		m.version, m.name,
 	); err != nil {
-		return fmt.Errorf("migration konnte nicht als angewendet vermerkt werden: %w", err)
+		return fmt.Errorf("could not record migration as applied: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("transaktion konnte nicht committed werden: %w", err)
+		return fmt.Errorf("could not commit transaction: %w", err)
 	}
 
 	return nil

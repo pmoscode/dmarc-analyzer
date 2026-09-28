@@ -1,45 +1,43 @@
 # DMARC Analyzer
 
-Ein als Docker-Container betriebenes Programm, das DMARC-Aggregate-Reports
-(RUA) aus einem IMAP-Postfach abholt, in SQLite speichert und über eine
-eingebettete Web-Oberfläche auswertet. Zugriffsschutz per OIDC gegen einen
-bestehenden Authentik-Identity-Provider, komplett über Umgebungsvariablen
-konfiguriert.
+A program that runs as a Docker container, fetches DMARC aggregate reports
+(RUA) from an IMAP mailbox, stores them in SQLite, and evaluates them via an
+embedded web UI. Access is protected via OIDC against an existing Authentik
+identity provider, and everything is configured through environment
+variables.
 
-> Architektur: [`docs/architecture.md`](docs/architecture.md). Feature-Doku
-> pro Domäne: [`docs/features/`](docs/features/). Architekturentscheidungen
-> samt Begründung: [`docs/adr/`](docs/adr/). `docs/archive/` enthält die
-> Planungsdokumente der früheren Desktop-Ära — historischer Kontext, kein
-> aktueller Stand mehr.
+> Architecture: [`docs/architecture.md`](docs/architecture.md). Per-domain
+> feature docs: [`docs/features/`](docs/features/). Architecture decisions
+> with rationale: [`docs/adr/`](docs/adr/). `docs/archive/` contains the
+> planning documents from the earlier desktop era — historical context, not
+> the current state.
 
-## Was das Programm tut
+## What the program does
 
-- Verbindet sich mit einem konfigurierten IMAP-Postfach und holt
-  **inkrementell nur neue** DMARC-Aggregate-Reports ab (`.xml`, `.xml.gz`,
-  `.zip`, auch mit mehreren Reports je Anhang) — siehe
+- Connects to a configured IMAP mailbox and fetches **only new** DMARC
+  aggregate reports incrementally (`.xml`, `.xml.gz`, `.zip`, including
+  attachments with multiple reports) — see
   [`docs/features/imap-sync.md`](docs/features/imap-sync.md).
-- Reports lassen sich zusätzlich per Drag & Drop oder Datei-Auswahl direkt
-  in der Web-Oberfläche importieren (`/import`), ohne IMAP-Zugang.
-- Zeigt auf einer Übersicht Kennzahlen (Nachrichten gesamt, DMARC-Pass-Rate,
-  DKIM-/SPF-Alignment-Rate, Anzahl unterschiedlicher Quellen) und vier
-  interaktive Diagramme (Chart.js: Zeitreihe, Disposition, Top-Sendequellen,
-  Sendequelle-×-Tag-Heatmap) mit Drill-down in die Berichtstabelle — siehe
+- Reports can also be imported directly via drag & drop or file selection in
+  the web UI (`/import`), without IMAP access.
+- Shows key metrics on an overview page (total messages, DMARC pass rate,
+  DKIM/SPF alignment rate, number of distinct sources) and four interactive
+  charts (Chart.js: time series, disposition, top sending sources,
+  source-×-day heatmap) with drill-down into the report table — see
   [`docs/features/dashboard.md`](docs/features/dashboard.md).
-- Filtert, sortiert und gruppiert Berichte und Sendequellen nach Zeitraum,
-  Domain, Absender-Organisation und Quell-IP; Filter stehen in der URL
-  (Lesezeichen und Zurück-Knopf funktionieren) — siehe
-  [`docs/features/reports.md`](docs/features/reports.md) und
+- Filters, sorts, and groups reports and sending sources by time range,
+  domain, sending organization, and source IP; filters are reflected in the
+  URL (bookmarks and the back button work) — see
+  [`docs/features/reports.md`](docs/features/reports.md) and
   [`docs/features/sources.md`](docs/features/sources.md).
-- Exportiert Berichte und Sendequellen als CSV (gesamter gefilterter
-  Bestand) sowie einzelne Diagramme als PNG oder CSV.
-- Löscht Reports automatisch nach einer konfigurierbaren
-  Aufbewahrungsdauer — siehe
-  [`docs/features/retention.md`](docs/features/retention.md).
-- Zugriffsschutz per OIDC/Authentik, nur für Mitglieder einer
-  konfigurierbaren Gruppe — siehe
-  [`docs/features/auth.md`](docs/features/auth.md).
+- Exports reports and sending sources as CSV (the whole filtered set) as
+  well as individual charts as PNG or CSV.
+- Automatically deletes reports after a configurable retention period —
+  see [`docs/features/retention.md`](docs/features/retention.md).
+- Access protection via OIDC/Authentik, restricted to members of a
+  configurable group — see [`docs/features/auth.md`](docs/features/auth.md).
 
-## Schnellstart
+## Quick start
 
 ```sh
 docker run -d \
@@ -50,30 +48,30 @@ docker run -d \
   ghcr.io/pmoscode/dmarc-analyzer:latest
 ```
 
-Vollständige Umgebungsvariablen-Referenz: [`docs/features/deployment.md`](docs/features/deployment.md);
-ein Beispiel mit allen Werten liegt in [`.env.example`](.env.example) (nach
-`.env` kopieren und ausfüllen — wird von [`docker-compose.yml`](docker-compose.yml)
-per `env_file` eingelesen).
+Full environment variable reference: [`docs/features/deployment.md`](docs/features/deployment.md);
+an example with all values lives in [`.env.example`](.env.example) (copy to
+`.env` and fill it in — read in via `env_file` by
+[`docker-compose.yml`](docker-compose.yml)).
 
-Voraussetzung ist ein bestehender Authentik-Identity-Provider — Setup-
-Anleitung in [`docs/features/auth.md`](docs/features/auth.md).
+Requires an existing Authentik identity provider — setup instructions in
+[`docs/features/auth.md`](docs/features/auth.md).
 
-## Entwicklungs-Setup
+## Development setup
 
-Voraussetzungen: Go 1.27+, [Task](https://taskfile.dev/), Docker (für
+Requirements: Go 1.27+, [Task](https://taskfile.dev/), Docker (for
 `task docker:*`/`compose:*`).
 
 ```sh
-task setup         # Werkzeuge installieren, Abhängigkeiten laden
-task check         # fmt + lint + test — vor jedem Commit, das auch die CI ausführt
-task run           # Programm im Entwicklungsmodus starten (Web-Oberfläche)
-task build         # Binärdatei nach bin/ bauen
-task docker:build  # Docker-Image lokal bauen (mit Version und Git-Commit)
-task compose:up    # per docker compose bauen und im Hintergrund starten
+task setup         # install tools, download dependencies
+task check         # fmt + lint + test — before every commit; also what CI runs
+task run           # start the program in development mode (web UI)
+task build         # build the binary into bin/
+task docker:build  # build the Docker image locally (with version and Git commit)
+task compose:up    # build via docker compose and start in the background
 ```
 
-Alle verfügbaren Tasks: `task --list`.
+All available tasks: `task --list`.
 
-## Lizenz
+## License
 
 [MIT](LICENSE)

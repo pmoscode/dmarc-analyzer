@@ -1,63 +1,61 @@
-# IMAP-Abholung und Import
+# IMAP fetching and import
 
-## Inkrementeller Sync
+## Incremental sync
 
-`internal/app/syncreports.UseCase.SyncAccount` verbindet sich mit dem
-konfigurierten IMAP-Postfach (`internal/infra/imap`) und holt **nur neue**
-Nachrichten seit dem letzten Lauf ab (`sync.State`: zuletzt gesehene
-UID + UIDVALIDITY). Ändert sich die UIDVALIDITY des Postfachs (z. B. nach
-einer Postfach-Migration beim Provider), erkennt das Protokoll das selbst
-und ein vollständiger Rescan läuft erneut — der `UNIQUE`-Index auf
-`reports` (`org_name`, `report_id`, `date_begin`) verhindert dabei
-Duplikate.
+`internal/app/syncreports.UseCase.SyncAccount` connects to the configured
+IMAP mailbox (`internal/infra/imap`) and fetches **only new** messages
+since the last run (`sync.State`: last-seen UID + UIDVALIDITY). If the
+mailbox's UIDVALIDITY changes (e.g. after a provider-side mailbox
+migration), the protocol detects that itself and a full rescan runs
+again — the `UNIQUE` index on `reports` (`org_name`, `report_id`,
+`date_begin`) prevents duplicates from that.
 
-Abholen und Parsen laufen nebenläufig, Schreiben nach SQLite seriell —
-Details in [`../architecture.md`](../architecture.md#sync-pipeline-internalappsyncreports).
+Fetching and parsing run concurrently, writing to SQLite is serial —
+details in
+[`../architecture.md`](../architecture.md#sync-pipeline-internalappsyncreports).
 
-Ausgelöst wird ein Sync-Lauf:
+A sync run is triggered:
 
-- **manuell** über den Abgleich-Knopf in der Web-Oberfläche (`POST /abgleich`), Fortschritt live per Server-Sent Events
-  (`GET /ereignisse`);
-- **automatisch** alle `DMARC_SYNC_INTERVAL_MINUTES` Minuten im
-  Hintergrund (`internal/app/syncscheduler`, siehe
+- **manually** via the sync button in the web UI (`POST /abgleich`),
+  with live progress via Server-Sent Events (`GET /ereignisse`);
+- **automatically** every `DMARC_SYNC_INTERVAL_MINUTES` minutes in the
+  background (`internal/app/syncscheduler`, see
   [`deployment.md`](deployment.md));
-- **per `docker exec`** (`dmarc-analyzer sync`) für Diagnose/Wartung.
+- **via `docker exec`** (`dmarc-analyzer sync`) for diagnostics/maintenance.
 
-Höchstens ein Lauf gleichzeitig — ein bereits laufender Sync macht einen
-weiteren Startversuch zu einem No-Op, kein Fehler.
+At most one run at a time — if a sync is already running, another start
+attempt is a no-op, not an error.
 
-## Unterstützte Formate
+## Supported formats
 
-DMARC-Aggregate-Reports (RUA, RFC 7489) kommen als E-Mail-Anhang in
-verschiedenen Verpackungen an. Unterstützt werden `.xml`, `.xml.gz` und
-`.zip` (auch mit **mehreren** enthaltenen XML-Dateien — jede wird als
-eigener Report importiert, siehe `internal/infra/dmarcxml`s
-`ParseAll`/`domainsync.MultiReportParser`). Ein Anhang, der von keinem
-registrierten `sync.ReportParser` erkannt wird (z. B. der Text-Körper der
-Nachricht selbst oder ein Firmenlogo im Anhang), wird stillschweigend
-übersprungen — kein Fehler.
+DMARC aggregate reports (RUA, RFC 7489) arrive as an email attachment in
+various packagings. Supported are `.xml`, `.xml.gz`, and `.zip` (including
+**multiple** XML files inside — each is imported as its own report, see
+`internal/infra/dmarcxml`'s `ParseAll`/`domainsync.MultiReportParser`). An
+attachment that no registered `sync.ReportParser` recognizes (e.g. the
+message's own text body or a company logo attachment) is silently
+skipped — not an error.
 
-Unbekannte oder RFC-abweichende Enum-Werte im XML (Provider halten sich
-nicht immer exakt an RFC 7489) werden nie verworfen, sondern auf einen
-`Unknown`-Wert abgebildet — ein einzelnes abweichendes Feld darf den
-Import des gesamten Reports nicht verhindern.
+Unknown or RFC-deviating enum values in the XML (providers don't always
+follow RFC 7489 exactly) are never discarded, but mapped to an `Unknown`
+value — a single deviating field must not block the import of the entire
+report.
 
-## Fehlerquarantäne
+## Error quarantine
 
-Kann eine Nachricht oder ein Anhang nicht verarbeitet werden (kaputtes
-XML, unerwartetes Format), bricht das **nicht** den gesamten Sync-Lauf ab
-— der Fehler landet in der Fehlerquarantäne (`failed_imports`-Tabelle,
-`domainsync.FailedImportRepository`) inklusive der unverarbeiteten
-Rohbytes, damit sich die Nachricht nach einer Parser-Korrektur erneut
-einlesen lässt, ohne das Postfach erneut zu befragen.
+If a message or attachment can't be processed (broken XML, unexpected
+format), that does **not** abort the entire sync run — the error lands in
+the error quarantine (the `failed_imports` table,
+`domainsync.FailedImportRepository`) along with the unprocessed raw
+bytes, so the message can be re-read after a parser fix without querying
+the mailbox again.
 
-## Datei-Import ohne IMAP
+## File import without IMAP
 
-Reports lassen sich zusätzlich direkt über die Web-Oberfläche importieren (`/import`, Drag & Drop oder Dateiauswahl)
-oder per
-`docker exec dmarc-analyzer import <pfad>...` — ohne IMAP-Zugangsdaten,
-für Offline-Betrieb oder die Migration von Altbeständen (`internal/app/importfiles`). Teilt sich MIME-Zerlegung und
-Parser mit dem
-IMAP-Sync, implementiert aber keine eigene `sync.MessageSource` — ein
-lokaler Dateiimport hat keine IMAP-Zugangsdaten, durch dieses Interface zu
-gehen wäre erzwungen statt natürlich.
+Reports can also be imported directly via the web UI (`/import`, drag &
+drop or file selection) or via `docker exec dmarc-analyzer import
+<path>...` — without IMAP credentials, for offline operation or migrating
+old data (`internal/app/importfiles`). Shares MIME splitting and parsers
+with the IMAP sync, but doesn't implement its own `sync.MessageSource` —
+a local file import has no IMAP credentials, so going through that
+interface would be forced rather than natural.

@@ -10,11 +10,11 @@ permissions:
   contents: read
 
 jobs:
-  # Nur noch ubuntu-latest: die Anwendung läuft seit dem Umstieg auf
-  # "rein Docker nativ" ausschließlich als Linux-Container, eine
-  # macOS/Windows-Matrix (die zuvor echte OS-Schlüsselbund-/Pfad-
-  # Unterschiede prüfte, siehe Git-Historie dieser Datei) prüft dafür
-  # nichts mehr, das nicht auch Linux allein abdeckt.
+  # ubuntu-latest only: since the move to "Docker-native only" the
+  # application runs exclusively as a Linux container, so a macOS/Windows
+  # matrix (which used to check real OS keychain/path differences — see
+  # this file's Git history) no longer covers anything that Linux alone
+  # doesn't already cover.
   check:
     runs-on: ubuntu-latest
     steps:
@@ -25,19 +25,19 @@ jobs:
           go-version: "1.27.1"
           cache: true
 
-      - name: Task installieren
+      - name: Install Task
         uses: arduino/setup-task@v3.0.0
         with:
           version: "3.53.1"
 
-      - name: golangci-lint installieren
+      - name: Install golangci-lint
         run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
 
-      - name: fmt-Drift prüfen
+      - name: Check fmt drift
         run: |
           task fmt
           git diff --exit-code -- '*.go' || {
-            echo "::error::gofmt/goimports hätte Dateien verändert — bitte 'task fmt' lokal ausführen und committen."
+            echo "::error::gofmt/goimports would have changed files — run 'task fmt' locally and commit."
             exit 1
           }
 
@@ -50,14 +50,14 @@ jobs:
       - name: Build
         run: task build
 
-  # docker baut und veröffentlicht das Container-Image nach GHCR — ersetzt
-  # den früheren "release"-Job (macOS/Windows/Linux-Binärdateien als
-  # GitHub-Release-Anhang), der mit dem Umstieg auf "rein Docker nativ"
-  # entfallen ist. Läuft erst nachdem "check" grün war, und nur für zwei
-  # Fälle: ein Versions-Tag (konkrete Version + "latest") oder ein Push
-  # auf main (bewegliches "dev"-Tag für den jeweils neuesten Stand).
+  # docker builds and publishes the container image to GHCR — replaces
+  # the former "release" job (macOS/Windows/Linux binaries as GitHub
+  # release assets), which went away with the move to "Docker-native
+  # only". Runs only after "check" is green, and only for two cases: a
+  # version tag (concrete version + "latest") or a push to main (a
+  # moving "dev" tag for the latest state).
   docker:
-    name: Docker-Image bauen und veröffentlichen
+    name: Build and publish Docker image
     needs: check
     if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -67,19 +67,19 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - name: Bei GHCR anmelden
+      - name: Log in to GHCR
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # type=semver läuft ohnehin nur bei einem Tag-Push an, der sich als
-      # Semver parsen lässt (kein enable nötig) — "latest" und "dev"
-      # dagegen würden ohne enable bei JEDEM Lauf dieses Jobs entstehen,
-      # deshalb hier explizit auf genau den einen Auslöser eingeschränkt,
-      # für den sie gedacht sind.
-      - name: Metadaten (Tags/Labels) ermitteln
+      # type=semver only ever fires on a tag push that parses as semver
+      # anyway (no enable needed) — "latest" and "dev", on the other
+      # hand, would be created on EVERY run of this job without enable,
+      # so they're explicitly restricted here to exactly the one trigger
+      # they're meant for.
+      - name: Determine metadata (tags/labels)
         id: meta
         uses: docker/metadata-action@v6
         with:
@@ -89,7 +89,7 @@ jobs:
             type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=raw,value=dev,enable=${{ github.ref == 'refs/heads/main' }}
 
-      - name: Image bauen und pushen
+      - name: Build and push image
         uses: docker/build-push-action@v7
         with:
           context: .

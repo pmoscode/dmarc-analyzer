@@ -1,5 +1,5 @@
--- Initiales Schema — IMPLEMENTIERUNG.md Abschnitt 8.1.
--- Zeitstempel für Report-Zeiträume sind Unix-Sekunden in UTC.
+-- Initial schema — IMPLEMENTIERUNG.md section 8.1.
+-- Timestamps for report periods are Unix seconds in UTC.
 
 CREATE TABLE accounts (
     id            TEXT PRIMARY KEY,
@@ -10,7 +10,7 @@ CREATE TABLE accounts (
     mailbox       TEXT NOT NULL DEFAULT 'INBOX',
     use_tls       INTEGER NOT NULL DEFAULT 1,
     created_at    TEXT NOT NULL
-    -- Passwort bewusst NICHT hier, sondern im Schlüsselbund (AP 3).
+    -- Password deliberately NOT stored here, but in the keychain (AP 3).
 );
 
 CREATE TABLE sync_state (
@@ -53,7 +53,7 @@ CREATE TABLE records (
     source_ip     TEXT NOT NULL,
     message_count INTEGER NOT NULL,
     disposition   TEXT NOT NULL,
-    dkim_result   TEXT NOT NULL,      -- ausgewertet (aligned)
+    dkim_result   TEXT NOT NULL,      -- evaluated (aligned)
     spf_result    TEXT NOT NULL,
     header_from   TEXT NOT NULL,
     envelope_from TEXT,
@@ -104,10 +104,10 @@ CREATE INDEX idx_records_report   ON records(report_id);
 CREATE INDEX idx_records_ip       ON records(source_ip);
 CREATE INDEX idx_records_from     ON records(header_from);
 
--- Ohne diese vier Indizes scannen die Batch-Ladefunktionen (reportrecords.go,
--- IN-Klausel über record_id/report_id) bei Reports mit vielen Records
--- praktisch die ganze Tabelle — mit 10.000 Records gemessen: FindByID > 3s
--- statt < 100ms.
+-- Without these four indexes, the batch-loading functions (reportrecords.go,
+-- IN clause over record_id/report_id) effectively scan the whole table for
+-- reports with many records — measured with 10,000 records: FindByID > 3s
+-- instead of < 100ms.
 CREATE INDEX idx_record_reasons_record     ON record_reasons(record_id);
 CREATE INDEX idx_auth_results_dkim_record  ON auth_results_dkim(record_id);
 CREATE INDEX idx_auth_results_spf_record   ON auth_results_spf(record_id);

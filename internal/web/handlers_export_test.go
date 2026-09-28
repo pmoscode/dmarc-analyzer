@@ -15,15 +15,15 @@ import (
 	domainsources "github.com/pmoscode/dmarc-analyzer/internal/domain/sources"
 )
 
-// pagedReportRepository liefert Reports über mehrere Seiten verteilt
-// (ein Report pro Seite) — für den Streaming-CSV-Export-Test, der
-// gerade prüfen soll, dass mehrere Seiten nacheinander abgerufen und
-// alle Zeilen in eine einzige CSV-Antwort geschrieben werden.
+// pagedReportRepository returns reports spread across several pages (one
+// report per page) — for the streaming CSV export test, which is meant
+// to check that several pages are fetched one after another and all rows
+// get written into a single CSV response.
 type pagedReportRepository struct {
 	fakeReportRepository
 	pages     [][]report.AggregateReport
 	fetched   int
-	failAfter int // Seiten, bevor ein Fehler simuliert wird (0: nie)
+	failAfter int // pages before an error is simulated (0: never)
 }
 
 func (p *pagedReportRepository) Query(_ context.Context, q report.Query) (report.Page, error) {
@@ -61,7 +61,7 @@ func TestHandleExportReportsCSV_StreamsAllPages(t *testing.T) {
 
 	rows, err := csv.NewReader(resp.Body).ReadAll()
 	require.NoError(t, err)
-	require.Len(t, rows, 4) // Kopfzeile + 3 Reports über 3 Seiten hinweg
+	require.Len(t, rows, 4) // header row + 3 reports across 3 pages
 	require.Equal(t, "Google", rows[1][0])
 	require.Equal(t, "Microsoft", rows[2][0])
 	require.Equal(t, "Yahoo", rows[3][0])
@@ -80,7 +80,7 @@ func TestHandleExportReportsCSV_EmptyResult_OnlyHeader(t *testing.T) {
 	require.NoError(t, err)
 	rows, err := csv.NewReader(bytes.NewReader(body)).ReadAll()
 	require.NoError(t, err)
-	require.Len(t, rows, 1, "nur die Kopfzeile")
+	require.Len(t, rows, 1, "only the header row")
 }
 
 func TestHandleExportReportsCSV_UsesActiveFilter(t *testing.T) {

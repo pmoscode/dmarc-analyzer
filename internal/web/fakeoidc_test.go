@@ -15,34 +15,32 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// fakeOIDCProvider ist ein minimaler, lokaler OIDC-Identity-Provider für
-// Tests — ein echter Authentik-Server lässt sich in dieser
-// Testumgebung nicht ansprechen. Deckt genau das ab, was oidc.go
-// tatsächlich braucht: Discovery, JWKS, Authorization-Endpoint
-// (überspringt jede echte Anmeldemaske und leitet sofort mit einem Code
-// zurück) und Token-Endpoint (liefert ein echt signiertes ID-Token).
-// Damit prüfen die Tests den tatsächlichen Code-Pfad in
-// oidc.go/handlers_login.go (Discovery, JWKS-Signaturprüfung,
-// Code-Austausch, Nonce-Abgleich), nicht nur eine mit Mocks verdeckte
-// Handler-Logik.
+// fakeOIDCProvider is a minimal, local OIDC identity provider for
+// tests — a real Authentik server can't be reached in this test
+// environment. Covers exactly what oidc.go actually needs: discovery,
+// JWKS, an authorization endpoint (skips any real login screen and
+// redirects immediately with a code) and a token endpoint (returns a
+// genuinely signed ID token). This lets the tests check the actual code
+// path in oidc.go/handlers_login.go (discovery, JWKS signature
+// verification, code exchange, nonce matching), not just handler logic
+// hidden behind mocks.
 type fakeOIDCProvider struct {
 	server     *httptest.Server
 	signingKey *rsa.PrivateKey
 	clientID   string
 
 	mu sync.Mutex
-	// nextGroups/nextSubject/nextEmail steuern den Inhalt des als
-	// nächstes ausgestellten ID-Tokens — je Testfall änderbar.
+	// nextGroups/nextSubject/nextEmail control the content of the next
+	// issued ID token — changeable per test case.
 	nextGroups  []string
 	nextSubject string
 	nextEmail   string
 	lastNonce   string
 }
 
-// testOIDCClientID ist die Client-ID, die alle Tests dieses Pakets sowohl
-// beim Fake-Provider als auch in Options.OIDC.ClientID verwenden — ein
-// Parameter dafür wäre hier reine Formsache, da nie ein zweiter Wert
-// vorkommt.
+// testOIDCClientID is the client ID all tests in this package use both
+// with the fake provider and in Options.OIDC.ClientID — a parameter for
+// this would be pure formality here, since a second value never occurs.
 const testOIDCClientID = "test-client"
 
 func newFakeOIDCProvider(t *testing.T) *fakeOIDCProvider {
@@ -63,8 +61,8 @@ func newFakeOIDCProvider(t *testing.T) *fakeOIDCProvider {
 
 func (p *fakeOIDCProvider) issuer() string { return p.server.URL }
 
-// setClaims legt fest, welche Gruppen/Subject/E-Mail das nächste über
-// /token ausgestellte ID-Token trägt.
+// setClaims sets which groups/subject/email the next ID token issued via
+// /token carries.
 func (p *fakeOIDCProvider) setClaims(subject, email string, groups []string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -94,10 +92,9 @@ func (p *fakeOIDCProvider) handleJWKS(w http.ResponseWriter, _ *http.Request) {
 	_ = json.NewEncoder(w).Encode(set)
 }
 
-// handleAuthorize überspringt jede echte Nutzerinteraktion: merkt sich
-// nonce und leitet sofort mit einem festen Code + dem übergebenen state
-// zum redirect_uri zurück, wie es ein Browser nach erfolgreicher
-// Anmeldung bei Authentik täte.
+// handleAuthorize skips any real user interaction: remembers the nonce
+// and redirects immediately with a fixed code + the given state to the
+// redirect_uri, as a browser would after a successful Authentik login.
 func (p *fakeOIDCProvider) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 
@@ -107,7 +104,7 @@ func (p *fakeOIDCProvider) handleAuthorize(w http.ResponseWriter, r *http.Reques
 
 	redirect, err := url.Parse(q.Get("redirect_uri"))
 	if err != nil {
-		http.Error(w, "ungültiger redirect_uri", http.StatusBadRequest)
+		http.Error(w, "invalid redirect_uri", http.StatusBadRequest)
 		return
 	}
 	rq := redirect.Query()
@@ -117,10 +114,9 @@ func (p *fakeOIDCProvider) handleAuthorize(w http.ResponseWriter, r *http.Reques
 	http.Redirect(w, r, redirect.String(), http.StatusFound)
 }
 
-// handleToken stellt unbedingt ein frisch signiertes ID-Token aus — ohne
-// den Code oder Client-Zugangsdaten zu prüfen: dieses Fake testet die
-// Client-Seite (oidc.go), nicht die Korrektheit eines echten
-// Token-Endpoints.
+// handleToken unconditionally issues a freshly signed ID token — without
+// checking the code or client credentials: this fake tests the client
+// side (oidc.go), not the correctness of a real token endpoint.
 func (p *fakeOIDCProvider) handleToken(w http.ResponseWriter, _ *http.Request) {
 	idToken, err := p.signIDToken()
 	if err != nil {

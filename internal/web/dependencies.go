@@ -12,34 +12,33 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/app/syncjob"
 )
 
-// Dependencies bündelt die Use Cases, die die Web-Oberfläche braucht.
+// Dependencies bundles the use cases the web UI needs.
 type Dependencies struct {
 	Statistics *statistics.UseCase
 	Reports    *queryreports.UseCase
 	Sources    *sourcestats.UseCase
 	Domains    *domainoverview.UseCase
-	// FailedRecords versorgt die Fehlschläge-Ansicht (/fehlschlaege) —
-	// berichtsübergreifende Suche nach Records, bei denen DMARC nicht
-	// bestanden wurde (Ergänzung zur Berichte-Detailseite, die dieselbe
-	// Rohdaten-Aufbereitung für einen einzelnen Bericht zeigt).
+	// FailedRecords powers the failures view (/fehlschlaege) — a
+	// cross-report search for records where DMARC failed (a complement to
+	// the report detail page, which shows the same raw-data breakdown for
+	// a single report).
 	FailedRecords *queryfailedrecords.UseCase
 	Accounts      *manageaccount.UseCase
 	SyncJob       *syncjob.Runner
-	// Importer braucht keine Zugangsdaten — Import aus hochgeladenen
-	// Dateien funktioniert unabhängig vom konfigurierten IMAP-Konto.
+	// Importer needs no credentials — importing from uploaded files works
+	// independently of the configured IMAP account.
 	Importer *importfiles.UseCase
-	// Retention verwaltet die Aufbewahrungsrichtlinie (AP 7, siehe
-	// handlers_settings.go) — RetentionMonths wird dort nur angezeigt,
-	// geändert wird es per ENV und Container-Neustart.
+	// Retention manages the retention policy (AP 7, see
+	// handlers_settings.go) — RetentionMonths is only displayed there;
+	// changing it happens via ENV and a container restart.
 	Retention *retention.UseCase
-	// SyncIntervalMinutes ist rein informativ für die Status-Seite (siehe
-	// handlers_settings.go) — der tatsächliche geplante Abgleich läuft in
-	// internal/app/syncscheduler, das dieselbe ENV-Einstellung bekommt.
+	// SyncIntervalMinutes is purely informational for the status page
+	// (see handlers_settings.go) — the actual scheduled sync runs in
+	// internal/app/syncscheduler, which gets the same ENV setting.
 	SyncIntervalMinutes int
-	// IMAPHost ist der Hostname des konfigurierten IMAP-Kontos (aus
-	// DMARC_IMAP_HOST) — rein informativ für die Sendequellen-Ansicht
-	// (siehe handlers_sources.go: hostet eine Sendequelle beim selben
-	// Anbieter wie das IMAP-Konto?). Kein Zugangsdatum, unbedenklich hier
-	// mitzuführen.
+	// IMAPHost is the hostname of the configured IMAP account (from
+	// DMARC_IMAP_HOST) — purely informational for the sending-sources view
+	// (see handlers_sources.go: does a sending source share a host with
+	// the IMAP account?). Not a credential, safe to carry here.
 	IMAPHost string
 }

@@ -2,10 +2,9 @@ version: "2"
 
 linters:
   default: none
-  # misspell ist bewusst nicht aktiv: Kommentare und Fehlertexte sind
-  # projektweit deutsch (IMPLEMENTIERUNG.md Abschnitt 1.3), ein auf
-  # Englisch trainierter Spellchecker markiert dort ständig Fehlalarme
-  # ("Konfiguration" -> "Configuration" u. ä.).
+  # misspell is deliberately not enabled — see AGENTS.md's language rule
+  # for why it was originally disabled and why re-enabling it is a
+  # deliberate follow-up rather than a side effect of any given change.
   enable:
     - govet
     - staticcheck
@@ -31,31 +30,30 @@ linters:
         - name: error-naming
     gosec:
       excludes:
-        # G304 (dateipfad aus Variable): Konfig-/Importpfade sind
-        # anwendungsgesteuert, nicht roh aus Netz-Eingaben.
+        # G304 (file path from variable): config/import paths are
+        # application-controlled, not raw from network input.
         - G304
   exclusions:
     rules:
-      # Testcode darf offensichtlichere Fehlerbehandlung haben; require/
-      # assert übernehmen das Melden.
+      # Test code may have more obvious error handling; require/assert
+      # take care of reporting.
       - path: _test\.go
         linters:
           - errcheck
           - gosec
-      # G201/G202 (SQL-String-Bau): internal/infra/sqlite setzt WHERE-,
-      # ORDER-BY- und IN-Klauseln aus einer festen, internen Menge von
-      # Spaltennamen und generierten "?"-Platzhaltern zusammen — nie aus
-      # rohen externen Werten. Die tatsächlichen Werte laufen ausnahmslos
-      # über gebundene Parameter (siehe buildWhere/buildOrderBy/
-      # buildCursorWhere und die batch-IN-Ladefunktionen).
+      # G201/G202 (SQL string building): internal/infra/sqlite assembles
+      # WHERE, ORDER BY, and IN clauses from a fixed, internal set of
+      # column names and generated "?" placeholders — never from raw
+      # external values. The actual values always go through bound
+      # parameters (see buildWhere/buildOrderBy/buildCursorWhere and the
+      # batch IN loader functions).
       - path: internal/infra/sqlite/.*\.go
         linters:
           - gosec
         text: "G20[12]"
-      # G101 (hartkodierte Credentials): internal/ui/i18n enthält
-      # ausschließlich UI-Beschriftungstexte, keine echten Geheimnisse —
-      # "Passwort" im Label-String ist hier immer nur ein Wort, keine
-      # hartkodierte Zugangsdaten.
+      # G101 (hardcoded credentials): internal/ui/i18n contains only UI
+      # label text, no real secrets — "password" in a label string here
+      # is always just a word, never a hardcoded credential.
       - path: internal/ui/i18n/.*\.go
         linters:
           - gosec

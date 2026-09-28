@@ -1,17 +1,17 @@
-// Diagramm-Logik für die Übersicht (MIGRATIONSPLAN.md Abschnitt 6a).
+// Chart logic for the overview (MIGRATIONSPLAN.md section 6a).
 //
-// Bewusst dünn gehalten: Aggregation, Filterung und die Ziel-URLs für den
-// Drill-down kommen bereits fertig vom Server (/api/diagramme/*) — dieses
-// Skript ordnet die JSON-Antworten nur Chart.js-Konfigurationen zu und
-// reicht Klicks als Navigation weiter (AGENTS.md-Nachtrag: Diagrammlogik
-// gehört nach Go, nicht nach charts.js).
+// Deliberately kept thin: aggregation, filtering and the drill-down
+// target URLs already come ready-made from the server
+// (/api/diagramme/*) — this script only maps the JSON responses to
+// Chart.js configurations and forwards clicks as navigation (AGENTS.md
+// addendum: chart logic belongs in Go, not in charts.js).
 (function () {
   "use strict";
 
-  // Matrix-Controller/-Element und den Zoom-Plugin global registrieren —
-  // beide UMD-Bündel greifen beim Laden per <script> auf das globale
-  // "Chart" zu (siehe vendor/-Dateien), müssen deshalb nach chart.umd.min.js
-  // eingebunden sein (siehe layout.html-Reihenfolge).
+  // Register the matrix controller/element and the zoom plugin globally
+  // — both UMD bundles access the global "Chart" when loaded via
+  // <script> (see vendor/ files), so they must be included after
+  // chart.umd.min.js (see the layout.html order).
   var matrixModule = window["chartjs-chart-matrix"];
   if (matrixModule) {
     Chart.register(matrixModule.MatrixController, matrixModule.MatrixElement);
@@ -29,9 +29,9 @@
     return m ? { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) } : { r: 0, g: 0, b: 0 };
   }
 
-  // passRateColor interpoliert zwischen der kritischen und der guten
-  // Statusfarbe — dieselbe Herleitung wie internal/infra/charts.passRateColor
-  // (Go), hier fürs Browser-Rendering nachgebildet.
+  // passRateColor interpolates between the critical and the good status
+  // color — the same derivation as internal/infra/charts.passRateColor
+  // (Go), replicated here for browser rendering.
   function passRateColor(rate) {
     var good = hexToRgb(cssVar("--status-good"));
     var bad = hexToRgb(cssVar("--status-critical"));
@@ -55,23 +55,22 @@
   function fetchJSON(url) {
     return fetch(url, { headers: { Accept: "application/json" } }).then(function (res) {
       if (!res.ok) {
-        throw new Error("Anfrage an " + url + " fehlgeschlagen: " + res.status);
+        throw new Error("request to " + url + " failed: " + res.status);
       }
       return res.json();
     });
   }
 
-  // apiURL hängt den aktuellen Filter (Zeitraum/Domain) an einen
-  // /api/diagramme/*-Pfad an — dieselbe Auswahl, mit der die Seite selbst
-  // gerade gerendert wurde (window.location.search enthält "zeitraum"
-  // und "domain", siehe dashboard.html-Filterleiste), damit ein Diagramm
-  // nicht versehentlich einen anderen Zeitraum zeigt als die
-  // Kennzahlen-Kacheln darüber.
+  // apiURL appends the current filter (period/domain) to an
+  // /api/diagramme/* path — the same selection the page itself was just
+  // rendered with (window.location.search contains "zeitraum" and
+  // "domain", see the dashboard.html filter bar), so a chart doesn't
+  // accidentally show a different period than the metric tiles above it.
   function apiURL(path) {
     return path + window.location.search;
   }
 
-  // --- Nachrichtenvolumen pro Tag -----------------------------------------
+  // --- Message volume per day ---------------------------------------------
 
   function renderDailyVolume() {
     var canvas = document.getElementById("chart-verlauf");
@@ -93,14 +92,14 @@
             labels: labels,
             datasets: [
               {
-                label: "Bestanden",
+                label: "Passed",
                 data: passData,
                 backgroundColor: cssVar("--status-good"),
                 stack: "volumen",
                 pointURLs: urls,
               },
               {
-                label: "Fehlgeschlagen",
+                label: "Failed",
                 data: failData,
                 backgroundColor: cssVar("--status-critical"),
                 stack: "volumen",
@@ -136,14 +135,14 @@
         renderDailyVolumeTable(days);
         registerExport("verlauf", chart, function () {
           return {
-            header: ["Tag", "Bestanden", "Fehlgeschlagen"],
+            header: ["Day", "Passed", "Failed"],
             rows: days.map(function (d) { return [d.label, d.pass, d.fail]; }),
           };
         });
         return chart;
       })
       .catch(function (err) {
-        console.error("Diagramm 'Nachrichtenvolumen pro Tag' konnte nicht geladen werden", err);
+        console.error("could not load chart 'message volume per day'", err);
       });
   }
 
@@ -152,8 +151,8 @@
     if (!table) {
       return;
     }
-    var rows = ["<caption>Nachrichtenvolumen pro Tag</caption>",
-      "<tr><th>Tag</th><th>Bestanden</th><th>Fehlgeschlagen</th></tr>"];
+    var rows = ["<caption>Message volume per day</caption>",
+      "<tr><th>Day</th><th>Passed</th><th>Failed</th></tr>"];
     days.forEach(function (d) {
       rows.push(
         "<tr><td><a href=\"" + d.url + "\">" + escapeHTML(d.label) + "</a></td>" +
@@ -163,7 +162,7 @@
     table.innerHTML = rows.join("");
   }
 
-  // --- Sendequelle × Tag (Heatmap) ----------------------------------------
+  // --- Sending source × day (heatmap) -------------------------------------
 
   function renderHeatmap() {
     var canvas = document.getElementById("chart-heatmap");
@@ -178,9 +177,9 @@
         var cells = data.cells || [];
         var toCSV = function () {
           return {
-            header: ["Quelle", "Tag", "Pass-Rate", "Nachrichten"],
+            header: ["Source", "Day", "Pass rate", "Messages"],
             rows: cells.map(function (c) {
-              return [c.y, c.x, c.hasData ? (c.passRate * 100).toFixed(1) + " %" : "keine Daten", c.hasData ? c.total : ""];
+              return [c.y, c.x, c.hasData ? (c.passRate * 100).toFixed(1) + " %" : "no data", c.hasData ? c.total : ""];
             }),
           };
         };
@@ -193,12 +192,12 @@
 
         var cellWidth = 36;
         var cellHeight = 28;
-        // Breite/Höhe hängen von der Anzahl Tage/Sendequellen ab. Müssen auf
-        // dem Eltern-Wrapper gesetzt werden, nicht auf dem Canvas selbst —
-        // sonst entsteht die in app.css bei .chart-canvas-wrap dokumentierte
-        // Größen-Rückkopplungsschleife. Die Mindestbreite sorgt dafür, dass
-        // die umgebende .chart-scroll bei vielen Tagen tatsächlich einen
-        // horizontalen Scrollbalken zeigt.
+        // Width/height depend on the number of days/sending sources. Must
+        // be set on the parent wrapper, not on the canvas itself —
+        // otherwise the size feedback loop documented in app.css at
+        // .chart-canvas-wrap occurs. The minimum width ensures the
+        // surrounding .chart-scroll actually shows a horizontal
+        // scrollbar with many days.
         var wrap = document.getElementById("chart-heatmap-wrap");
         if (wrap) {
           wrap.style.minWidth = Math.max(300, dayLabels.length * cellWidth + 140) + "px";
@@ -210,7 +209,7 @@
           data: {
             datasets: [
               {
-                label: "Pass-Rate",
+                label: "Pass rate",
                 data: cells,
                 backgroundColor: function (context) {
                   var raw = context.dataset.data[context.dataIndex];
@@ -258,9 +257,9 @@
                   label: function (context) {
                     var raw = context.dataset.data[context.dataIndex];
                     if (!raw.hasData) {
-                      return [raw.y, raw.x, "keine Daten"];
+                      return [raw.y, raw.x, "no data"];
                     }
-                    return [raw.y, raw.x, "Pass-Rate: " + (raw.passRate * 100).toFixed(1) + " %", "Nachrichten: " + raw.total];
+                    return [raw.y, raw.x, "Pass rate: " + (raw.passRate * 100).toFixed(1) + " %", "Messages: " + raw.total];
                   },
                 },
               },
@@ -281,7 +280,7 @@
         return chart;
       })
       .catch(function (err) {
-        console.error("Diagramm 'Sendequelle × Tag' konnte nicht geladen werden", err);
+        console.error("could not load chart 'sending source × day'", err);
       });
   }
 
@@ -290,10 +289,10 @@
     if (!table) {
       return;
     }
-    var rows = ["<caption>Sendequelle × Tag</caption>",
-      "<tr><th>Quelle</th><th>Tag</th><th>Pass-Rate</th><th>Nachrichten</th></tr>"];
+    var rows = ["<caption>Sending source × day</caption>",
+      "<tr><th>Source</th><th>Day</th><th>Pass rate</th><th>Messages</th></tr>"];
     cells.forEach(function (c) {
-      var passRate = c.hasData ? (c.passRate * 100).toFixed(1) + " %" : "keine Daten";
+      var passRate = c.hasData ? (c.passRate * 100).toFixed(1) + " %" : "no data";
       var count = c.hasData ? c.total : "–";
       rows.push(
         "<tr><td>" + escapeHTML(c.y) + "</td><td><a href=\"" + c.url + "\">" + escapeHTML(c.x) + "</a></td>" +
@@ -309,16 +308,15 @@
     return div.innerHTML;
   }
 
-  // --- Diagramm-Export (MIGRATIONSPLAN.md Meilenstein M4: "Diagramm-
-  // Export als PNG (Browser) und CSV (Tabellenansicht)") -----------------
+  // --- Chart export (MIGRATIONSPLAN.md milestone M4: "chart export as
+  // PNG (browser) and CSV (table view)") -----------------------------------
   //
-  // chartExports bildet einen Diagrammschlüssel (dieselben Namen wie die
-  // "data-chart"-Attribute der Export-Knöpfe in dashboard.html) auf einen
-  // Zugriff auf das zuletzt gezeichnete Chart.js-Objekt sowie eine
-  // csv()-Funktion ab, die genau die Zeilen liefert, die auch die
-  // zugehörige Tabellenansicht zeigt — kein serverseitiger Bild-Export
-  // (siehe MIGRATIONSPLAN.md Abschnitt 6a: "Serverseitiger Bild-Export
-  // entfällt").
+  // chartExports maps a chart key (the same names as the "data-chart"
+  // attributes of the export buttons in dashboard.html) to access to the
+  // most recently drawn Chart.js object, plus a csv() function that
+  // returns exactly the rows the corresponding table view also shows —
+  // no server-side image export (see MIGRATIONSPLAN.md section 6a:
+  // "server-side image export dropped").
   var chartExports = {};
 
   function registerExport(key, chart, csvRows) {
@@ -376,7 +374,7 @@
     }
   });
 
-  // --- Top-Sendequellen (horizontales Balkendiagramm) ---------------------
+  // --- Top sending sources (horizontal bar chart) --------------------------
 
   function renderTopSources() {
     var canvas = document.getElementById("chart-quellen");
@@ -392,10 +390,10 @@
         var colors = sources.map(function (s) { return passRateColor(s.passRate); });
         var urls = sources.map(function (s) { return s.url; });
 
-        // Höhe hängt von der Anzahl Sendequellen ab (mehr Quellen -> mehr
-        // Balkenreihen). Muss auf dem Eltern-Wrapper gesetzt werden, nicht
-        // auf dem Canvas selbst — sonst entsteht die in app.css bei
-        // .chart-canvas-wrap dokumentierte Größen-Rückkopplungsschleife.
+        // Height depends on the number of sending sources (more sources
+        // -> more bar rows). Must be set on the parent wrapper, not on
+        // the canvas itself — otherwise the size feedback loop
+        // documented in app.css at .chart-canvas-wrap occurs.
         var wrap = document.getElementById("chart-quellen-wrap");
         if (wrap) {
           wrap.style.height = Math.max(120, sources.length * 28 + 60) + "px";
@@ -407,7 +405,7 @@
             labels: labels,
             datasets: [
               {
-                label: "Nachrichten",
+                label: "Messages",
                 data: totals,
                 backgroundColor: colors,
                 pointURLs: urls,
@@ -428,7 +426,7 @@
                 callbacks: {
                   label: function (context) {
                     var s = sources[context.dataIndex];
-                    return ["Nachrichten: " + s.total, "Pass-Rate: " + (s.passRate * 100).toFixed(1) + " %"];
+                    return ["Messages: " + s.total, "Pass rate: " + (s.passRate * 100).toFixed(1) + " %"];
                   },
                 },
               },
@@ -447,14 +445,14 @@
         renderTopSourcesTable(sources);
         registerExport("quellen", chart, function () {
           return {
-            header: ["Quelle", "Nachrichten", "Pass-Rate"],
+            header: ["Source", "Messages", "Pass rate"],
             rows: sources.map(function (s) { return [s.label, s.total, (s.passRate * 100).toFixed(1) + " %"]; }),
           };
         });
         return chart;
       })
       .catch(function (err) {
-        console.error("Diagramm 'Top-Sendequellen' konnte nicht geladen werden", err);
+        console.error("could not load chart 'top sending sources'", err);
       });
   }
 
@@ -463,8 +461,8 @@
     if (!table) {
       return;
     }
-    var rows = ["<caption>Top-Sendequellen</caption>",
-      "<tr><th>Quelle</th><th>Nachrichten</th><th>Pass-Rate</th></tr>"];
+    var rows = ["<caption>Top sending sources</caption>",
+      "<tr><th>Source</th><th>Messages</th><th>Pass rate</th></tr>"];
     sources.forEach(function (s) {
       rows.push(
         "<tr><td><a href=\"" + s.url + "\">" + escapeHTML(s.label) + "</a></td>" +
@@ -474,7 +472,7 @@
     table.innerHTML = rows.join("");
   }
 
-  // --- Verteilung nach Disposition (Donut) --------------------------------
+  // --- Disposition breakdown (donut) ---------------------------------------
 
   function dispositionColor(disposition) {
     switch (disposition) {
@@ -539,14 +537,14 @@
         renderDispositionTable(slices);
         registerExport("disposition", chart, function () {
           return {
-            header: ["Disposition", "Nachrichten"],
+            header: ["Disposition", "Messages"],
             rows: slices.map(function (s) { return [s.label, s.total]; }),
           };
         });
         return chart;
       })
       .catch(function (err) {
-        console.error("Diagramm 'Verteilung nach Disposition' konnte nicht geladen werden", err);
+        console.error("could not load chart 'disposition breakdown'", err);
       });
   }
 
@@ -555,8 +553,8 @@
     if (!table) {
       return;
     }
-    var rows = ["<caption>Verteilung nach Disposition</caption>",
-      "<tr><th>Disposition</th><th>Nachrichten</th></tr>"];
+    var rows = ["<caption>Disposition breakdown</caption>",
+      "<tr><th>Disposition</th><th>Messages</th></tr>"];
     slices.forEach(function (s) {
       rows.push(
         "<tr><td><a href=\"" + s.url + "\">" + escapeHTML(s.label) + "</a></td>" +

@@ -6,56 +6,57 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/report"
 )
 
-// DailyVolume ist das Nachrichtenvolumen eines Tages, aufgeteilt nach
-// DMARC-Ergebnis (IMPLEMENTIERUNG.md Abschnitt 10.3: "Nachrichtenvolumen
-// pro Tag, gestapelt nach Pass/Fail"). Pass/Fail folgt derselben Definition
-// wie Statistics.PassRate (PolicyEvaluation.PassesDMARC()).
+// DailyVolume is the message volume of one day, split by DMARC result
+// (IMPLEMENTIERUNG.md section 10.3: "message volume per day, stacked by
+// pass/fail"). Pass/fail follows the same definition as
+// Statistics.PassRate (PolicyEvaluation.PassesDMARC()).
 type DailyVolume struct {
-	// Day ist auf Tagesbeginn (00:00 UTC) normalisiert.
+	// Day is normalized to the start of the day (00:00 UTC).
 	Day  time.Time
 	Pass int
 	Fail int
 }
 
-// SourceVolume ist das Nachrichtenvolumen einer einzelnen Quell-IP im
-// Zeitraum, mit ihrer Pass-Rate (IMPLEMENTIERUNG.md Abschnitt 10.3:
-// "Top-10-Sendequellen nach Volumen, eingefärbt nach Pass-Rate").
+// SourceVolume is the message volume of a single source IP in the period,
+// with its pass rate (IMPLEMENTIERUNG.md section 10.3: "top 10 sending
+// sources by volume, colored by pass rate").
 type SourceVolume struct {
 	SourceIP report.SourceIP
 	Total    int
 	PassRate float64
-	// Label ist die für Menschen sprechende Bezeichnung dieser Quelle —
-	// erkannter Diensteanbieter, sonst PTR-Hostname, sonst leer (dann
-	// zeigt das Diagramm im Browser die IP-Adresse selbst). Wird von
-	// app/statistics.UseCase.Dashboard() über sources.Enricher befüllt —
-	// dieselbe Anreicherung wie in der Sendequellen-Ansicht
-	// (app/sourcestats), hier nur zusätzlich fürs Dashboard-Diagramm.
+	// Label is the human-readable name of this source — a recognized
+	// service provider, otherwise the PTR hostname, otherwise empty (in
+	// which case the chart in the browser shows the IP address itself).
+	// Populated by app/statistics.UseCase.Dashboard() via
+	// sources.Enricher — the same enrichment as in the sending-sources
+	// view (app/sourcestats), just additionally for the dashboard chart
+	// here.
 	Label string
 }
 
-// HeatmapCell ist die Pass-Rate einer Quelle an einem Tag. HasData ist
-// false, wenn die Quelle an diesem Tag keine Nachrichten gesendet hat —
-// eine PassRate von 0 wäre dann irreführend (sähe aus wie "komplett
-// fehlgeschlagen" statt "keine Daten").
+// HeatmapCell is the pass rate of a source on one day. HasData is false
+// when the source sent no messages that day — a PassRate of 0 would then
+// be misleading (would look like "completely failed" instead of "no
+// data").
 type HeatmapCell struct {
 	PassRate float64
 	HasData  bool
-	// Total ist die Nachrichtenzahl dieser Quelle an diesem Tag — für die
-	// Heatmap-Tooltips im Web-Frontend (MIGRATIONSPLAN.md Abschnitt 6a:
-	// "Tooltip mit Quelle, Tag, Pass-Rate und Nachrichtenzahl"). 0, wenn
-	// HasData false ist.
+	// Total is the message count of this source on this day — for the
+	// heatmap tooltips in the web frontend (MIGRATIONSPLAN.md section 6a:
+	// "tooltip with source, day, pass rate and message count"). 0 when
+	// HasData is false.
 	Total int
 }
 
-// Heatmap ist die Matrix Quelle × Tag für die Top-Quellen im Zeitraum
-// (IMPLEMENTIERUNG.md Abschnitt 10.3: "Heatmap — Sendequelle × Tag, Farbe
-// = Pass-Rate"). Cells[i][j] gehört zu Sources[i] am Tag Days[j].
+// Heatmap is the source × day matrix for the top sources in the period
+// (IMPLEMENTIERUNG.md section 10.3: "heatmap — sending source × day,
+// color = pass rate"). Cells[i][j] belongs to Sources[i] on day Days[j].
 type Heatmap struct {
 	Sources []report.SourceIP
-	// SourceLabels sind die zu Sources parallelen, für Menschen
-	// sprechenden Bezeichnungen (siehe SourceVolume.Label) — leer (oder
-	// kürzer als Sources), wenn keine Anreicherung stattgefunden hat;
-	// das Diagramm im Browser fällt dann auf die IP-Adresse zurück.
+	// SourceLabels are the human-readable names parallel to Sources (see
+	// SourceVolume.Label) — empty (or shorter than Sources) when no
+	// enrichment took place; the chart in the browser then falls back to
+	// the IP address.
 	SourceLabels []string
 	Days         []time.Time
 	Cells        [][]HeatmapCell

@@ -9,16 +9,16 @@ import (
 	domainsources "github.com/pmoscode/dmarc-analyzer/internal/domain/sources"
 )
 
-// sourcesPageSize ist die je Ladeschritt angeforderte Seitengröße —
-// dieselbe Lazy-Nachladelogik wie /berichte (reportsPageSize) und zuvor
+// sourcesPageSize is the page size requested per load step — the same
+// lazy-loading logic as /berichte (reportsPageSize) and formerly
 // internal/ui/sources.View.
 const sourcesPageSize = 50
 
-// sourcesFilter fasst Filter und Sortierung von /quellen zusammen.
-// Anders als /berichte kennt domainsources.Query keine Drill-down-
-// spezifischen Felder (Quell-IP/Disposition wären hier auch fachlich
-// sinnlos: diese Ansicht IST bereits nach Quell-IP aggregiert) — nur
-// Zeitraum, Domain (geteilte Filterleiste) und ein Sortierfeld.
+// sourcesFilter combines the filter and sort order of /quellen. Unlike
+// /berichte, domainsources.Query has no drill-down-specific fields
+// (source IP/disposition would be meaningless here too: this view IS
+// already aggregated by source IP) — only period, domain (shared filter
+// bar) and a sort field.
 type sourcesFilter struct {
 	Period    filterParams
 	SortField domainsources.SortField
@@ -75,7 +75,7 @@ func sourcesPageURL(filter sourcesFilter, cursor string) string {
 	return "/quellen/seite?" + v.Encode()
 }
 
-// --- Vorlagendaten -------------------------------------------------------
+// --- Template data ---------------------------------------------------------
 
 type sourceRowView struct {
 	IP       string
@@ -84,56 +84,55 @@ type sourceRowView struct {
 	Hostname string
 	Service  string
 
-	// EinordnungLabel und EinordnungTon erklären, wie diese Quelle zu
-	// deuten ist (siehe classifySource) — dieselbe Erklärung, die sonst
-	// nur im Kopf des Betrachters stattfindet: DKIM ohne SPF ist meist
-	// eine harmlose Weiterleitung, DKIM-Fehlschlag dagegen ein Grund zum
-	// genaueren Hinsehen.
+	// EinordnungLabel and EinordnungTon explain how to interpret this
+	// source (see classifySource) — the same reasoning that would
+	// otherwise only happen in the viewer's head: DKIM without SPF is
+	// usually harmless forwarding, whereas a DKIM failure is a reason to
+	// look closer.
 	EinordnungLabel string
 	EinordnungTon   string
-	// GleicherHosterWieIMAP ist gesetzt, wenn der PTR-Hostname dieser
-	// Quelle denselben (groben) Betreiber-Domainteil trägt wie das
-	// konfigurierte IMAP-Konto (siehe registrableDomain) — ein weiteres
-	// Indiz für "eigene Infrastruktur", zusätzlich zur DKIM/SPF-Prüfung.
+	// GleicherHosterWieIMAP is set when this source's PTR hostname shares
+	// the same (coarse) operator domain part as the configured IMAP
+	// account (see registrableDomain) — another signal for "our own
+	// infrastructure", in addition to the DKIM/SPF check.
 	GleicherHosterWieIMAP bool
 }
 
 const sourcesUnknownValue = "—"
 
-// classifySource ordnet eine Sendequelle anhand ihrer getrennten DKIM-/
-// SPF-Bestehensrate ein. Die Schwellenwerte (0.9/0.5) sind grobe
-// Faustregeln für "im Wesentlichen besteht/besteht nicht" über viele
-// Nachrichten hinweg, kein Versuch einer exakten statistischen Grenze.
+// classifySource classifies a sending source based on its separate
+// DKIM/SPF pass rates. The thresholds (0.9/0.5) are rough rules of thumb
+// for "essentially passes/doesn't pass" across many messages, not an
+// attempt at an exact statistical boundary.
 //
-//   - DKIM UND SPF bestehen weitgehend: eindeutig autorisiert.
-//   - DKIM besteht, SPF nicht: DMARC besteht trotzdem (dkim ODER spf
-//     reicht), das Muster ist aber typisch für Mail-Weiterleitung — die
-//     DKIM-Signatur übersteht die Weiterleitung, SPF bricht fast immer,
-//     weil die weiterleitende IP nicht im SPF-Record der ursprünglichen
-//     Domain steht.
-//   - DKIM besteht überwiegend NICHT: eine echte Fälschung könnte DKIM
-//     nicht bestehen (dafür fehlt der private Schlüssel der Domain) —
-//     das lohnt einen genaueren Blick.
-//   - alles dazwischen: uneindeutig, ebenfalls einen Blick wert.
+//   - DKIM AND SPF pass mostly: clearly authorized.
+//   - DKIM passes, SPF doesn't: DMARC still passes (dkim OR spf is
+//     enough), but the pattern is typical of mail forwarding — the DKIM
+//     signature survives the forward, SPF almost always breaks because
+//     the forwarding IP isn't in the original domain's SPF record.
+//   - DKIM predominantly does NOT pass: a genuine spoof couldn't pass
+//     DKIM (it lacks the domain's private key for that) — worth a
+//     closer look.
+//   - everything in between: ambiguous, also worth a look.
 func classifySource(s domainsources.Stat) (label, tone string) {
 	switch {
 	case s.DKIMPassRate >= 0.9 && s.SPFPassRate >= 0.9:
-		return "Autorisiert (DKIM & SPF)", "good"
+		return "Authorized (DKIM & SPF)", "good"
 	case s.DKIMPassRate >= 0.9:
-		return "Autorisiert (vermutlich Weiterleitung)", "good"
+		return "Authorized (likely forwarding)", "good"
 	case s.DKIMPassRate < 0.5:
-		return "Nicht bestätigt — prüfen", "critical"
+		return "Unconfirmed — review", "critical"
 	default:
-		return "Teilweise bestätigt — prüfen", "warning"
+		return "Partially confirmed — review", "warning"
 	}
 }
 
-// registrableDomain liefert eine grobe Näherung des Betreiber-Domainteils
-// eines Hostnamens: die letzten beiden durch "." getrennten Bezeichner
-// (z. B. "kasserver.com" aus "dd33832.kasserver.com"). Kein allgemeiner
-// Public-Suffix-Parser (der bräuchte eine gepflegte Liste für
-// Mehrteil-TLDs wie ".co.uk") — für den hier gebrauchten groben Vergleich
-// "läuft das über denselben Hoster wie das IMAP-Konto?" reicht das.
+// registrableDomain returns a rough approximation of a hostname's
+// operator domain part: the last two "."-separated labels (e.g.
+// "kasserver.com" from "dd33832.kasserver.com"). Not a general
+// public-suffix parser (that would need a maintained list for multi-part
+// TLDs like ".co.uk") — good enough for the coarse comparison used here:
+// "does this run through the same host as the IMAP account?".
 func registrableDomain(host string) string {
 	host = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(host)), ".")
 	parts := strings.Split(host, ".")
@@ -188,7 +187,7 @@ type sourcesPageData struct {
 	SortIPURL     string
 	SortField     string
 
-	// ExportURL: siehe reportsPageData.ExportURL.
+	// ExportURL: see reportsPageData.ExportURL.
 	ExportURL string
 
 	Rows sourcesRowsData
@@ -196,7 +195,7 @@ type sourcesPageData struct {
 
 func buildSourcesPageData(filter sourcesFilter, page domainsources.Page, imapHost string) sourcesPageData {
 	return sourcesPageData{
-		Title:         "Sendequellen",
+		Title:         "Sending sources",
 		Domain:        filter.Period.Domain,
 		PeriodOptions: filter.Period.options(),
 		SortVolumeURL: filter.sortLink(domainsources.SortByVolume),
@@ -211,7 +210,7 @@ func buildSourcesPageData(filter sourcesFilter, page domainsources.Page, imapHos
 	}
 }
 
-// --- Handler --------------------------------------------------------------
+// --- Handlers ---------------------------------------------------------------
 
 func (s *Server) handleSources(w http.ResponseWriter, r *http.Request) {
 	filter := parseSourcesFilter(r)

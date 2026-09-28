@@ -1,8 +1,8 @@
-// Package retention setzt die Aufbewahrungsrichtlinie um (AP 7,
-// IMPLEMENTIERUNG.md O-7: "Standard-Aufbewahrungsdauer für Reports? 24
-// Monate, in den Einstellungen änderbar.") — die Dauer kommt seit dem
-// Umstieg auf reine ENV-Konfiguration aus internal/infra/envconfig, nicht
-// mehr aus einer zur Laufzeit änderbaren Einstellung.
+// Package retention implements the retention policy (work package 7,
+// IMPLEMENTIERUNG.md O-7: "default retention period for reports? 24
+// months, changeable in settings.") — the period has come from
+// internal/infra/envconfig ever since the switch to pure ENV
+// configuration, no longer from a setting changeable at runtime.
 package retention
 
 import (
@@ -12,18 +12,18 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/report"
 )
 
-// UseCase wendet die Aufbewahrungsrichtlinie an. Reports ist bewusst vom
-// Typ report.Pruner statt report.Repository — dieser Anwendungsfall
-// braucht nur DeleteOlderThan, keinen vollständigen Repository-Zugriff
-// (siehe Kommentar an report.Pruner).
+// UseCase applies the retention policy. Reports is deliberately of type
+// report.Pruner instead of report.Repository — this use case only needs
+// DeleteOlderThan, not full repository access (see comment on
+// report.Pruner).
 type UseCase struct {
-	// RetentionMonths kommt aus envconfig.Config.RetentionMonths — 0
-	// bedeutet unbegrenzte Aufbewahrung, keine automatische Löschung.
+	// RetentionMonths comes from envconfig.Config.RetentionMonths — 0
+	// means unlimited retention, no automatic deletion.
 	RetentionMonths int
 	Reports         report.Pruner
 
-	// Now liefert den aktuellen Zeitpunkt — nil verwendet time.Now.
-	// Austauschbar für Tests mit einem festen Zeitpunkt.
+	// Now returns the current point in time — nil uses time.Now.
+	// Swappable for tests with a fixed point in time.
 	Now func() time.Time
 }
 
@@ -34,9 +34,9 @@ func (u *UseCase) now() time.Time {
 	return time.Now()
 }
 
-// ApplyNow löscht alle Reports, die nach der konfigurierten
-// Aufbewahrungsdauer als zu alt gelten, und liefert die Anzahl gelöschter
-// Reports. RetentionMonths <= 0 (unbegrenzte Aufbewahrung) löscht nichts.
+// ApplyNow deletes all reports considered too old per the configured
+// retention period, and returns the number of deleted reports.
+// RetentionMonths <= 0 (unlimited retention) deletes nothing.
 func (u *UseCase) ApplyNow(ctx context.Context) (int64, error) {
 	if u.RetentionMonths <= 0 {
 		return 0, nil

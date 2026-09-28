@@ -48,9 +48,9 @@ func TestNewAggregateReport_RequiresValidDateRange(t *testing.T) {
 func TestNewAggregateReport_ZeroRecordsIsValid(t *testing.T) {
 	t.Parallel()
 
-	// Ein Report ohne Records ist fachlich zulässig — z. B. wenn im
-	// Zeitraum keine Nachrichten der berichtenden Domain zugestellt wurden
-	// (siehe Testfall in IMPLEMENTIERUNG.md Abschnitt 12.3).
+	// A report without records is a valid business case — e.g. when no
+	// messages from the reporting domain were delivered in the period
+	// (see test case in IMPLEMENTIERUNG.md section 12.3).
 	r, err := report.NewAggregateReport(validMetadata(t), report.PublishedPolicy{}, nil, report.SourceReference{}, time.Now())
 
 	require.NoError(t, err)

@@ -10,11 +10,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// newSelfSignedDiscoveryServer liefert einen TLS-Testserver mit
-// selbstsigniertem Zertifikat (httptest.NewTLSServer), der nur das
-// Discovery-Dokument bedient — für newOIDCAuthenticator reicht das, JWKS
-// wird erst bei einer echten Anmeldung gebraucht (siehe fakeoidc_test.go
-// für den vollständigen Flow gegen einen unverschlüsselten Fake-Provider).
+// newSelfSignedDiscoveryServer returns a TLS test server with a
+// self-signed certificate (httptest.NewTLSServer) that only serves the
+// discovery document — that's enough for newOIDCAuthenticator, JWKS is
+// only needed for an actual login (see fakeoidc_test.go for the full
+// flow against an unencrypted fake provider).
 func newSelfSignedDiscoveryServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	mux := http.NewServeMux()
@@ -40,10 +40,10 @@ func newSelfSignedDiscoveryServer(t *testing.T) *httptest.Server {
 }
 
 // TestNewOIDCAuthenticator_SelfSignedCert_FailsWithoutInsecureSkipVerify
-// belegt den eigentlichen Grund für DMARC_OIDC_INSECURE_SKIP_VERIFY: gegen
-// einen Issuer mit selbstsigniertem Zertifikat (z. B. Caddys "tls internal"
-// im FS-BS-VPS-Setup-DEV) schlägt die Discovery ohne den Schalter mit einem
-// TLS-Fehler fehl.
+// demonstrates the actual reason for DMARC_OIDC_INSECURE_SKIP_VERIFY:
+// against an issuer with a self-signed certificate (e.g. Caddy's "tls
+// internal" in the FS-BS-VPS-Setup-DEV) discovery fails with a TLS error
+// without the flag.
 func TestNewOIDCAuthenticator_SelfSignedCert_FailsWithoutInsecureSkipVerify(t *testing.T) {
 	server := newSelfSignedDiscoveryServer(t)
 
@@ -56,8 +56,8 @@ func TestNewOIDCAuthenticator_SelfSignedCert_FailsWithoutInsecureSkipVerify(t *t
 }
 
 // TestNewOIDCAuthenticator_SelfSignedCert_SucceedsWithInsecureSkipVerify
-// prüft, dass InsecureSkipVerify die TLS-Prüfung tatsächlich abschaltet —
-// derselbe Server wie oben, diesmal mit gesetztem Schalter.
+// verifies that InsecureSkipVerify actually disables the TLS check — the
+// same server as above, this time with the flag set.
 func TestNewOIDCAuthenticator_SelfSignedCert_SucceedsWithInsecureSkipVerify(t *testing.T) {
 	server := newSelfSignedDiscoveryServer(t)
 
@@ -69,5 +69,5 @@ func TestNewOIDCAuthenticator_SelfSignedCert_SucceedsWithInsecureSkipVerify(t *t
 
 	require.NoError(t, err)
 	require.NotNil(t, auth)
-	require.NotNil(t, auth.httpClient, "httpClient sollte gesetzt sein, damit spaetere JWKS-/Token-Calls denselben Client verwenden")
+	require.NotNil(t, auth.httpClient, "httpClient should be set so later JWKS/token calls use the same client")
 }

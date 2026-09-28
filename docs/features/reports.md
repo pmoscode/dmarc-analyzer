@@ -1,40 +1,37 @@
-# Berichte
+# Reports
 
-## Speicherung
+## Storage
 
-Jeder importierte DMARC-Aggregate-Report wird vollständig oder gar nicht
-gespeichert (`report.Repository.Save` läuft in einer Transaktion): Metadaten (Absender-Organisation, Berichtszeitraum,
-veröffentlichte Policy) plus
-alle enthaltenen Records (Quell-IP, Nachrichtenzahl, Disposition,
-DKIM-/SPF-Ergebnisse, Reasons) sowie der komplette Rohbericht (für spätere
-Nachvollziehbarkeit). Deduplizierung über einen `UNIQUE`-Index auf (`org_name`, `report_id`, `date_begin`) — derselbe
-Report von zwei
-verschiedenen Wegen importiert (z. B. per IMAP und zusätzlich per
-Datei-Upload) wird nur einmal gespeichert.
+Every imported DMARC aggregate report is stored fully or not at all
+(`report.Repository.Save` runs in a transaction): metadata (sending
+organization, report period, published policy) plus all contained
+records (source IP, message count, disposition, DKIM/SPF results,
+reasons), as well as the complete raw report (for later traceability).
+Deduplication via a `UNIQUE` index on (`org_name`, `report_id`,
+`date_begin`) — the same report imported via two different paths (e.g.
+via IMAP and also via file upload) is stored only once.
 
-## Berichtstabelle (`/berichte`)
+## Report table (`/berichte`)
 
-Filtert, sortiert und gruppiert serverseitig in SQL (keine Offset-, sondern
-Keyset-Pagination — bleibt auch bei vielen Reports schnell):
+Filters, sorts, and groups server-side in SQL (not offset but keyset
+pagination — stays fast even with many reports):
 
-- **Filter**: Zeitraum, Domain, Absender-Organisation, Quell-IP,
-  Disposition.
-- **Sortierung**: nach Berichtsbeginn, Absender-Organisation oder Domain.
-- **Gruppierung** (wirkt als zusätzlicher, primärer Sortierschlüssel):
-  nach Domain, nach Organisation oder nach Quell-IP.
+- **Filter**: time range, domain, sending organization, source IP,
+  disposition.
+- **Sort**: by report start, sending organization, or domain.
+- **Group** (acts as an additional, primary sort key): by domain, by
+  organization, or by source IP.
 
-Filter stehen in der URL — Lesezeichen und der Zurück-Knopf des Browsers
-funktionieren.
+Filters live in the URL — bookmarks and the browser's back button work.
 
-## Berichtsdetail (`/berichte/{id}`)
+## Report detail (`/berichte/{id}`)
 
-Lädt einen einzelnen Report vollständig, inklusive aller Records — die
-Berichtstabelle selbst lädt bewusst keine Records (eine Zeile pro Report,
-nicht pro Record).
+Loads a single report fully, including all records — the report table
+itself deliberately doesn't load records (one row per report, not per
+record).
 
-## CSV-Export
+## CSV export
 
-`GET /export/berichte.csv` exportiert den **gesamten gefilterten
-Bestand** (nicht nur die aktuell angezeigte Seite) als CSV (`internal/app/exportdata`). Einzelne Dashboard-Diagramme
-lassen sich
-zusätzlich direkt als PNG oder CSV exportieren.
+`GET /export/berichte.csv` exports the **entire filtered dataset** (not
+just the currently displayed page) as CSV (`internal/app/exportdata`).
+Individual dashboard charts can also be exported directly as PNG or CSV.

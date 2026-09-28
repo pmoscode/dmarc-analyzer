@@ -1,233 +1,251 @@
-# Implementierungsplan — DMARC Analyzer
+# Implementation plan — DMARC Analyzer
 
-> Basis: `FEATURES.md`. Dieser Plan konkretisiert die Anforderungen zu einer
-> umsetzbaren Architektur und einem Phasenplan.
+> Basis: `FEATURES.md`. This plan turns the requirements into a concrete
+> architecture and phase plan.
 
 ---
 
-## 1. Ausgangslage und Interpretation der Anforderungen
+## 1. Starting point and interpretation of the requirements
 
-### 1.1 Begriffsklärung
+### 1.1 Terminology clarification
 
-In `FEATURES.md` steht durchgehend „DMerc". Das Repository heißt `dmarc-analyzer`,
-und der beschriebene Ablauf (Daten aus einem Mailkonto abholen, auswerten,
-visualisieren) entspricht exakt dem DMARC-Reporting-Workflow. **Annahme: gemeint ist
-DMARC** (Domain-based Message Authentication, Reporting and Conformance, RFC 7489).
+`FEATURES.md` consistently says "DMerc". The repository is called
+`dmarc-analyzer`, and the described flow (fetch data from a mail
+account, evaluate it, visualize it) matches the DMARC reporting workflow
+exactly. **Assumption: DMARC is meant** (Domain-based Message
+Authentication, Reporting and Conformance, RFC 7489).
 
-### 1.2 Zum Abschnitt „Non features"
+### 1.2 On the "Non features" section
 
-Der Abschnitt „## Non features" in `FEATURES.md` listet inhaltlich **technische
-Vorgaben** (Go, Fyne, sichere Credentials, Taskfile, Tests, README, CHANGELOG,
-SOLID/DDD/Clean Architecture/Clean Code). Diese werden hier als **verbindliche
-Anforderungen** behandelt, nicht als Ausschlüsse. Falls tatsächlich Ausschlüsse
-gemeint waren: bitte melden, der Plan ändert sich dann grundlegend.
+The "## Non features" section in `FEATURES.md` in substance lists
+**technical requirements** (Go, Fyne, secure credentials, Taskfile,
+tests, README, CHANGELOG, SOLID/DDD/Clean Architecture/Clean Code).
+These are treated here as **binding requirements**, not as exclusions.
+If exclusions were actually meant: please say so, the plan would then
+change fundamentally.
 
-### 1.3 Geklärte Entscheidungen
+### 1.3 Decisions clarified
 
-| Thema | Entscheidung |
+| Topic | Decision |
 | --- | --- |
-| Report-Typen v1 | Nur **DMARC Aggregate Reports (RUA)**. Schnittstellen bewusst generisch, damit RUF und TLS-RPT später ohne Umbau andocken. |
-| Storage | **SQLite über `modernc.org/sqlite`** (reines Go, kein CGO → Cross-Compile bleibt einfach). |
-| Mail-Zugriff v1 | **IMAP mit Benutzername/Passwort bzw. App-Passwort.** |
-| Sprache | **Durchgängig Deutsch**: UI, README, CHANGELOG, Code-Kommentare, Commit-Messages. |
+| Report types v1 | Only **DMARC Aggregate Reports (RUA)**. Interfaces deliberately generic, so RUF and TLS-RPT can plug in later without a rewrite. |
+| Storage | **SQLite via `modernc.org/sqlite`** (pure Go, no CGO → cross-compiling stays simple). |
+| Mail access v1 | **IMAP with username/password or app password.** |
+| Language | **Consistently German**: UI, README, CHANGELOG, code comments, commit messages. |
 
-**Ausnahme zur Sprachregel:** Go-Bezeichner (Paket-, Typ-, Funktions-, Feldnamen)
-bleiben **englisch**. Deutsche Identifier mit Umlauten brechen mit Go-Konventionen,
-verschlechtern die Lesbarkeit im Zusammenspiel mit Standardbibliothek und Fyne und
-erschweren spätere Mitarbeit. Alles, was Menschen lesen — Kommentare, Fehlertexte für
-Nutzer, Log-Meldungen, UI-Strings, Doku — ist deutsch. Falls gewünscht, kann das
-umgestellt werden; bitte kurz Bescheid geben.
+**Exception to the language rule:** Go identifiers (package, type,
+function, field names) stay **English**. German identifiers with
+umlauts break Go conventions, hurt readability alongside the standard
+library and Fyne, and make later contribution harder. Everything humans
+read — comments, user-facing error text, log messages, UI strings, docs
+— is German. This can be changed if desired; please just say so.
 
----
-
-## 2. Zielbild
-
-Ein eigenständiges Desktop-Programm (macOS, Windows, Linux) als einzelne Binärdatei:
-
-1. Verbindet sich mit einem konfigurierten IMAP-Postfach, in dem DMARC-Aggregate-
-   Reports eingehen.
-2. Holt **inkrementell** nur neue Nachrichten, entpackt die Anhänge
-   (`.gz`, `.zip`, blankes `.xml`), parst das Feedback-XML.
-3. Speichert die normalisierten Daten lokal in SQLite — idempotent, Duplikate werden
-   erkannt und verworfen.
-4. Stellt die Daten in einer Fyne-Oberfläche dar: Dashboard mit Kennzahlen und
-   Diagrammen, filter-/sortier-/gruppierbare Tabellen, Detailansichten.
-5. Speichert Zugangsdaten im Schlüsselbund des Betriebssystems, niemals im Klartext.
+> **Historical note:** this decision was later reversed — the whole
+> codebase, including comments/errors/logs/UI strings/docs, now uses
+> English throughout (see `AGENTS.md`'s language rule). This document is
+> kept unchanged as historical context and does not reflect that later
+> change.
 
 ---
 
-## 3. Technologie-Stack
+## 2. Target picture
 
-> **Nachtrag M5 (siehe `MIGRATIONSPLAN.md`, `docs/adr/0001-web-oberflaeche-statt-fyne.md`,
-> `docs/adr/0002-chartjs-statt-chartrenderer-port.md`):** Die ursprünglich
-> vorgesehenen Zeilen „UI" (Fyne), „Diagramme" (go-chart) und „UI-Tests"
-> (Fyne-Testtreiber) unten sind durch eine eingebettete Web-Oberfläche
-> ersetzt worden — Begründung und Konsequenzen in den beiden ADRs.
+A standalone desktop program (macOS, Windows, Linux) as a single binary:
 
-| Zweck | Bibliothek | Begründung |
+1. Connects to a configured IMAP mailbox that receives DMARC aggregate
+   reports.
+2. Fetches **incrementally**, only new messages, unpacks the attachments
+   (`.gz`, `.zip`, plain `.xml`), parses the feedback XML.
+3. Stores the normalized data locally in SQLite — idempotently,
+   duplicates are detected and discarded.
+4. Presents the data in a Fyne UI: dashboard with metrics and charts,
+   filterable/sortable/groupable tables, detail views.
+5. Stores credentials in the OS keychain, never in plaintext.
+
+---
+
+## 3. Technology stack
+
+> **M5 addendum (see `MIGRATIONSPLAN.md`,
+> `docs/adr/0001-web-oberflaeche-statt-fyne.md`,
+> `docs/adr/0002-chartjs-statt-chartrenderer-port.md`):** the originally
+> planned rows "UI" (Fyne), "Charts" (go-chart), and "UI tests" (Fyne
+> test driver) below have been replaced by an embedded web UI —
+> rationale and consequences in the two ADRs.
+
+| Purpose | Library | Rationale |
 | --- | --- | --- |
-| UI | `internal/web`: `net/http` + `html/template` (Standardbibliothek) + `htmx` | Eingebettete Web-Oberfläche im Standardbrowser statt Fyne — kein Bundler, kein Node-Werkzeug, `go build` bleibt der einzige Build-Schritt (ADR 0001). |
-| IMAP | `github.com/emersion/go-imap/v2` | Aktueller Stand, IMAP4rev1+rev2, sauberes API. |
-| MIME/Anhänge | `github.com/emersion/go-message` | Robustes Parsen von Multipart-Mails und Encodings. |
-| Datenbank | `modernc.org/sqlite` (via `database/sql`) | CGO-frei, Cross-Compile ohne C-Toolchain. |
+| UI | `internal/web`: `net/http` + `html/template` (standard library) + `htmx` | Embedded web UI in the default browser instead of Fyne — no bundler, no Node tooling, `go build` stays the only build step (ADR 0001). |
+| IMAP | `github.com/emersion/go-imap/v2` | Current, IMAP4rev1+rev2, clean API. |
+| MIME/attachments | `github.com/emersion/go-message` | Robust parsing of multipart mail and encodings. |
+| Database | `modernc.org/sqlite` (via `database/sql`) | CGO-free, cross-compiles without a C toolchain. |
 | Credentials | `github.com/zalando/go-keyring` | macOS Keychain, Windows Credential Manager, Linux Secret Service. |
-| Diagramme | Chart.js + `chartjs-chart-matrix` + `chartjs-plugin-zoom` (`internal/web/static/vendor/`, minifizierte UMD-Dateien im Repository statt CDN) | Im Browser gerendert, interaktiv (Tooltip, umschaltbare Legende, Zoom, Klick-Drilldown); der Server liefert nur JSON über `/api/diagramme/*`. Ersetzt den ursprünglich vorgesehenen `ChartRenderer`-Port (siehe 8.2, ADR 0002). |
-| Logging | `log/slog` (Standardbibliothek) | Kein zusätzliches Dependency, strukturierte Logs. |
-| XML/Archive | `encoding/xml`, `compress/gzip`, `archive/zip` | Standardbibliothek reicht vollständig aus. |
-| Tests | `testing` + `github.com/stretchr/testify/require` | Table-driven Tests, knappe Assertions. |
-| Web-Tests | `net/http/httptest` (Standardbibliothek) | Handler- und Template-Tests ohne echten Server/Browser — jede Seite wird gerendert und als HTML geparst (siehe 12.2). |
-| Task-Runner | `Taskfile.yml` (go-task) | Vorgabe; `task` ist lokal bereits installiert. |
-| Linting | `golangci-lint` | Sammelt vet, staticcheck, errcheck, revive u. a. |
+| Charts | Chart.js + `chartjs-chart-matrix` + `chartjs-plugin-zoom` (`internal/web/static/vendor/`, minified UMD files checked into the repository instead of a CDN) | Rendered in the browser, interactive (tooltip, toggleable legend, zoom, click drill-down); the server delivers only JSON via `/api/diagramme/*`. Replaces the originally planned `ChartRenderer` port (see 8.2, ADR 0002). |
+| Logging | `log/slog` (standard library) | No extra dependency, structured logs. |
+| XML/archives | `encoding/xml`, `compress/gzip`, `archive/zip` | The standard library is entirely sufficient. |
+| Tests | `testing` + `github.com/stretchr/testify/require` | Table-driven tests, terse assertions. |
+| Web tests | `net/http/httptest` (standard library) | Handler and template tests without a real server/browser — every page is rendered and parsed as HTML (see 12.2). |
+| Task runner | `Taskfile.yml` (go-task) | Requirement; `task` is already installed locally. |
+| Linting | `golangci-lint` | Bundles vet, staticcheck, errcheck, revive, etc. |
 
-**Go-Version:** 1.27 (lokal 1.27.1 vorhanden).
-**Modulpfad:** `github.com/pmoscode/dmarc-analyzer`.
+**Go version:** 1.27 (1.27.1 available locally).
+**Module path:** `github.com/pmoscode/dmarc-analyzer`.
 
-Abhängigkeiten werden bewusst knapp gehalten: alles, was die Standardbibliothek
-sauber erledigt, wird nicht durch ein Dependency ersetzt. Konkrete gepinnte
-Versionen (inkl. der Frontend-Dateien unter `internal/web/static/vendor/`)
-stehen in `docs/DEPENDENCIES.md`.
+Dependencies are kept deliberately lean: anything the standard library
+handles cleanly isn't replaced by a dependency. Concrete pinned versions
+(including the frontend files under `internal/web/static/vendor/`) live
+in `docs/DEPENDENCIES.md`.
 
-Zurückgestellt: ein `chromedp`-Browser-Rauchtest für die vier Chart.js-
-Diagramme (MIGRATIONSPLAN.md Entscheidung E-8) — bislang ungeschrieben, da
-in den bisherigen Entwicklungsumgebungen kein Chrome/Chromium verfügbar
-war; siehe `MIGRATIONSPLAN.md` Abschnitt 11.
+Deferred: a `chromedp` browser smoke test for the four Chart.js charts
+(MIGRATIONSPLAN.md decision E-8) — unwritten so far, because no
+Chrome/Chromium was available in the development environments used so
+far; see `MIGRATIONSPLAN.md` section 11.
 
 ---
 
-## 4. Architektur
+## 4. Architecture
 
-### 4.1 Schichtenmodell (Clean Architecture)
+### 4.1 Layer model (Clean Architecture)
 
-Abhängigkeiten zeigen ausschließlich **nach innen**. Die Domänenschicht kennt weder
-SQL noch IMAP noch die Web-Oberfläche.
+Dependencies point exclusively **inward**. The domain layer knows
+neither SQL, nor IMAP, nor the web UI.
 
 ```
 ┌───────────────────────────────────────────────────────────┐
-│  cmd/dmarc-analyzer  — Composition Root, Wiring, Start     │
+│  cmd/dmarc-analyzer  — composition root, wiring, startup   │
 ├───────────────────────────────────────────────────────────┤
-│  internal/web        — html/template + Chart.js (Browser) │
-│  internal/infra      — IMAP, SQLite, Keyring, XML         │
+│  internal/web        — html/template + Chart.js (browser) │
+│  internal/infra      — IMAP, SQLite, keyring, XML          │
 ├───────────────────────────────────────────────────────────┤
-│  internal/app        — Use Cases (Anwendungsfälle)         │
+│  internal/app        — use cases                           │
 ├───────────────────────────────────────────────────────────┤
-│  internal/domain     — Entities, Value Objects, Ports      │
+│  internal/domain     — entities, value objects, ports       │
 └───────────────────────────────────────────────────────────┘
 ```
 
-* **domain** — reine Fachlogik. Keine Imports außerhalb der Standardbibliothek.
-  Definiert die *Ports* (Interfaces), die außen implementiert werden.
-* **app** — orchestriert Use Cases, kennt nur Domänen-Ports.
-* **infra** — *Adapter*: implementiert die Ports gegen konkrete Technik.
-* **web** — Web-Oberfläche (`html/template` + Chart.js), ruft ausschließlich
-  Use Cases auf (ursprünglich als Fyne-Desktop-UI geplant, siehe
-  `MIGRATIONSPLAN.md`/ADR 0001 zur Migration).
-* **cmd** — einziger Ort, an dem konkrete Implementierungen verdrahtet werden.
+* **domain** — pure business logic. No imports outside the standard
+  library. Defines the *ports* (interfaces) implemented on the outside.
+* **app** — orchestrates use cases, knows only domain ports.
+* **infra** — *adapters*: implement the ports against concrete
+  technology.
+* **web** — web UI (`html/template` + Chart.js), calls exclusively into
+  use cases (originally planned as a Fyne desktop UI, see
+  `MIGRATIONSPLAN.md`/ADR 0001 on the migration).
+* **cmd** — the only place where concrete implementations are wired up.
 
-### 4.2 Bezug zu den geforderten Prinzipien
+### 4.2 Relation to the required principles
 
 **SOLID**
-* *SRP* — je Paket eine Verantwortung; Parser parst, Repository persistiert, Fetcher holt ab.
-* *OCP* — neue Report-Typen (RUF, TLS-RPT) kommen als zusätzliche `ReportParser`-
-  Implementierung dazu, ohne bestehenden Code zu ändern.
-* *LSP* — Ports sind verhaltensdefiniert; Fakes in Tests verhalten sich wie die echten Adapter.
-* *ISP* — schmale Interfaces (`ReportReader`, `ReportWriter` statt eines fetten `ReportStore`).
-* *DIP* — `app` hängt an Interfaces aus `domain`, nie an `infra`.
+* *SRP* — one responsibility per package; the parser parses, the
+  repository persists, the fetcher fetches.
+* *OCP* — new report types (RUF, TLS-RPT) are added as an additional
+  `ReportParser` implementation, without changing existing code.
+* *LSP* — ports are behaviorally defined; fakes in tests behave like the
+  real adapters.
+* *ISP* — narrow interfaces (`ReportReader`, `ReportWriter` instead of
+  one fat `ReportStore`).
+* *DIP* — `app` depends on interfaces from `domain`, never on `infra`.
 
 **DDD**
-* *Aggregate Root*: `AggregateReport` — Records existieren nur innerhalb eines Reports
-  und werden ausschließlich über ihn geladen und gespeichert.
-* *Value Objects* (unveränderlich, ohne Identität): `SourceIP`, `DomainName`,
-  `DateRange`, `Disposition`, `AlignmentMode`, `PolicyEvaluation`, `AuthResults`.
-* *Domain Services*: `AlignmentEvaluator` (bewertet Ausrichtung), `ReportDeduplicator`.
-* *Repositories*: eines pro Aggregate, mit fachlicher Sprache
-  (`FindByDomainAndPeriod`, nicht `SelectWhere`).
-* *Ubiquitous Language*: Begriffe aus RFC 7489 werden 1:1 übernommen
-  (Disposition, Alignment, Policy Published, Header From …) — keine Eigenerfindungen.
+* *Aggregate root*: `AggregateReport` — records exist only within a
+  report and are loaded and saved exclusively through it.
+* *Value objects* (immutable, no identity): `SourceIP`, `DomainName`,
+  `DateRange`, `Disposition`, `AlignmentMode`, `PolicyEvaluation`,
+  `AuthResults`.
+* *Domain services*: `AlignmentEvaluator` (evaluates alignment),
+  `ReportDeduplicator`.
+* *Repositories*: one per aggregate, with business language
+  (`FindByDomainAndPeriod`, not `SelectWhere`).
+* *Ubiquitous language*: terms from RFC 7489 are adopted 1:1
+  (disposition, alignment, policy published, header from, …) — no
+  invented terminology.
 
 **Clean Code**
-* Funktionen kurz und auf einer Abstraktionsebene, sprechende Namen, keine Flag-Parameter.
-* Fehler werden mit `fmt.Errorf("...: %w", err)` kontextualisiert und nie verschluckt.
-* Kommentare erklären das *Warum*, nicht das *Was*.
-* Keine globalen Zustände außerhalb der Composition Root.
+* Functions short and at one level of abstraction, meaningful names, no
+  flag parameters.
+* Errors are contextualized with `fmt.Errorf("...: %w", err)` and never
+  swallowed.
+* Comments explain the *why*, not the *what*.
+* No global state outside the composition root.
 
 ---
 
-## 5. Projektstruktur
+## 5. Project structure
 
-> **Nachtrag M5:** `internal/ui` (Fyne) ist vollständig entfernt,
-> `internal/infra/charts` (go-chart) ebenso — ersetzt durch `internal/web`
-> (siehe `MIGRATIONSPLAN.md`, ADR 0001/0002). Baum unten spiegelt den
-> aktuellen Stand.
+> **M5 addendum:** `internal/ui` (Fyne) has been fully removed,
+> `internal/infra/charts` (go-chart) as well — replaced by `internal/web`
+> (see `MIGRATIONSPLAN.md`, ADR 0001/0002). The tree below reflects the
+> current state.
 
 ```
 dmarc-analyzer/
 ├── cmd/
 │   └── dmarc-analyzer/
-│       ├── main.go                  # Einstiegspunkt
-│       └── wire.go                  # Composition Root: Adapter verdrahten
+│       ├── main.go                  # entry point
+│       └── wire.go                  # composition root: wires up adapters
 ├── internal/
 │   ├── domain/
-│   │   ├── report/                  # Aggregate: AggregateReport
+│   │   ├── report/                  # aggregate: AggregateReport
 │   │   │   ├── report.go
 │   │   │   ├── record.go
 │   │   │   ├── policy.go
 │   │   │   ├── valueobjects.go
-│   │   │   └── repository.go        # Port: ReportRepository
-│   │   ├── account/                 # Aggregat: MailAccount
+│   │   │   └── repository.go        # port: ReportRepository
+│   │   ├── account/                 # aggregate: MailAccount
 │   │   │   ├── account.go
 │   │   │   ├── credentials.go
-│   │   │   └── repository.go        # Ports: AccountRepository, CredentialStore
+│   │   │   └── repository.go        # ports: AccountRepository, CredentialStore
 │   │   ├── sync/
-│   │   │   ├── state.go             # SyncState je Konto/Postfach
-│   │   │   ├── failedimport.go      # Fehlgeschlagene Importe (Protokoll, Wiederholen)
-│   │   │   └── ports.go             # Ports: MessageSource, ReportParser, MultiReportParser
-│   │   ├── sources/                 # Sendequellen-Anreicherung (Dienst-Erkennung, PTR)
+│   │   │   ├── state.go             # SyncState per account/mailbox
+│   │   │   ├── failedimport.go      # failed imports (log, retry)
+│   │   │   └── ports.go             # ports: MessageSource, ReportParser, MultiReportParser
+│   │   ├── sources/                 # sending-source enrichment (service detection, PTR)
 │   │   └── analysis/
-│   │       ├── statistics.go        # Kennzahlen, Aggregationen fürs Dashboard
-│   │       └── charts.go            # Diagramm-Datentypen (DailyVolume, Heatmap, …) für /api/diagramme/*
+│   │       ├── statistics.go        # metrics, aggregations for the dashboard
+│   │       └── charts.go            # chart data types (DailyVolume, Heatmap, …) for /api/diagramme/*
 │   ├── app/
-│   │   ├── syncreports/             # Use Case: Reports abholen + importieren
-│   │   ├── syncjob/                 # Use Case: Sync als serverseitiger Auftrag (höchstens ein Lauf gleichzeitig)
-│   │   ├── queryreports/            # Use Case: Filtern, Sortieren, Gruppieren
-│   │   ├── statistics/              # Use Case: Dashboard-Kennzahlen
-│   │   ├── sourcestats/             # Use Case: Sendequellen-Statistik
-│   │   ├── manageaccount/           # Use Case: Konto anlegen/testen/löschen
-│   │   ├── importfiles/             # Use Case: Import aus Datei/Bytes (.eml/.xml/.zip)
-│   │   └── exportdata/              # Use Case: CSV-Export (gestreamt)
+│   │   ├── syncreports/             # use case: fetch + import reports
+│   │   ├── syncjob/                 # use case: sync as a server-side job (at most one run at a time)
+│   │   ├── queryreports/            # use case: filter, sort, group
+│   │   ├── statistics/              # use case: dashboard metrics
+│   │   ├── sourcestats/             # use case: sending-source statistics
+│   │   ├── manageaccount/           # use case: create/test/delete account
+│   │   ├── importfiles/             # use case: import from file/bytes (.eml/.xml/.zip)
+│   │   └── exportdata/              # use case: CSV export (streamed)
 │   ├── infra/
-│   │   ├── imap/                    # MessageSource-Adapter
-│   │   ├── dmarcxml/                # ReportParser-Adapter (XML + gz/zip)
-│   │   ├── mailmime/                # MIME-Zerlegung von Postfach-Nachrichten
-│   │   ├── sourceinfo/              # PTR/Dienst-Erkennung für Sendequellen
+│   │   ├── imap/                    # MessageSource adapter
+│   │   ├── dmarcxml/                # ReportParser adapter (XML + gz/zip)
+│   │   ├── mailmime/                # MIME splitting of mailbox messages
+│   │   ├── sourceinfo/              # PTR/service detection for sending sources
 │   │   ├── sqlite/
-│   │   │   ├── migrations/          # *.sql, per go:embed eingebettet
+│   │   │   ├── migrations/          # *.sql, embedded via go:embed
 │   │   │   ├── db.go
 │   │   │   ├── migrate.go
 │   │   │   ├── reportrepo.go
 │   │   │   ├── accountrepo.go
 │   │   │   └── syncstaterepo.go
-│   │   ├── keyring/                 # CredentialStore-Adapter (OS-Schlüsselbund + Datei-Fallback)
-│   │   └── config/                  # Einstellungen (nicht-geheim)
+│   │   ├── keyring/                 # CredentialStore adapter (OS keychain + file fallback)
+│   │   └── config/                  # settings (non-secret)
 │   ├── web/
-│   │   ├── server.go, routes.go     # http.Server, Handler-Baum, Middleware-Verdrahtung
-│   │   ├── middleware.go            # CSP/Sicherheits-Header, Host-Prüfung, CSRF, Sitzung
-│   │   ├── auth.go, instance.go     # Einmal-Anmeldelink, Sitzungs-Cookie, instance.json
-│   │   ├── handlers_*.go            # je Seite/Aktion ein Handler (Dashboard, Berichte, Quellen, Import, Export, Konten, Sync, …)
-│   │   ├── api_charts.go            # JSON-Endpunkte für die vier Chart.js-Diagramme
+│   │   ├── server.go, routes.go     # http.Server, handler tree, middleware wiring
+│   │   ├── middleware.go            # CSP/security headers, host check, CSRF, session
+│   │   ├── auth.go, instance.go     # one-time login link, session cookie, instance.json
+│   │   ├── handlers_*.go            # one handler per page/action (dashboard, reports, sources, import, export, accounts, sync, …)
+│   │   ├── api_charts.go            # JSON endpoints for the four Chart.js charts
 │   │   ├── templates/               # html/template (layout.html + pages/*.html)
-│   │   ├── static/                  # app.css, app.js, charts.js, vendor/ (htmx, Chart.js, Plugins)
-│   │   └── glossary/                # Zentrale Begriffs-Erklärungen (deutsch)
+│   │   ├── static/                  # app.css, app.js, charts.js, vendor/ (htmx, Chart.js, plugins)
+│   │   └── glossary/                # central term explanations (German)
 │   └── platform/
 │       ├── logging/
-│       └── paths/                   # Pfade für DB, Logs, Config
+│       └── paths/                   # paths for DB, logs, config
 ├── testdata/
-│   └── reports/                     # Echte Beispiel-Reports (anonymisiert)
+│   └── reports/                     # real example reports (anonymized)
 ├── docs/
 │   ├── adr/                         # Architecture Decision Records
 │   └── DEPENDENCIES.md
 ├── packaging/
-│   └── darwin/Info.plist.tmpl       # Minimales .app-Bundle-Manifest für "task release:darwin"
-├── .github/workflows/                # CI: fmt+lint+test, Cross-Compile-Release bei Tags
+│   └── darwin/Info.plist.tmpl       # minimal .app bundle manifest for "task release:darwin"
+├── .github/workflows/                # CI: fmt+lint+test, cross-compiled release on tags
 ├── Taskfile.yml
 ├── README.md
 ├── CHANGELOG.md
@@ -237,26 +255,26 @@ dmarc-analyzer/
 └── .golangci.yml
 ```
 
-`internal/` verhindert, dass Interna versehentlich zur öffentlichen API werden.
+`internal/` prevents internals from accidentally becoming a public API.
 
 ---
 
-## 6. Domänenmodell
+## 6. Domain model
 
 ### 6.1 Aggregate `AggregateReport`
 
-Abgeleitet aus dem Schema in RFC 7489, Anhang C.
+Derived from the schema in RFC 7489, Appendix C.
 
 ```go
-// AggregateReport ist das Aggregate Root eines DMARC-Berichts.
-// Records existieren nur im Kontext ihres Reports.
+// AggregateReport is the aggregate root of a DMARC report.
+// Records exist only within the context of their report.
 type AggregateReport struct {
     ID          ReportID
-    Metadata    Metadata        // Absender-Org, Report-ID, Zeitraum
-    Policy      PublishedPolicy // veröffentlichte DMARC-Policy
-    Records     []Record        // ausgewertete Sendequellen
+    Metadata    Metadata        // sending org, report ID, period
+    Policy      PublishedPolicy // published DMARC policy
+    Records     []Record        // evaluated sending sources
     ImportedAt  time.Time
-    SourceRef   SourceReference // Herkunft: Konto, Postfach, UID, Dateiname
+    SourceRef   SourceReference // origin: account, mailbox, UID, filename
 }
 
 type Metadata struct {
@@ -281,43 +299,43 @@ type PublishedPolicy struct {
 type Record struct {
     SourceIP    SourceIP
     Count       int
-    Evaluated   PolicyEvaluation // disposition + dkim/spf-Ergebnis + Gründe
+    Evaluated   PolicyEvaluation // disposition + dkim/spf result + reasons
     Identifiers Identifiers      // header_from, envelope_from, envelope_to
-    Auth        AuthResults      // DKIM- und SPF-Einzelergebnisse
+    Auth        AuthResults      // individual DKIM and SPF results
 }
 ```
 
-### 6.2 Fachliche Invarianten (in Konstruktoren erzwungen)
+### 6.2 Business invariants (enforced in constructors)
 
-* Ein Report ohne `ReportID` oder ohne gültigen Zeitraum ist ungültig.
-* `DateRange.Begin` liegt vor `DateRange.End`.
-* `Count` je Record ist `> 0`.
-* `Percentage` liegt in `[0, 100]`.
-* Unbekannte Enum-Werte aus dem XML werden auf `Unknown` abgebildet, nicht verworfen —
-  Provider halten sich nicht immer an den RFC.
+* A report without a `ReportID` or without a valid period is invalid.
+* `DateRange.Begin` is before `DateRange.End`.
+* `Count` per record is `> 0`.
+* `Percentage` is in `[0, 100]`.
+* Unknown enum values from the XML are mapped to `Unknown`, not
+  discarded — providers don't always follow the RFC.
 
-### 6.3 Fachliche Identität und Deduplizierung
+### 6.3 Business identity and deduplication
 
-Die fachliche Identität eines Reports ist das Tripel
-`(OrgName, ReportID, DateRange.Begin)`. Darauf liegt ein UNIQUE-Index. Dadurch ist der
-Import auch dann idempotent, wenn dieselbe Mail doppelt abgeholt wird — etwa nach einem
-`UIDVALIDITY`-Wechsel auf dem Server oder einem Wiederherstellen des Postfachs.
+The business identity of a report is the triple
+`(OrgName, ReportID, DateRange.Begin)`. A UNIQUE index sits on it. This
+makes the import idempotent even if the same mail is fetched twice —
+e.g. after a `UIDVALIDITY` change on the server or a mailbox restore.
 
-### 6.4 Ports (in `domain` definiert, in `infra` implementiert)
+### 6.4 Ports (defined in `domain`, implemented in `infra`)
 
 ```go
-// MessageSource liefert Rohnachrichten aus einer Quelle (v1: IMAP).
-// Bewusst technikneutral, damit später Dateiimport oder andere Protokolle
-// ohne Änderung der Use Cases andocken können.
+// MessageSource delivers raw messages from a source (v1: IMAP).
+// Deliberately technology-neutral, so file import or other protocols
+// can plug in later without changing the use cases.
 type MessageSource interface {
     Connect(ctx context.Context, acc account.MailAccount) error
     FetchNew(ctx context.Context, state SyncState) (iter.Seq2[RawMessage, error], SyncState, error)
     Close() error
 }
 
-// ReportParser wandelt einen Rohanhang in Domänenobjekte.
-// Über Supports() wird die passende Implementierung gewählt — so kommen
-// RUF und TLS-RPT später additiv hinzu (Open/Closed).
+// ReportParser turns a raw attachment into domain objects.
+// Supports() selects the matching implementation — this is how RUF and
+// TLS-RPT get added additively later (Open/Closed).
 type ReportParser interface {
     Supports(attachment RawAttachment) bool
     Parse(ctx context.Context, attachment RawAttachment) (*AggregateReport, error)
@@ -337,66 +355,69 @@ type CredentialStore interface {
 }
 ```
 
-`FetchNew` liefert einen Iterator statt eines Slices: große Postfächer werden so
-streamend verarbeitet, ohne alle Nachrichten im Speicher zu halten.
+`FetchNew` returns an iterator instead of a slice: large mailboxes are
+thus processed in a streaming fashion, without holding all messages in
+memory.
 
 ---
 
-## 7. Kernablauf: Inkrementeller Sync
+## 7. Core flow: incremental sync
 
-> Anforderung: „It is smart to discover new data only in the mail account."
+> Requirement: "It is smart to discover new data only in the mail account."
 
-### 7.1 Ablauf
+### 7.1 Flow
 
 ```
-Use Case SyncReports
+Use case SyncReports
   │
-  ├─ 1. Konto laden, Passwort aus dem Schlüsselbund holen
-  ├─ 2. IMAP-Verbindung aufbauen (TLS erzwungen)
-  ├─ 3. Postfach auswählen, SyncState laden
-  │      ├─ UIDVALIDITY stimmt überein?  → UID-basiert weiter ab LastUID+1
-  │      └─ UIDVALIDITY hat gewechselt?  → vollständiger Rescan,
-  │                                         Duplikate fängt der UNIQUE-Index ab
-  ├─ 4. UID FETCH (BODY.PEEK[]) der neuen Nachrichten, gestreamt
-  │      └─ PEEK: das \Seen-Flag bleibt unberührt, das Postfach
-  │               wird nicht für andere Clients „verbraucht"
-  ├─ 5. Je Nachricht:
-  │      ├─ MIME zerlegen, Anhänge extrahieren
-  │      ├─ Dekomprimieren (.gz / .zip / blankes .xml)
-  │      ├─ Passenden ReportParser wählen und parsen
-  │      ├─ Deduplizierungsschlüssel prüfen → ggf. überspringen
-  │      └─ In einer Transaktion speichern (Report + alle Records)
-  ├─ 6. Nach jeder erfolgreichen Nachricht SyncState fortschreiben
-  │      └─ Abbruch/Absturz kostet höchstens eine Nachricht erneut
-  └─ 7. Ergebnis melden: neu / übersprungen / fehlerhaft
+  ├─ 1. Load account, fetch password from the keychain
+  ├─ 2. Establish the IMAP connection (TLS enforced)
+  ├─ 3. Select mailbox, load SyncState
+  │      ├─ UIDVALIDITY matches?  → continue UID-based from LastUID+1
+  │      └─ UIDVALIDITY changed?  → full rescan,
+  │                                  the UNIQUE index catches duplicates
+  ├─ 4. UID FETCH (BODY.PEEK[]) the new messages, streamed
+  │      └─ PEEK: the \Seen flag stays untouched, the mailbox
+  │               isn't "consumed" for other clients
+  ├─ 5. Per message:
+  │      ├─ Split MIME, extract attachments
+  │      ├─ Decompress (.gz / .zip / plain .xml)
+  │      ├─ Pick the matching ReportParser and parse
+  │      ├─ Check the deduplication key → skip if needed
+  │      └─ Save in one transaction (report + all records)
+  ├─ 6. Persist SyncState after every successful message
+  │      └─ A cancellation/crash costs at most one message reprocessed
+  └─ 7. Report the result: new / skipped / failed
 ```
 
-### 7.2 Robustheit
+### 7.2 Robustness
 
-* **Fehlerquarantäne** — nicht parsebare Anhänge landen mit Fehlertext in
-  `failed_imports`, statt den gesamten Lauf abzubrechen. In der UI einsehbar und
-  gezielt wiederholbar.
-* **Rohdaten-Archiv** — das Original-XML wird optional gzip-komprimiert in
-  `raw_reports` abgelegt. So kann nach einer Parser-Korrektur neu eingelesen werden,
-  ohne das Postfach erneut zu befragen. Abschaltbar (Speicherplatz).
-* **Kontext-Abbruch** — jeder Schritt respektiert `context.Context`; der Sync-Knopf
-  in der UI kann jederzeit abgebrochen werden.
-* **Backoff** — bei temporären IMAP-Fehlern exponentiell gestaffelte Wiederholung
-  (3 Versuche), danach sauberer Abbruch mit verständlicher Meldung.
-* **Transaktionen** — ein Report wird vollständig oder gar nicht gespeichert.
+* **Error quarantine** — unparseable attachments land with an error
+  message in `failed_imports`, instead of aborting the whole run.
+  Visible in the UI and retryable individually.
+* **Raw-data archive** — the original XML is optionally stored
+  gzip-compressed in `raw_reports`. This lets it be re-read after a
+  parser fix, without querying the mailbox again. Can be disabled
+  (storage).
+* **Context cancellation** — every step respects `context.Context`; the
+  sync button in the UI can be cancelled at any time.
+* **Backoff** — exponentially staggered retry (3 attempts) on transient
+  IMAP errors, then a clean abort with a comprehensible message.
+* **Transactions** — a report is saved fully or not at all.
 
-### 7.3 Nebenläufigkeit
+### 7.3 Concurrency
 
-Das Abholen (I/O-gebunden) und das Parsen (CPU-gebunden) laufen als Pipeline über
-Channels mit begrenzter Worker-Anzahl (`GOMAXPROCS`, gedeckelt). Die Schreiboperationen
-laufen **seriell** in einer einzigen Goroutine — SQLite mag keine konkurrierenden
-Schreiber. Zusätzlich: `journal_mode=WAL`, `busy_timeout=5000`.
+Fetching (I/O-bound) and parsing (CPU-bound) run as a pipeline over
+channels with a bounded number of workers (`GOMAXPROCS`, capped). The
+write operations run **serially** in a single goroutine — SQLite doesn't
+like concurrent writers. In addition: `journal_mode=WAL`,
+`busy_timeout=5000`.
 
 ---
 
-## 8. Persistenz
+## 8. Persistence
 
-### 8.1 Schema (Auszug)
+### 8.1 Schema (excerpt)
 
 ```sql
 CREATE TABLE accounts (
@@ -408,7 +429,7 @@ CREATE TABLE accounts (
     mailbox       TEXT NOT NULL DEFAULT 'INBOX',
     use_tls       INTEGER NOT NULL DEFAULT 1,
     created_at    TEXT NOT NULL
-    -- Passwort bewusst NICHT hier, sondern im Schlüsselbund
+    -- password deliberately NOT here, but in the keychain
 );
 
 CREATE TABLE sync_state (
@@ -425,7 +446,7 @@ CREATE TABLE reports (
     org_name      TEXT NOT NULL,
     org_email     TEXT,
     report_id     TEXT NOT NULL,
-    date_begin    INTEGER NOT NULL,   -- Unix-Zeit, UTC
+    date_begin    INTEGER NOT NULL,   -- Unix time, UTC
     date_end      INTEGER NOT NULL,
     policy_domain TEXT NOT NULL,
     policy_p      TEXT, policy_sp TEXT,
@@ -443,7 +464,7 @@ CREATE TABLE records (
     source_ip     TEXT NOT NULL,
     message_count INTEGER NOT NULL,
     disposition   TEXT NOT NULL,
-    dkim_result   TEXT NOT NULL,      -- ausgewertet (aligned)
+    dkim_result   TEXT NOT NULL,      -- evaluated (aligned)
     spf_result    TEXT NOT NULL,
     header_from   TEXT NOT NULL,
     envelope_from TEXT,
@@ -468,323 +489,335 @@ CREATE INDEX idx_records_ip       ON records(source_ip);
 CREATE INDEX idx_records_from     ON records(header_from);
 ```
 
-Zeitstempel für Report-Zeiträume werden als **Unix-Sekunden in UTC** gespeichert —
-Zeitzonenlogik gehört in die Darstellungsschicht, nicht in die Daten.
+Timestamps for report periods are stored as **Unix seconds in UTC** —
+timezone logic belongs in the presentation layer, not in the data.
 
-### 8.2 Weitere Persistenz-Entscheidungen
+### 8.2 Further persistence decisions
 
-* **Migrationen** — nummerierte `.sql`-Dateien in `internal/infra/sqlite/migrations/`,
-  per `go:embed` in die Binärdatei eingebettet, angewendet durch einen kleinen eigenen
-  Migrator (~60 Zeilen) mit Tabelle `schema_migrations`. Kein zusätzliches Dependency.
-* **PRAGMAs beim Öffnen** — `journal_mode=WAL`, `foreign_keys=ON`,
+* **Migrations** — numbered `.sql` files in
+  `internal/infra/sqlite/migrations/`, embedded into the binary via
+  `go:embed`, applied by a small custom migrator (~60 lines) with a
+  `schema_migrations` table. No extra dependency.
+* **PRAGMAs on open** — `journal_mode=WAL`, `foreign_keys=ON`,
   `busy_timeout=5000`, `synchronous=NORMAL`.
-* **Performance** — Batch-Inserts von Records über Prepared Statements innerhalb
-  einer Transaktion. `modernc.org/sqlite` ist langsamer als die CGO-Variante; bei
-  typischen Report-Größen (einige hundert Records) ist das irrelevant, beim Erstimport
-  großer Archive macht Batching den Unterschied.
-* **Speicherort** — `os.UserConfigDir()/dmarc-analyzer/dmarc.db`, plattformkonform.
-* **~~ChartRenderer als Port~~ (M5: entfernt)** — ursprünglich sollte
-  `analysis.ChartRenderer` `image.Image` liefern (v1 mit `go-chart`
-  implementiert), gedacht als austauschbarer Adapter für später native,
-  interaktive Fyne-Widgets. Mit dem Umstieg auf die Web-Oberfläche
-  entfällt die Motivation dafür vollständig: Diagramme sind im Browser
-  ohnehin clientseitig (Chart.js), ein serverseitiger Bild-Renderer-Port
-  wird nicht mehr gebraucht. Die reinen Datentypen
-  (`analysis.DailyVolume`/`SourceVolume`/`Heatmap`/`HeatmapCell`) bleiben
-  bestehen und werden jetzt direkt als JSON an `/api/diagramme/*`
-  ausgeliefert. Begründung und Alternativenabwägung:
-  `docs/adr/0002-chartjs-statt-chartrenderer-port.md`.
+* **Performance** — batch inserts of records via prepared statements
+  inside one transaction. `modernc.org/sqlite` is slower than the CGO
+  variant; at typical report sizes (a few hundred records) that's
+  irrelevant, but batching makes a difference on the initial import of
+  large archives.
+* **Storage location** — `os.UserConfigDir()/dmarc-analyzer/dmarc.db`,
+  platform-appropriate.
+* **~~ChartRenderer as a port~~ (removed in M5)** — originally,
+  `analysis.ChartRenderer` was meant to return `image.Image` (v1
+  implemented with `go-chart`), intended as a swappable adapter for
+  later native, interactive Fyne widgets. With the move to the web UI,
+  the motivation for that disappears entirely: charts are client-side in
+  the browser anyway (Chart.js), a server-side image-renderer port is no
+  longer needed. The plain data types
+  (`analysis.DailyVolume`/`SourceVolume`/`Heatmap`/`HeatmapCell`) remain
+  and are now delivered directly as JSON to `/api/diagramme/*`. Rationale
+  and alternatives weighed: `docs/adr/0002-chartjs-statt-chartrenderer-port.md`.
 
 ---
 
-## 9. Sicherer Umgang mit Zugangsdaten
+## 9. Secure handling of credentials
 
-> Anforderung: „The credentials are securely stored."
+> Requirement: "The credentials are securely stored."
 
-| Regel | Umsetzung |
+| Rule | Implementation |
 | --- | --- |
-| Passwort nie in der DB | Nur `accounts`-Metadaten in SQLite; Secret im OS-Schlüsselbund unter Service `de.freie-schule.dmarc-analyzer`, Key = Account-ID. |
-| Passwort nie im Log | Eigener Typ `Secret` mit `String()`/`MarshalJSON()`, die `"***"` zurückgeben — Leaks über `%v` oder JSON-Dumps sind damit strukturell ausgeschlossen. |
-| Transport verschlüsselt | IMAPS (Port 993) als Standard; STARTTLS als Alternative. Klartext-IMAP ist nur mit expliziter Bestätigung möglich und wird in der UI gewarnt. |
-| Zertifikate | Reguläre Prüfung gegen den System-Trust-Store. `InsecureSkipVerify` existiert nicht als Option. |
-| Kurze Lebensdauer im Speicher | Secret wird erst unmittelbar vor dem Login gelesen und danach mit `Zero()` überschrieben. |
-| Linux-Fallback | Ohne Secret Service (D-Bus) greift ein verschlüsselter Dateispeicher: AES-256-GCM, Schlüssel aus einer Master-Passphrase via `scrypt`. Abfrage beim Programmstart. |
-| Löschen heißt löschen | Kontolöschung entfernt Metadaten **und** Schlüsselbundeintrag. |
+| Password never in the DB | Only `accounts` metadata in SQLite; the secret lives in the OS keychain under service `de.freie-schule.dmarc-analyzer`, key = account ID. |
+| Password never in the log | A dedicated `Secret` type with `String()`/`MarshalJSON()` that return `"***"` — leaks via `%v` or JSON dumps are thus structurally excluded. |
+| Transport encrypted | IMAPS (port 993) as the default; STARTTLS as an alternative. Plaintext IMAP is only possible with explicit confirmation and is warned about in the UI. |
+| Certificates | Regular verification against the system trust store. `InsecureSkipVerify` doesn't exist as an option. |
+| Short lifetime in memory | The secret is only read right before login and overwritten with `Zero()` afterward. |
+| Linux fallback | Without a secret service (D-Bus), an encrypted file store kicks in: AES-256-GCM, key derived from a master passphrase via `scrypt`. Prompted for at program startup. |
+| Deleting means deleting | Deleting an account removes the metadata **and** the keychain entry. |
 
 ---
 
-## 10. UI-Konzept (Web-Oberfläche)
+## 10. UI concept (web UI)
 
-> **Nachtrag M5:** Ursprünglich als Fyne-Desktop-Oberfläche geplant
-> (Hauptfenster mit seitlicher Navigation, `widget.Table` usw.) — durch die
-> Migration auf eine im Browser laufende Web-Oberfläche ersetzt
-> (`internal/web`, siehe `MIGRATIONSPLAN.md`, ADR 0001). Die fachlichen
-> Ansichten und Kennzahlen (10.1–10.3) blieben inhaltlich gleich, nur die
-> Umsetzung (10.4) ist komplett anders.
+> **M5 addendum:** originally planned as a Fyne desktop UI (main window
+> with side navigation, `widget.Table`, etc.) — replaced by the migration
+> to a web UI running in the browser (`internal/web`, see
+> `MIGRATIONSPLAN.md`, ADR 0001). The business-level views and metrics
+> (10.1–10.3) stayed the same in substance, only the implementation
+> (10.4) is completely different.
 
 ### 10.1 Navigation
 
-Kopfzeilen-Navigation, serverseitig aktiv markiert anhand des angeforderten
-Pfads (`internal/web/handlers_nav.go`, kein JavaScript nötig):
+Header navigation, marked active server-side based on the requested path
+(`internal/web/handlers_nav.go`, no JavaScript needed):
 
-| Ansicht | Route | Inhalt |
+| View | Route | Content |
 | --- | --- | --- |
-| **Übersicht** | `/` | Kennzahlen-Kacheln, Zeitreihe, Top-Sendequellen, Verteilung nach Disposition, Heatmap Quelle × Tag. |
-| **Berichte** | `/berichte`, `/berichte/{id}` | Paginierte Tabelle aller Reports; Filter nach Zeitraum, Domain, Absender-Org, Quell-IP; CSV-Export des gesamten gefilterten Bestands. Klick öffnet Detailansicht (Metadaten, veröffentlichte Policy, Record-Tabelle mit Auth-Ergebnissen). |
-| **Sendequellen** | `/quellen` | Aggregiert nach Quell-IP: Volumen, Pass-Rate, PTR/rDNS, erkannter Dienst; CSV-Export. |
-| **Import** | `/import` | Drag-&-Drop-/Datei-Upload für `.eml`/`.xml`/`.xml.gz`/`.zip`, Ergebnisanzeige (neu/übersprungen/fehlerhaft). |
-| **Glossar** | `/glossar` | Zentrale Begriffs-Erklärungen (deutsch), von „?"-Links auf anderen Seiten verlinkt. |
-| **Einstellungen** | `/einstellungen` | Konten verwalten, Verbindung testen, Postfach-Sync anstoßen/abbrechen. |
-| **Ersteinrichtung** | `/einrichtung` | Erstes Konto anlegen — automatische Weiterleitung, solange kein Konto existiert. |
-| **Entsperren** | `/entsperren` | Master-Passphrase für den Datei-Schlüsselspeicher (Linux ohne Secret Service). |
+| **Overview** | `/` | Metric tiles, time series, top sending sources, distribution by disposition, source × day heatmap. |
+| **Reports** | `/berichte`, `/berichte/{id}` | Paginated table of all reports; filter by time range, domain, sending org, source IP; CSV export of the entire filtered dataset. Clicking opens the detail view (metadata, published policy, record table with auth results). |
+| **Sending sources** | `/quellen` | Aggregated by source IP: volume, pass rate, PTR/rDNS, detected service; CSV export. |
+| **Import** | `/import` | Drag-and-drop/file upload for `.eml`/`.xml`/`.xml.gz`/`.zip`, result display (new/skipped/failed). |
+| **Glossary** | `/glossar` | Central term explanations (German), linked from "?" links on other pages. |
+| **Settings** | `/einstellungen` | Manage accounts, test connection, trigger/cancel mailbox sync. |
+| **First-run setup** | `/einrichtung` | Create the first account — automatic redirect as long as no account exists. |
+| **Unlock** | `/entsperren` | Master passphrase for the file key store (Linux without a secret service). |
 
-### 10.2 Kennzahlen auf der Übersicht
+### 10.2 Metrics on the overview
 
-* Gesamtzahl ausgewerteter Nachrichten im gewählten Zeitraum
-* DMARC-Pass-Rate (Anteil der Nachrichten mit `dkim=pass` **oder** `spf=pass` nach Alignment)
-* SPF-Alignment-Rate und DKIM-Alignment-Rate getrennt
-* Anzahl unterschiedlicher Sendequellen
-* Volumen nach Disposition: `none` / `quarantine` / `reject`
-* Veränderung gegenüber der Vorperiode (Trendpfeil)
+* Total number of evaluated messages in the selected time range
+* DMARC pass rate (share of messages with `dkim=pass` **or** `spf=pass`
+  after alignment)
+* SPF alignment rate and DKIM alignment rate, reported separately
+* Number of distinct sending sources
+* Volume by disposition: `none` / `quarantine` / `reject`
+* Change vs. the previous period (trend arrow)
 
-### 10.3 Visualisierungen
+### 10.3 Visualizations
 
-* **Zeitreihe** — Nachrichtenvolumen pro Tag, gestapelt nach Pass/Fail.
-* **Balken** — Top-Sendequellen nach Volumen, eingefärbt nach Pass-Rate.
-* **Donut** — Verteilung der Dispositions.
-* **Heatmap** — Sendequelle × Tag, Farbe = Pass-Rate. Macht ausfallende Dienste sofort sichtbar.
-* **Tabelle mit Gruppierung** — nach Domain, Org oder Quell-IP klappbar.
+* **Time series** — message volume per day, stacked by pass/fail.
+* **Bars** — top sending sources by volume, colored by pass rate.
+* **Donut** — distribution of dispositions.
+* **Heatmap** — source × day, color = pass rate. Makes failing services
+  immediately visible.
+* **Table with grouping** — collapsible by domain, org, or source IP.
 
-Alle vier Diagramme sind interaktiv (Chart.js im Browser, siehe ADR 0002):
-Tooltip beim Hover, umschaltbare Legende, Zoom/Verschieben in der
-Zeitreihe, Klick öffnet die passend gefilterten Berichte (Drill-down).
-Jedes Diagramm hat zusätzlich eine zuschaltbare Tabellenansicht (für
-Screenreader, da `<canvas>` selbst nicht barrierefrei ist) sowie
-PNG-/CSV-Export-Knöpfe.
+All four charts are interactive (Chart.js in the browser, see ADR 0002):
+tooltip on hover, toggleable legend, zoom/pan in the time series, click
+opens the correspondingly filtered reports (drill-down). Each chart also
+has a toggleable table view (for screen readers, since `<canvas>` itself
+isn't accessible) plus PNG/CSV export buttons.
 
-### 10.4 Web-Praxis
+### 10.4 Web practice
 
-* **Kein Inline-JavaScript** — Content-Security-Policy verbietet
-  `unsafe-inline`; jedes Verhalten liegt in `internal/web/static/*.js`
-  (siehe `AGENTS.md`).
-* **Diagrammlogik gehört nach Go** — Aggregation, Filterung und
-  Drill-down-Ziele entstehen serverseitig; `charts.js` bekommt fertig
-  aufbereitete JSON-Daten und bleibt bewusst dünn (reine Darstellung).
-* **Jede Zustandsänderung per POST mit CSRF-Token** — nie ein GET mit
-  Seiteneffekt (siehe `internal/web/middleware.go: requireCSRF`).
-* **Seitenweises Nachladen statt Virtualisierung** — anders als eine
-  Fyne-`widget.Table` lädt die Web-Tabelle Seiten explizit nach
-  (Keyset-Pagination aus SQLite, `LIMIT`-artig aber ohne teure
-  `OFFSET`-Zählung bei großen Tabellen), auch für CSV-Exports über den
-  gesamten gefilterten Bestand (gestreamt, siehe
-  `internal/app/exportdata`).
-* **Farbpalette für hell und dunkel** über CSS-Variablen
-  (`internal/web/static/app.css`), dieselben Werte wie in den
-  Chart.js-Diagrammen; Pass/Fail-Farben zusätzlich durch Symbole/Text
-  unterscheidbar (Barrierefreiheit) — Palette folgt der `dataviz`-Skill-
-  Referenzpalette, siehe `AGENTS.md`.
-* **Fortschrittsanzeige** beim Sync mit Abbruch-Möglichkeit, über
-  Server-Sent Events (`GET /ereignisse`) statt Polling.
-* Eine Desktop-Benachrichtigung nach Abschluss eines Hintergrund-Syncs
-  (ursprünglich mit `fyne.App.SendNotification` geplant) ist mit dem
-  Wechsel zur Web-Oberfläche noch offen — vorgesehen als
-  Browser-Benachrichtigung bei geöffnetem Tab, siehe `UMSETZUNGSPLAN.md`
-  AP 7.
+* **No inline JavaScript** — the Content Security Policy forbids
+  `unsafe-inline`; every behavior lives in `internal/web/static/*.js`
+  (see `AGENTS.md`).
+* **Chart logic belongs in Go** — aggregation, filtering, and drill-down
+  targets are produced server-side; `charts.js` receives already-prepared
+  JSON data and stays deliberately thin (pure presentation).
+* **Every state change via POST with a CSRF token** — never a GET with a
+  side effect (see `internal/web/middleware.go: requireCSRF`).
+* **Paged lazy-loading instead of virtualization** — unlike a Fyne
+  `widget.Table`, the web table explicitly loads pages (keyset
+  pagination from SQLite, `LIMIT`-like but without an expensive `OFFSET`
+  count on large tables), also for CSV exports over the entire filtered
+  dataset (streamed, see `internal/app/exportdata`).
+* **Color palette for light and dark** via CSS variables
+  (`internal/web/static/app.css`), the same values as in the Chart.js
+  charts; pass/fail colors additionally distinguishable by icon/text
+  (accessibility) — the palette follows the `dataviz` skill's reference
+  palette, see `AGENTS.md`.
+* **Progress display** during sync with the ability to cancel, via
+  Server-Sent Events (`GET /ereignisse`) instead of polling.
+* A desktop notification after a background sync finishes (originally
+  planned with `fyne.App.SendNotification`) is still open with the move
+  to the web UI — planned as a browser notification while a tab is open,
+  see `UMSETZUNGSPLAN.md` WP 7.
 
 ---
 
-## 11. Vorschläge für zusätzliche Funktionen
+## 11. Suggestions for additional features
 
-> Zur Anforderung „Propose any features I might have forgotten."
+> On the requirement "Propose any features I might have forgotten."
 
-### Hoher Nutzen, geringer Aufwand
+### High value, low effort
 
-1. **Datei-/Ordner-Import** — `.eml`, `.zip`, `.xml` per Drag & Drop einlesen. Schon
-   für die Entwicklung unverzichtbar, ermöglicht Offline-Betrieb und Migration von
-   Altbeständen. Fällt fast nebenbei ab, weil `MessageSource` bereits abstrahiert ist.
-2. **rDNS-/PTR-Auflösung** der Quell-IPs mit Cache. Aus „192.0.2.45" wird
-   „mail-out.mailchimp.com" — der Unterschied zwischen Rohdaten und Erkenntnis.
-3. **Erkennung bekannter Dienste** — kuratierte Liste (Google Workspace, Microsoft 365,
-   Mailchimp, SendGrid, Brevo, Postmark …), Abgleich über PTR und IP-Bereiche. Macht
-   sofort sichtbar, welcher legitime Dienst noch nicht korrekt authentifiziert ist.
-4. **Export** — gefilterte Ansicht als CSV, Diagramme als PNG.
-5. **DNS-Prüfung der eigenen Domain** — aktuellen `_dmarc`-TXT-Record, SPF und
-   DKIM-Selektoren live abfragen und die Syntax validieren. Antwortet auf die Frage
-   „stimmt meine Konfiguration überhaupt?", die aus Reports allein nie hervorgeht.
+1. **File/folder import** — read in `.eml`, `.zip`, `.xml` via drag &
+   drop. Already indispensable for development, enables offline
+   operation and migration of old data. Falls out almost for free,
+   because `MessageSource` is already abstracted.
+2. **rDNS/PTR resolution** of source IPs with a cache. "192.0.2.45"
+   becomes "mail-out.mailchimp.com" — the difference between raw data
+   and insight.
+3. **Detection of known services** — a curated list (Google Workspace,
+   Microsoft 365, Mailchimp, SendGrid, Brevo, Postmark, …), matched via
+   PTR and IP ranges. Immediately shows which legitimate service still
+   isn't authenticating correctly.
+4. **Export** — filtered view as CSV, charts as PNG.
+5. **DNS check of your own domain** — live-query the current `_dmarc`
+   TXT record, SPF, and DKIM selectors, and validate the syntax. Answers
+   the question "is my configuration even correct?", which reports alone
+   never reveal.
 
-### Mittlerer Aufwand, hoher fachlicher Wert
+### Medium effort, high business value
 
-6. **Diagnose-Assistent** — zu einer fehlschlagenden Quelle in Klartext erklären,
-   *warum* sie fehlschlägt (SPF fehlt / SPF nicht ausgerichtet / DKIM-Signatur ungültig /
-   Weiterleitung ohne SRS) und was zu tun ist.
-7. **Policy-Reifegrad** — bewerten, ob ein Wechsel von `p=none` nach `quarantine` oder
-   `reject` gefahrlos möglich ist: „98,7 % der letzten 30 Tage bestehen DMARC; 2 nicht
-   klassifizierte Quellen offen."
-8. **Alarmierung** — Desktop-Benachrichtigung bei Pass-Raten-Einbruch, neuer unbekannter
-   Sendequelle oder ausbleibenden Reports.
-9. **Zeitraumvergleich** — zwei Perioden nebeneinander, Differenzen hervorgehoben.
-10. **SPF-Lookup-Zähler** — Warnung beim Überschreiten des 10-DNS-Lookup-Limits (RFC 7208),
-    eine der häufigsten stillen Fehlerursachen.
+6. **Diagnosis assistant** — explain in plain language *why* a failing
+   source is failing (missing SPF / SPF not aligned / invalid DKIM
+   signature / forwarding without SRS) and what to do about it.
+7. **Policy maturity** — assess whether a move from `p=none` to
+   `quarantine` or `reject` is safely possible: "98.7% of the last 30
+   days pass DMARC; 2 unclassified sources remain."
+8. **Alerting** — desktop notification on a pass-rate drop, a newly seen
+   unknown sending source, or missing reports.
+9. **Period comparison** — two periods side by side, differences
+   highlighted.
+10. **SPF lookup counter** — warning when exceeding the 10-DNS-lookup
+    limit (RFC 7208), one of the most common silent failure causes.
 
-### Betrieb und Datenschutz
+### Operations and privacy
 
-11. **Aufbewahrungsrichtlinie** — Reports älter als *n* Monate automatisch löschen.
-    DSGVO-relevant, weil Aggregate Reports IP-Adressen enthalten.
-12. **Backup/Restore** — DB sichern und wiederherstellen (`VACUUM INTO`).
-13. **Hintergrund-Sync per Zeitplan** — z. B. stündlich, mit Statusanzeige.
-14. **Headless-CLI-Modus** — `dmarc-analyzer sync --headless` für Cron/launchd,
-    ohne UI-Start. Aus der Clean Architecture ergibt sich das fast kostenlos, weil die
-    Use Cases UI-unabhängig sind.
-15. **Mehrere Konten und Domains** parallel, mit Domain-Filter in allen Ansichten.
+11. **Retention policy** — automatically delete reports older than *n*
+    months. GDPR-relevant, since aggregate reports contain IP addresses.
+12. **Backup/restore** — back up and restore the DB (`VACUUM INTO`).
+13. **Scheduled background sync** — e.g. hourly, with status display.
+14. **Headless CLI mode** — `dmarc-analyzer sync --headless` for
+    cron/launchd, without starting the UI. Falls out almost for free from
+    Clean Architecture, since the use cases are UI-independent.
+15. **Multiple accounts and domains** in parallel, with a domain filter
+    in all views.
 
-### Später (Schnittstellen sind vorbereitet)
+### Later (interfaces are prepared)
 
-16. DMARC Forensic Reports (RUF) — mit Hinweis auf personenbezogene Inhalte.
+16. DMARC Forensic Reports (RUF) — with a note on personally identifiable
+    content.
 17. TLS-RPT (RFC 8460).
-18. BIMI-Bereitschaftsprüfung.
-19. MTA-STS-Policy-Prüfung.
+18. BIMI readiness check.
+19. MTA-STS policy check.
 
-**Empfehlung für v1:** Punkte 1–4 und 11 mit einplanen; 5–8 als v1.1. Die übrigen sind
-begründete Optionen, kein Muss.
+**Recommendation for v1:** plan in items 1–4 and 11; 5–8 as v1.1. The
+rest are justified options, not a must.
 
 ---
 
-## 12. Teststrategie
+## 12. Test strategy
 
-> Anforderung: „write tests."
+> Requirement: "write tests."
 
-### 12.1 Verteilung
+### 12.1 Distribution
 
 ```
-        ╱╲        wenige End-to-End-Tests (Sync gegen IMAP-Fake)
-       ╱  ╲       Integrationstests (SQLite, Parser mit echten Fixtures)
-      ╱____╲      viele Unit-Tests (Domäne, Use Cases)
+        ╱╲        few end-to-end tests (sync against an IMAP fake)
+       ╱  ╲       integration tests (SQLite, parser with real fixtures)
+      ╱____╲      many unit tests (domain, use cases)
 ```
 
-### 12.2 Je Schicht
+### 12.2 Per layer
 
-| Schicht | Vorgehen | Zielabdeckung |
+| Layer | Approach | Target coverage |
 | --- | --- | --- |
-| `domain` | Reine Unit-Tests, table-driven, keine Mocks nötig — die Schicht hat keine Abhängigkeiten. | ≥ 90 % |
-| `app` | Use Cases gegen **Fakes** der Ports (handgeschrieben, kein Mock-Framework). | ≥ 85 % |
-| `infra/dmarcxml` | **Golden-File-Tests** gegen echte, anonymisierte Reports von Google, Microsoft, Yahoo, Mail.ru, Enterprise-Anbietern — jeder Provider weicht anders vom RFC ab. Zusätzlich Fuzzing auf dem XML-Parser. | ≥ 85 % |
-| `infra/sqlite` | Integrationstests gegen eine temporäre Datei-DB (nicht `:memory:`, damit WAL und Transaktionen realistisch getestet werden). Migrationen vorwärts und wiederholt anwenden. | ≥ 80 % |
-| `infra/imap` | Tests gegen einen In-Process-IMAP-Server (`go-imap`-Serverkomponente) mit vorbereiteten Nachrichten. Prüft besonders UID-Logik und `UIDVALIDITY`-Wechsel. | ≥ 70 % |
-| `web` | `net/http/httptest` mit handgeschriebenen Fakes der App-Ports: Statuscodes, Weiterleitungen, Sicherheits-Verhalten (Sitzung/CSRF/`Host`-Prüfung), jede Seite gerendert und als HTML geparst. JSON-Diagramm-Endpunkte zusätzlich auf gültiges JSON und korrekte Drill-down-URLs geprüft. Keine Pixelvergleiche. | ≥ 80 % |
-| Browser (Chart.js) | **Zurückgestellt:** ein `chromedp`-Rauchtest (MIGRATIONSPLAN.md E-8) soll die vier Diagramme tatsächlich im Browser prüfen (gezeichnet, keine Konsolenfehler, ein Drill-down-Klick funktioniert) — `httptest` sieht kein JavaScript. Noch ungeschrieben, siehe `MIGRATIONSPLAN.md` Abschnitt 11. | — |
+| `domain` | Pure unit tests, table-driven, no mocks needed — the layer has no dependencies. | ≥ 90% |
+| `app` | Use cases against **fakes** of the ports (hand-written, no mock framework). | ≥ 85% |
+| `infra/dmarcxml` | **Golden-file tests** against real, anonymized reports from Google, Microsoft, Yahoo, Mail.ru, enterprise providers — every provider deviates from the RFC differently. Plus fuzzing on the XML parser. | ≥ 85% |
+| `infra/sqlite` | Integration tests against a temporary file DB (not `:memory:`, so WAL and transactions are tested realistically). Migrations applied forward and repeatedly. | ≥ 80% |
+| `infra/imap` | Tests against an in-process IMAP server (`go-imap` server component) with prepared messages. Checks UID logic and `UIDVALIDITY` changes in particular. | ≥ 70% |
+| `web` | `net/http/httptest` with hand-written fakes of the app ports: status codes, redirects, security behavior (session/CSRF/`Host` check), every page rendered and parsed as HTML. JSON chart endpoints additionally checked for valid JSON and correct drill-down URLs. No pixel comparisons. | ≥ 80% |
+| Browser (Chart.js) | **Deferred:** a `chromedp` smoke test (MIGRATIONSPLAN.md E-8) is meant to actually check the four charts in the browser (drawn, no console errors, one drill-down click works) — `httptest` can't see JavaScript. Still unwritten, see `MIGRATIONSPLAN.md` section 11. | — |
 
-### 12.3 Besondere Testfälle
+### 12.3 Special test cases
 
-* Report mit 0 Records; Report mit 10.000 Records.
-* `UIDVALIDITY`-Wechsel mitten im Sync → vollständiger Rescan ohne Duplikate.
-* Doppelt zugestellte identische Mail → genau ein Datensatz.
-* Beschädigtes Gzip, Zip mit mehreren Dateien, Zip-Bombe (Größenlimit beim Entpacken).
-* XML mit unbekannten Elementen, fehlendem `pct`, nicht-RFC-konformen Enum-Werten.
-* XXE-Schutz: externe Entities werden abgelehnt (Go's `encoding/xml` löst sie nicht
-  auf — wird durch einen Test festgeschrieben, damit das so bleibt).
-* Abbruch per `context.Cancel` mitten im Sync → konsistenter Zustand.
+* Report with 0 records; report with 10,000 records.
+* `UIDVALIDITY` change mid-sync → full rescan without duplicates.
+* Duplicate-delivered identical mail → exactly one record.
+* Corrupted gzip, zip with several files, zip bomb (size limit during
+  unpacking).
+* XML with unknown elements, missing `pct`, non-RFC-compliant enum
+  values.
+* XXE protection: external entities are rejected (Go's `encoding/xml`
+  doesn't resolve them — pinned down by a test to keep it that way).
+* Cancellation via `context.Cancel` mid-sync → consistent state.
 
-### 12.4 Werkzeuge
+### 12.4 Tools
 
-* `go test -race` in jedem Lauf — bei einer Goroutine-Pipeline nicht verhandelbar.
-* `task cover` erzeugt einen HTML-Coverage-Report.
-* Testfixtures liegen in `testdata/`; **alle Domains und IPs werden anonymisiert**
-  (`example.com`, RFC-5737-Adressbereiche).
+* `go test -race` on every run — non-negotiable for a goroutine
+  pipeline.
+* `task cover` produces an HTML coverage report.
+* Test fixtures live in `testdata/`; **all domains and IPs are
+  anonymized** (`example.com`, RFC 5737 address ranges).
 
 ---
 
 ## 13. Taskfile
 
-> Anforderung: „generate a Taskfile with the common tasks."
+> Requirement: "generate a Taskfile with the common tasks."
 
-| Task | Zweck |
+| Task | Purpose |
 | --- | --- |
-| `task setup` | Werkzeuge installieren (`golangci-lint`), `go mod download`. |
-| `task build` | Binärdatei nach `bin/` bauen (`CGO_ENABLED=0`), Version per `-ldflags` einbetten. |
-| `task run` | Programm im Entwicklungsmodus starten (öffnet den Standardbrowser). |
-| `task test` | Alle Tests mit `-race`. |
-| `task test:unit` | Nur schnelle Tests (ohne Build-Tag `integration`). |
-| `task test:integration` | Integrationstests (Build-Tag `integration`). |
-| `task cover` | Coverage messen und als HTML öffnen. |
+| `task setup` | Install tools (`golangci-lint`), `go mod download`. |
+| `task build` | Build the binary into `bin/` (`CGO_ENABLED=0`), embed the version via `-ldflags`. |
+| `task run` | Start the program in development mode (opens the default browser). |
+| `task test` | All tests with `-race`. |
+| `task test:unit` | Fast tests only (without the `integration` build tag). |
+| `task test:integration` | Integration tests (`integration` build tag). |
+| `task cover` | Measure coverage and open it as HTML. |
 | `task lint` | `golangci-lint run`. |
 | `task fmt` | `gofmt -s -w` + `goimports`. |
-| `task tidy` | `go mod tidy` und Prüfung auf ungenutzte Abhängigkeiten. |
-| `task release:darwin` | macOS-Binärdateien (arm64, amd64) cross-kompilieren, als minimales `.app`-Bündel zippen (`packaging/darwin/Info.plist.tmpl`, kein `fyne package` mehr — siehe M5). |
-| `task release:windows` | Windows-Binärdatei (amd64) ohne Konsolenfenster (`-H windowsgui`) cross-kompilieren, zippen. |
-| `task release:linux` | Linux-Binärdateien (amd64, arm64) cross-kompilieren, als `.tar.gz` packen. |
-| `task release` | Alle drei `release:*`-Tasks ausführen, Checksummen (`checksums.txt`) erzeugen. |
-| `task clean` | Build-Artefakte entfernen. |
-| `task check` | `fmt` + `lint` + `test` — das, was auch die CI ausführt. |
+| `task tidy` | `go mod tidy` and check for unused dependencies. |
+| `task release:darwin` | Cross-compile macOS binaries (arm64, amd64), zip as a minimal `.app` bundle (`packaging/darwin/Info.plist.tmpl`, no more `fyne package` — see M5). |
+| `task release:windows` | Cross-compile the Windows binary (amd64) without a console window (`-H windowsgui`), zip it. |
+| `task release:linux` | Cross-compile Linux binaries (amd64, arm64), pack as `.tar.gz`. |
+| `task release` | Run all three `release:*` tasks, produce checksums (`checksums.txt`). |
+| `task clean` | Remove build artifacts. |
+| `task check` | `fmt` + `lint` + `test` — the same thing CI runs. |
 
-`task check` ist der Standardbefehl vor jedem Commit. Alle Release-Tasks
-sind reine `go build`-Cross-Compiles mit `CGO_ENABLED=0` (kein
-plattformspezifisches Paketierwerkzeug mehr nötig, siehe M5 und
-`docs/adr/0001-web-oberflaeche-statt-fyne.md`) — laufen daher auf einem
-einzigen Entwicklungsrechner für alle Zielplattformen.
-
----
-
-## 14. Dokumentation
-
-**README.md** (deutsch): Was das Programm tut, Screenshots, Installation je Plattform,
-Einrichtung des IMAP-Kontos (inklusive Hinweis zu App-Passwörtern), Erklärung der
-Kennzahlen, Speicherorte von DB und Konfiguration, Datenschutzhinweis, Entwicklungs-
-Setup, Lizenz.
-
-**CHANGELOG.md**: Format nach *Keep a Changelog*, Versionierung nach *SemVer*.
-Abschnitte `Hinzugefügt` / `Geändert` / `Behoben` / `Entfernt` / `Sicherheit`. Wird bei
-jedem Merge gepflegt, nicht erst beim Release.
-
-**docs/**: Architekturüberblick mit Diagramm, ADRs (Architecture Decision Records) für
-die tragenden Entscheidungen — je ein kurzes Dokument zu SQLite-Wahl, CGO-Freiheit,
-Keyring-Strategie und Chart-Rendering. Der Wert liegt darin, in einem Jahr noch zu
-wissen, *warum* etwas so ist.
+`task check` is the standard command before every commit. All release
+tasks are plain `go build` cross-compiles with `CGO_ENABLED=0` (no more
+platform-specific packaging tool needed, see M5 and
+`docs/adr/0001-web-oberflaeche-statt-fyne.md`) — so they run on a single
+development machine for all target platforms.
 
 ---
 
-## 15. Phasenplan
+## 14. Documentation
 
-| Phase | Inhalt | Ergebnis |
+**README.md** (German): what the program does, screenshots, installation
+per platform, setting up the IMAP account (including a note on app
+passwords), explanation of the metrics, storage locations of the DB and
+configuration, privacy notice, development setup, license.
+
+**CHANGELOG.md**: format per *Keep a Changelog*, versioning per *SemVer*.
+Sections `Added` / `Changed` / `Fixed` / `Removed` / `Security`.
+Maintained on every merge, not only at release time.
+
+**docs/**: architecture overview with a diagram, ADRs (Architecture
+Decision Records) for the load-bearing decisions — one short document
+each for the SQLite choice, CGO freedom, keyring strategy, and chart
+rendering. The value lies in still knowing, a year from now, *why*
+something is the way it is.
+
+---
+
+## 15. Phase plan
+
+| Phase | Content | Result |
 | --- | --- | --- |
-| **0 — Grundgerüst** | `go mod init`, Verzeichnisstruktur, `Taskfile.yml`, `.golangci.yml`, GitHub-Actions-Workflow, README-/CHANGELOG-Rohfassung, Logging, Pfad-Auflösung. | `task check` läuft grün auf leerem Projekt. |
-| **1 — Domäne & Parser** | Entities, Value Objects, Invarianten, Ports. XML-Parser inklusive gzip/zip-Entpacken. Fixtures mehrerer Provider. | Beliebiger Report wird korrekt zu Domänenobjekten; Golden-Tests grün. |
-| **2 — Persistenz** | SQLite-Anbindung, Migrator, Repositories, Deduplizierung, Query-/Aggregations-Funktionen. | Reports werden gespeichert und wieder gelesen; Integrationstests grün. |
-| **3 — Mail & Sicherheit** | IMAP-Adapter, Keyring-Adapter, `SyncState`, inkrementelle Logik, Fehlerquarantäne. | `SyncReports` holt aus einem echten Postfach nur Neues. |
-| **4 — Anwendungsschicht** | Use Cases vollständig, Statistiken, Export, CLI-Modus `sync --headless`. | Kompletter Ablauf ohne UI nutzbar und testbar. |
-| **5 — UI-Grundgerüst** | Fenster, Navigation, Theme, Einstellungen mit Verbindungstest, Berichtstabelle, Detailansicht, Sync mit Fortschritt. | Bedienbares Programm für den Kern-Use-Case. |
-| **6 — Auswertung** | Dashboard, Diagramme, Sendequellen-Ansicht, rDNS, Dienst-Erkennung, Filter und Gruppierung. | Die in `FEATURES.md` geforderte Visualisierung steht. |
-| **7 — Feinschliff & Release** | Datei-Import, Aufbewahrungsrichtlinie, Benachrichtigungen, Hintergrund-Sync, Barrierefreiheit, Performance mit großen Datenmengen, Packaging für drei Plattformen, Doku vervollständigen. | Version 1.0.0. |
+| **0 — Scaffolding** | `go mod init`, directory structure, `Taskfile.yml`, `.golangci.yml`, GitHub Actions workflow, README/CHANGELOG drafts, logging, path resolution. | `task check` runs green on an empty project. |
+| **1 — Domain & parser** | Entities, value objects, invariants, ports. XML parser including gzip/zip unpacking. Fixtures from several providers. | Any report correctly turns into domain objects; golden tests green. |
+| **2 — Persistence** | SQLite wiring, migrator, repositories, deduplication, query/aggregation functions. | Reports are saved and read back; integration tests green. |
+| **3 — Mail & security** | IMAP adapter, keyring adapter, `SyncState`, incremental logic, error quarantine. | `SyncReports` fetches only new items from a real mailbox. |
+| **4 — Application layer** | Use cases complete, statistics, export, CLI mode `sync --headless`. | The complete flow usable and testable without a UI. |
+| **5 — UI scaffolding** | Window, navigation, theme, settings with connection test, report table, detail view, sync with progress. | A usable program for the core use case. |
+| **6 — Analysis** | Dashboard, charts, sending-sources view, rDNS, service detection, filtering and grouping. | The visualization required by `FEATURES.md` is in place. |
+| **7 — Polish & release** | File import, retention policy, notifications, background sync, accessibility, performance with large data volumes, packaging for three platforms, complete the docs. | Version 1.0.0. |
 
-Jede Phase endet mit grünem `task check` und einem gepflegten CHANGELOG-Eintrag.
-Die Phasen 1–4 sind vollständig ohne UI testbar — das ist der eigentliche Gewinn der
-gewählten Architektur und hält die Rückkopplungsschleife kurz.
-
----
-
-## 16. Risiken und Gegenmaßnahmen
-
-| Risiko | Auswirkung | Gegenmaßnahme |
-| --- | --- | --- |
-| `go-imap/v2` ist noch in aktiver Entwicklung, API kann sich ändern | Anpassungsaufwand bei Updates | Nur der Adapter hinter `MessageSource` ist betroffen; Version in `go.mod` gepinnt. |
-| Provider liefern RFC-abweichendes XML | Import schlägt fehl | Toleranter Parser, `Unknown`-Enums, Fehlerquarantäne statt Abbruch, Rohdaten-Archiv für späteres Neueinlesen. |
-| `modernc.org/sqlite` langsamer als CGO-Variante | Träger Erstimport | Batch-Inserts in Transaktionen, Indizes erst nach dem Massenimport, Benchmarks in Phase 2. |
-| Fyne-Tabellen bei sehr vielen Zeilen | UI ruckelt | Keyset-Pagination in der Datenquelle, Aggregationen in SQL statt in Go. |
-| Linux ohne Secret Service | Kein Schlüsselbund verfügbar | Verschlüsselter Dateispeicher als Fallback (siehe Abschnitt 9). |
-| Zip-Bombe im Anhang | Speicher erschöpft | Harte Obergrenze für entpackte Größe (z. B. 100 MB), `io.LimitReader`. |
-| Aggregate Reports enthalten IP-Adressen | DSGVO-Pflichten | Rein lokale Verarbeitung, keine Cloud-Übertragung, Aufbewahrungsrichtlinie, Hinweis im README. |
-| Umfang wächst über v1 hinaus | Verzögerung | Abschnitt 11 priorisiert bewusst; alles jenseits v1 bleibt bis nach 1.0.0 liegen. |
+Every phase ends with a green `task check` and a maintained CHANGELOG
+entry. Phases 1–4 are fully testable without a UI — that's the actual
+payoff of the chosen architecture, and it keeps the feedback loop short.
 
 ---
 
-## 17. Offene Fragen
+## 16. Risks and countermeasures
 
-| Nr. | Frage | Vorschlag, falls keine Antwort |
+| Risk | Impact | Countermeasure |
 | --- | --- | --- |
-| **O-1** | Wie lautet der Modulpfad / die Repo-URL? | `github.com/Freie-Schule/dmarc-analyzer` |
-| **O-2** | Sollen Go-Bezeichner wirklich englisch bleiben (Kommentare und UI deutsch)? Siehe 1.3. | Ja, englische Bezeichner. |
-| **O-3** | Welche Lizenz? | MIT |
-| **O-4** | Sollen verarbeitete Mails im Postfach markiert oder verschoben werden, oder unberührt bleiben? | Unberührt (`BODY.PEEK`), da mehrere Clients dasselbe Postfach lesen könnten. Optional abschaltbar. |
-| **O-5** | Gibt es Beispiel-Reports aus dem echten Postfach für die Fixtures? | Sonst werden aus öffentlichen RFC-Beispielen synthetische Fixtures erzeugt. |
-| **O-6** | Sind Windows und Linux tatsächlich Zielplattformen, oder reicht macOS? | Alle drei bauen, getestet wird primär auf macOS. |
-| **O-7** | Standard-Aufbewahrungsdauer für Reports? | 24 Monate, in den Einstellungen änderbar. |
-| **O-8** | Soll es einen Headless-/CLI-Modus geben (Vorschlag 14)? | Ja, in Phase 4 — der Aufwand ist gering, der Nutzen für automatisierte Läufe hoch. |
+| `go-imap/v2` is still under active development, the API can change | Rework effort on updates | Only the adapter behind `MessageSource` is affected; version pinned in `go.mod`. |
+| Providers deliver RFC-deviating XML | Import fails | Tolerant parser, `Unknown` enums, error quarantine instead of aborting, raw-data archive for later re-reading. |
+| `modernc.org/sqlite` slower than the CGO variant | Sluggish initial import | Batch inserts in transactions, indexes only after the bulk import, benchmarks in phase 2. |
+| Fyne tables with very many rows | UI stutters | Keyset pagination in the data source, aggregations in SQL instead of Go. |
+| Linux without a secret service | No keychain available | Encrypted file store as a fallback (see section 9). |
+| Zip bomb in an attachment | Memory exhausted | Hard upper bound on unpacked size (e.g. 100 MB), `io.LimitReader`. |
+| Aggregate reports contain IP addresses | GDPR obligations | Purely local processing, no cloud transfer, retention policy, note in the README. |
+| Scope grows beyond v1 | Delay | Section 11 deliberately prioritizes; everything beyond v1 stays on hold until after 1.0.0. |
+
+---
+
+## 17. Open questions
+
+| No. | Question | Suggestion if unanswered |
+| --- | --- | --- |
+| **O-1** | What is the module path / repo URL? | `github.com/Freie-Schule/dmarc-analyzer` |
+| **O-2** | Should Go identifiers really stay English (comments and UI German)? See 1.3. | Yes, English identifiers. |
+| **O-3** | Which license? | MIT |
+| **O-4** | Should processed mail in the mailbox be marked or moved, or left untouched? | Untouched (`BODY.PEEK`), since several clients might read the same mailbox. Optionally toggleable. |
+| **O-5** | Are there sample reports from a real mailbox for the fixtures? | Otherwise synthetic fixtures are generated from public RFC examples. |
+| **O-6** | Are Windows and Linux actually target platforms, or is macOS enough? | All three build; testing is primarily on macOS. |
+| **O-7** | Default retention period for reports? | 24 months, changeable in settings. |
+| **O-8** | Should there be a headless/CLI mode (suggestion 14)? | Yes, in phase 4 — the effort is low, the value for automated runs high. |

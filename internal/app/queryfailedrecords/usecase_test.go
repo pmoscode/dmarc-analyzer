@@ -11,7 +11,7 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/failedrecords"
 )
 
-var errTest = errors.New("testfehler")
+var errTest = errors.New("test error")
 
 type fakeFailedRecordsRepository struct {
 	page failedrecords.Page

@@ -17,18 +17,18 @@ import (
 	domainsync "github.com/pmoscode/dmarc-analyzer/internal/domain/sync"
 )
 
-// fullDeps sind alle Fakes hinter einem per newTestServerWithAccounts
-// gebauten Server — als Struct statt einzelner Rückgabewerte, damit
-// Tests gezielt genau die Fakes benennen können, die sie brauchen.
+// fullDeps holds all the fakes behind a server built via
+// newTestServerWithAccounts — as a struct instead of individual return
+// values, so tests can name exactly the fakes they need.
 type fullDeps struct {
 	accounts *fakeAccountRepository
 	source   *fakeMessageSource
 	syncer   *fakeJobSyncer
 }
 
-// newTestServerWithAccounts baut einen Server mit vollständig verdrahteten
-// Dependencies (Statistics/Accounts/SyncJob) — für Tests von
-// /einstellungen und /abgleich.
+// newTestServerWithAccounts builds a server with fully wired-up
+// dependencies (Statistics/Accounts/SyncJob) — for tests of
+// /einstellungen and /abgleich.
 func newTestServerWithAccounts(t *testing.T, accounts ...account.MailAccount) (*Server, *fullDeps) {
 	t.Helper()
 

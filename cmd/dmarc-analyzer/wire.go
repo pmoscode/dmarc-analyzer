@@ -26,14 +26,14 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/infra/sqlite"
 )
 
-// primaryAccountID ist die feste ID des einen, per ENV konfigurierten
-// Kontos (siehe internal/infra/envconfig) — es gibt seit dem Umstieg auf
-// reine ENV-Konfiguration kein Konto-CRUD mehr, nur genau ein Konto pro
-// Container.
+// primaryAccountID is the fixed ID of the single, ENV-configured account
+// (see internal/infra/envconfig) — since the move to pure ENV
+// configuration there is no more account CRUD, only exactly one account
+// per container.
 const primaryAccountID = account.AccountID("primary")
 
-// app bündelt die für die CLI verdrahteten Use Cases und die geladene
-// Konfiguration.
+// app bundles the use cases wired for the CLI and the loaded
+// configuration.
 type app struct {
 	db     *sql.DB
 	config envconfig.Config
@@ -49,22 +49,22 @@ type app struct {
 	retention     *retention.UseCase
 }
 
-// newApp lädt die ENV-Konfiguration, öffnet die Datenbank, legt das eine
-// konfigurierte Konto an (bzw. aktualisiert es, falls sich Host/Port/
-// Benutzername seit dem letzten Start geändert haben) und verdrahtet die
-// Use Cases. Einziger Ort im Programm, der konkrete Infra-Typen kennt
-// (AGENTS.md: "cmd/dmarc-analyzer: einziger Ort, an dem Adapter mit Use
-// Cases verdrahtet werden").
+// newApp loads the ENV configuration, opens the database, creates the
+// one configured account (or updates it if host/port/username have
+// changed since the last start), and wires the use cases. The only
+// place in the program that knows concrete infra types (AGENTS.md:
+// "cmd/dmarc-analyzer: the only place where adapters are wired to use
+// cases").
 func newApp(ctx context.Context) (*app, error) {
 	cfg, err := envconfig.Load()
 	if err != nil {
-		return nil, fmt.Errorf("konfiguration konnte nicht geladen werden: %w", err)
+		return nil, fmt.Errorf("configuration could not be loaded: %w", err)
 	}
 
 	dbPath := filepath.Join(cfg.DataDir, "dmarc.db")
 	db, err := sqlite.Open(ctx, dbPath)
 	if err != nil {
-		return nil, fmt.Errorf("datenbank konnte nicht geöffnet werden: %w", err)
+		return nil, fmt.Errorf("database could not be opened: %w", err)
 	}
 
 	accountRepo := sqlite.NewAccountRepository(db)
@@ -81,19 +81,19 @@ func newApp(ctx context.Context) (*app, error) {
 	)
 	if err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("konto aus ENV-Konfiguration ist ungültig: %w", err)
+		return nil, fmt.Errorf("account from ENV configuration is invalid: %w", err)
 	}
 	if err := accountRepo.Save(ctx, acc); err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("konto konnte nicht gespeichert werden: %w", err)
+		return nil, fmt.Errorf("account could not be saved: %w", err)
 	}
 
 	decoder := mailmime.NewDecoder()
 	parsers := []domainsync.ReportParser{dmarcxml.NewParser()}
 	newSource := func() domainsync.MessageSource { return imap.NewAdapter() }
-	// enricher: eine gemeinsame Instanz für Dashboard und Sendequellen-
-	// Ansicht — beide reichern dieselben Quell-IPs an, ein gemeinsamer
-	// Cache spart doppelte PTR-Lookups.
+	// enricher: a shared instance for the dashboard and the sending
+	// sources view — both enrich the same source IPs, a shared cache
+	// avoids duplicate PTR lookups.
 	enricher := sourceinfo.NewEnricher()
 
 	return &app{

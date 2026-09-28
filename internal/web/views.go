@@ -12,25 +12,23 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/web/glossary"
 )
 
-// devTemplatesDir ist der Pfad, unter dem Dev-Modus (DMARC_DEV_MODE=true)
-// Vorlagen von der Festplatte liest — relativ zum Arbeitsverzeichnis, das
-// beim Starten des Programms das Repository-Wurzelverzeichnis sein muss
-// (z. B. `task run`).
+// devTemplatesDir is the path dev mode (DMARC_DEV_MODE=true) reads
+// templates from on disk — relative to the working directory, which must
+// be the repository root when the program starts (e.g. `task run`).
 const devTemplatesDir = "internal/web/templates"
 
-// templateFuncs stellt Vorlagen-Hilfsfunktionen bereit: "glossaryDef"
-// liefert die Erklärung eines Glossar-Begriffs direkt als Text — für die
-// "?"-Hinweise, die die Erklärung inline (als Tooltip/Popover) statt über
-// einen Link auf eine eigene Glossarseite anzeigen (es gibt keine
-// Glossarseite mehr, siehe ehemals handlers_glossary.go). "csrfToken"
-// liefert das CSRF-Token DIESER Anfrage (jede Sitzung hat seit dem
-// Umstieg auf OIDC-Mehrbenutzer-Logins ihr eigenes Token, siehe auth.go)
-// — als Platzhalter-Funktion registriert, die render()/renderNamed() vor
-// jeder Ausführung per Template.Funcs() auf den tatsächlichen Wert dieser
-// Anfrage umbiegen (siehe render unten). "buildInfo" liefert Version und
-// Git-Commit des laufenden Builds für die Kopfzeile (layout.html) — fest
-// für die gesamte Laufzeit, deshalb anders als "csrfToken" direkt hier
-// registriert.
+// newTemplateFuncs provides template helper functions: "glossaryDef"
+// returns a glossary term's explanation directly as text — for the "?"
+// hints that show the explanation inline (as a tooltip/popover) instead
+// of via a link to a dedicated glossary page (there is no glossary page
+// anymore, see formerly handlers_glossary.go). "csrfToken" returns THIS
+// request's CSRF token (every session has had its own token since the
+// move to OIDC multi-user logins, see auth.go) — registered as a
+// placeholder function that render()/renderNamed() rebind to this
+// request's actual value before every execution via Template.Funcs()
+// (see render below). "buildInfo" returns the running build's version and
+// git commit for the header (layout.html) — fixed for the entire runtime,
+// so unlike "csrfToken" it's registered directly here.
 func newTemplateFuncs(build BuildInfo) template.FuncMap {
 	return template.FuncMap{
 		"glossaryDef": func(term string) string {
@@ -42,19 +40,19 @@ func newTemplateFuncs(build BuildInfo) template.FuncMap {
 	}
 }
 
-// views lädt und rendert HTML-Vorlagen. Jede Seite (pages/*.html) wird
-// zusammen mit layout.html zu einem eigenen *template.Template geparst —
-// bewusst nicht alle Seiten in einem gemeinsamen Baum: Go-Templates
-// teilen sich benannte Blöcke ({{define "content"}}) über alle mit
-// ParseFS/ParseGlob gemeinsam geparsten Dateien hinweg; mehrere Seiten mit
-// je einem eigenen "content"-Block in einem Baum würden sich gegenseitig
-// überschreiben (letzte gewinnt), nicht wie ein Aufrufer erwarten würde.
+// views loads and renders HTML templates. Each page (pages/*.html) is
+// parsed together with layout.html into its own *template.Template —
+// deliberately not all pages in one shared tree: Go templates share named
+// blocks ({{define "content"}}) across all files parsed together via
+// ParseFS/ParseGlob; several pages each with their own "content" block in
+// one tree would overwrite each other (last one wins), not what a caller
+// would expect.
 type views struct {
 	dev   bool
 	funcs template.FuncMap
-	// csrfToken liefert das CSRF-Token für die Sitzung von r — vom Server
-	// übergeben (siehe newViews-Aufruf in server.go), damit views nicht
-	// selbst von auth.go abhängen muss.
+	// csrfToken returns the CSRF token for the session of r — passed in
+	// by the server (see the newViews call in server.go) so views doesn't
+	// have to depend on auth.go itself.
 	csrfToken func(*http.Request) string
 
 	mu    sync.RWMutex
@@ -77,7 +75,7 @@ func (v *views) load() error {
 
 	pageFiles, err := fs.Glob(tmplFS, "pages/*.html")
 	if err != nil {
-		return fmt.Errorf("seiten-vorlagen konnten nicht aufgelistet werden: %w", err)
+		return fmt.Errorf("could not list page templates: %w", err)
 	}
 
 	pages := make(map[string]*template.Template, len(pageFiles))
@@ -85,7 +83,7 @@ func (v *views) load() error {
 		name := path.Base(pf)
 		t, err := template.New("layout.html").Funcs(v.funcs).ParseFS(tmplFS, "layout.html", pf)
 		if err != nil {
-			return fmt.Errorf("vorlage %q konnte nicht geparst werden: %w", name, err)
+			return fmt.Errorf("could not parse template %q: %w", name, err)
 		}
 		pages[name] = t
 	}
@@ -103,21 +101,20 @@ func templatesFS(dev bool) (fs.FS, error) {
 	return fs.Sub(embeddedTemplates, "templates")
 }
 
-// render führt die Vorlage page (z. B. "dashboard.html") gegen data aus
-// und schreibt das Ergebnis nach w. Im Entwicklungsmodus wird vor jedem
-// Aufruf neu von der Festplatte geladen, damit Änderungen ohne Neubau
-// sichtbar werden.
+// render executes the page template (e.g. "dashboard.html") against data
+// and writes the result to w. In development mode it reloads from disk
+// before every call, so changes are visible without a rebuild.
 func (v *views) render(w http.ResponseWriter, r *http.Request, page string, data any) error {
 	return v.renderNamed(w, r, page, "layout.html", data)
 }
 
-// renderNamed führt einen benannten Block innerhalb der Vorlage page aus
-// statt immer "layout.html" — Grundlage für htmx-Teilaktualisierungen
-// (MIGRATIONSPLAN.md Abschnitt 7 "GET /berichte/seite"): dieselbe Datei
-// (z. B. "reports.html") definiert per {{define "rows"}}...{{end}} einen
-// Block, den sowohl der volle Seitenaufruf (über "content" eingebunden)
-// als auch der htmx-Ladeknopf (direkt als "rows") ausführen können, ohne
-// die Zeilen-Vorlage doppelt zu pflegen.
+// renderNamed executes a named block within the page template instead of
+// always "layout.html" — the basis for htmx partial updates
+// (MIGRATIONSPLAN.md section 7 "GET /berichte/seite"): the same file
+// (e.g. "reports.html") defines a block via {{define "rows"}}...{{end}}
+// that both the full page view (included via "content") and the htmx
+// load-more button (executed directly as "rows") can run, without
+// maintaining the row template twice.
 func (v *views) renderNamed(w http.ResponseWriter, r *http.Request, page, tmplName string, data any) error {
 	if v.dev {
 		if err := v.load(); err != nil {
@@ -129,25 +126,25 @@ func (v *views) renderNamed(w http.ResponseWriter, r *http.Request, page, tmplNa
 	t, ok := v.pages[page]
 	v.mu.RUnlock()
 	if !ok {
-		return fmt.Errorf("unbekannte vorlage %q", page)
+		return fmt.Errorf("unknown template %q", page)
 	}
 
-	// Clone + Funcs() statt den zur Parse-Zeit registrierten Platzhalter
-	// zu behalten: das CSRF-Token hängt von der jeweiligen Sitzung ab
-	// (mehrere gleichzeitig angemeldete Admins, siehe auth.go), t selbst
-	// wird aber nur einmal geparst und zwischen Anfragen geteilt
-	// (v.pages). Clone() dupliziert die gesamte Vorlagensammlung (layout +
-	// Seite) günstig genug für eine Admin-Oberfläche ohne hohen Durchsatz.
+	// Clone + Funcs() instead of keeping the placeholder registered at
+	// parse time: the CSRF token depends on the particular session
+	// (several admins can be logged in at once, see auth.go), but t
+	// itself is only parsed once and shared across requests (v.pages).
+	// Clone() duplicates the whole template collection (layout + page)
+	// cheaply enough for a low-throughput admin UI.
 	token := v.csrfToken(r)
 	cloned, err := t.Clone()
 	if err != nil {
-		return fmt.Errorf("vorlage %q konnte nicht für diese anfrage vorbereitet werden: %w", page, err)
+		return fmt.Errorf("could not prepare template %q for this request: %w", page, err)
 	}
 	cloned = cloned.Funcs(template.FuncMap{"csrfToken": func() string { return token }})
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := cloned.ExecuteTemplate(w, tmplName, data); err != nil {
-		return fmt.Errorf("vorlage %q (%q) konnte nicht gerendert werden: %w", page, tmplName, err)
+		return fmt.Errorf("could not render template %q (%q): %w", page, tmplName, err)
 	}
 	return nil
 }

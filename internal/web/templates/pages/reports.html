@@ -1,42 +1,42 @@
 {{define "content"}}
 <form class="filter-bar" method="get" action="/berichte" aria-label="Filter">
   {{if .UsesAbsolutePeriod}}
-  <p class="chart-hint">Zeitraum aus einem Diagramm-Klick: {{.PeriodFromLabel}} – {{.PeriodToLabel}}.</p>
+  <p class="chart-hint">Period from a chart click: {{.PeriodFromLabel}} – {{.PeriodToLabel}}.</p>
   {{else}}
-  <label>Zeitraum
+  <label>Period
     <select name="zeitraum">
       {{range .PeriodOptions}}<option value="{{.Days}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
     </select>
   </label>
   {{end}}
   <label>Domain
-    <input type="text" name="domain" value="{{.Domain}}" placeholder="Alle" autocomplete="off">
+    <input type="text" name="domain" value="{{.Domain}}" placeholder="All" autocomplete="off">
   </label>
-  <label>Quell-IP
-    <input type="text" name="quelle" value="{{.SourceIP}}" placeholder="Alle" autocomplete="off">
+  <label>Source IP
+    <input type="text" name="quelle" value="{{.SourceIP}}" placeholder="All" autocomplete="off">
   </label>
   <label>Disposition
     <select name="disposition">
       {{range .DispositionOptions}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
     </select>
   </label>
-  <label>Gruppierung
+  <label>Grouping
     <select name="gruppierung">
       {{range .GroupOptions}}<option value="{{.Value}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
     </select>
   </label>
-  <button type="submit">Filter anwenden</button>
-  <a href="/berichte" class="filter-reset">Filter zurücksetzen</a>
+  <button type="submit">Apply filter</button>
+  <a href="/berichte" class="filter-reset">Reset filter</a>
 </form>
 
-<p class="export-link"><a href="{{.ExportURL}}">CSV exportieren (gesamter gefilterter Bestand)</a></p>
+<p class="export-link"><a href="{{.ExportURL}}">Export CSV (entire filtered set)</a></p>
 
-<table class="data-table" aria-label="Berichte">
+<table class="data-table" aria-label="Reports">
   <thead>
     <tr>
-      <th><a href="{{.SortOrgURL}}">Organisation{{.SortOrgIndicator}}</a></th>
+      <th><a href="{{.SortOrgURL}}">Organization{{.SortOrgIndicator}}</a></th>
       <th><a href="{{.SortDomainURL}}">Domain{{.SortDomainIndicator}}</a></th>
-      <th><a href="{{.SortPeriodURL}}">Zeitraum{{.SortPeriodIndicator}}</a></th>
+      <th><a href="{{.SortPeriodURL}}">Period{{.SortPeriodIndicator}}</a></th>
     </tr>
   </thead>
   <tbody id="reports-rows">
@@ -44,7 +44,7 @@
   </tbody>
 </table>
 {{if not .Rows.Rows}}
-<p class="empty-state">Keine Berichte für diesen Filter gefunden.</p>
+<p class="empty-state">No reports found for this filter.</p>
 {{end}}
 {{end}}
 
@@ -62,7 +62,7 @@
     <button type="button" class="load-more"
       hx-get="{{.NextPageURL}}"
       hx-target="#reports-load-more-row"
-      hx-swap="outerHTML">Weitere laden</button>
+      hx-swap="outerHTML">Load more</button>
   </td>
 </tr>
 {{end}}

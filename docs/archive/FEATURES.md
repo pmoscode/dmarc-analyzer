@@ -25,4 +25,4 @@
 - Follow DDD
 - Follow the Clean Architecture principles
 - Follow the Clean Code principles
-- Benutzerfreundliche Oberfläche für einfache Navigation und Bedienung
+- User-friendly interface for easy navigation and operation

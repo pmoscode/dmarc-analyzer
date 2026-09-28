@@ -14,18 +14,18 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/analysis"
 )
 
-// testPublicHost ist der Host-Header, den ein vorgeschalteter Reverse-Proxy
-// in Produktion unverändert durchreichen würde (siehe middleware.go
-// requireHost) — Tests verbinden sich zwar über die tatsächlich gebundene
-// Loopback-Adresse (server.go bind()), setzen den Host-Header aber auf
-// diesen festen, öffentlichen Namen, genau wie es der Proxy täte.
+// testPublicHost is the Host header a reverse proxy in front of the
+// server would pass through unchanged in production (see middleware.go
+// requireHost) — tests connect via the actually bound loopback address
+// (server.go bind()), but set the Host header to this fixed, public
+// name, just like the proxy would.
 const testPublicHost = "dmarc.example.test"
 
-// testRedirectURL ist die zu testPublicHost passende OIDC-Redirect-URL —
-// bestimmt zugleich Server.allowedHost (siehe server.go New()). Sie ist
-// absichtlich nicht auflösbar (kein echter DNS-Eintrag) — Tests, die dem
-// Redirect dorthin folgen müssen, schreiben den Host auf srv.Addr() um
-// (siehe beginFakeOIDCLogin), statt tatsächlich danach aufzulösen.
+// testRedirectURL is the OIDC redirect URL matching testPublicHost — it
+// also determines Server.allowedHost (see server.go New()). It's
+// deliberately unresolvable (no real DNS entry) — tests that need to
+// follow the redirect there rewrite the host to srv.Addr() (see
+// beginFakeOIDCLogin) instead of actually resolving it.
 const testRedirectURL = "http://" + testPublicHost + "/anmelden/callback"
 
 func testDeps() Dependencies {
@@ -34,7 +34,7 @@ func testDeps() Dependencies {
 	}
 }
 
-// testBuild ist die Build-Information aller Testserver — siehe
+// testBuild is the build information of all test servers — see
 // TestLayout_HeaderShowsVersionAndCommit.
 var testBuild = BuildInfo{Version: "v9.9.9-test", Commit: "0123456789abcdef0123456789abcdef01234567"}
 
@@ -52,10 +52,10 @@ func testOIDCOptions(issuer string) Options {
 	}
 }
 
-// newRequest baut eine Anfrage mit Kontext und setzt den Host-Header auf
-// testPublicHost — genau wie ein vorgeschalteter Reverse-Proxy es täte
-// (TCP-Verbindung zur intern gebundenen Adresse, Host-Header trägt den
-// öffentlichen Namen, siehe requireHost in middleware.go).
+// newRequest builds a request with context and sets the Host header to
+// testPublicHost — just like a reverse proxy in front of the server
+// would (TCP connection to the internally bound address, Host header
+// carries the public name, see requireHost in middleware.go).
 func newRequest(t *testing.T, method, target string, body io.Reader) *http.Request {
 	t.Helper()
 	req, err := http.NewRequestWithContext(context.Background(), method, target, body)
@@ -64,8 +64,8 @@ func newRequest(t *testing.T, method, target string, body io.Reader) *http.Reque
 	return req
 }
 
-// httpGet baut eine GET-Anfrage mit Kontext statt der kontextlosen
-// http.Get/(*http.Client).Get-Bequemlichkeitsfunktionen (linter: noctx).
+// httpGet builds a GET request with context instead of the contextless
+// http.Get/(*http.Client).Get convenience functions (linter: noctx).
 func httpGet(t *testing.T, client *http.Client, url string) *http.Response {
 	t.Helper()
 	resp, err := client.Do(newRequest(t, http.MethodGet, url, nil))
@@ -73,13 +73,12 @@ func httpGet(t *testing.T, client *http.Client, url string) *http.Response {
 	return resp
 }
 
-// testCookieJar ist ein bewusst vereinfachter http.CookieJar für Tests:
-// net/http/cookiejar würde ein Secure-Cookie (siehe auth.go
-// setSessionCookie) für die "http://"-Testserver-URLs dieses Pakets beim
-// Zurücklesen stillschweigend verwerfen (RFC 6265, von der Standardbibliothek
-// korrekt umgesetzt) — dieses Fake ignoriert Secure/Domain/Path bewusst,
-// es dient nur dazu, Cookies zwischen den Anfragen EINES Testclients
-// weiterzureichen.
+// testCookieJar is a deliberately simplified http.CookieJar for tests:
+// net/http/cookiejar would silently drop a Secure cookie (see auth.go
+// setSessionCookie) when reading it back for this package's "http://"
+// test server URLs (RFC 6265, correctly implemented by the standard
+// library) — this fake deliberately ignores Secure/Domain/Path; it only
+// serves to pass cookies along between the requests of ONE test client.
 type testCookieJar struct {
 	mu      sync.Mutex
 	cookies map[string]*http.Cookie
@@ -121,10 +120,10 @@ func (j *testCookieJar) cookiesNamed(name string) []*http.Cookie {
 	return nil
 }
 
-// newTestServer baut und startet einen Server mit einem lokalen
-// Fake-OIDC-Provider (siehe fakeoidc_test.go) auf einem echten, zufälligen
-// Loopback-Port — bewusst kein httptest.NewServer: Server.Start bindet
-// bereits selbst einen echten net.Listener (siehe server.go).
+// newTestServer builds and starts a server with a local fake OIDC
+// provider (see fakeoidc_test.go) on a real, random loopback port —
+// deliberately not httptest.NewServer: Server.Start already binds a real
+// net.Listener itself (see server.go).
 func newTestServer(t *testing.T) (*Server, *fakeOIDCProvider) {
 	t.Helper()
 
@@ -137,11 +136,11 @@ func newTestServer(t *testing.T) (*Server, *fakeOIDCProvider) {
 	return srv, provider
 }
 
-// beginFakeOIDCLogin durchläuft /anmelden und den Fake-Provider bis kurz
-// vor dem Callback an unseren Server: liefert einen Client mit dem
-// pending-login-Cookie im Jar sowie die auf srv.Addr() umgeschriebene
-// Callback-URL (der Provider leitet eigentlich auf testRedirectURL um,
-// die nicht auflösbar ist — siehe testRedirectURL-Dokumentation).
+// beginFakeOIDCLogin runs through /anmelden and the fake provider up to
+// just before the callback to our server: returns a client with the
+// pending-login cookie in the jar, plus the callback URL rewritten to
+// srv.Addr() (the provider actually redirects to testRedirectURL, which
+// isn't resolvable — see the testRedirectURL documentation).
 func beginFakeOIDCLogin(t *testing.T, srv *Server) (*http.Client, string) {
 	t.Helper()
 
@@ -167,9 +166,9 @@ func beginFakeOIDCLogin(t *testing.T, srv *Server) (*http.Client, string) {
 	return client, u.String()
 }
 
-// loginViaFakeOIDC durchläuft den vollständigen Anmeldevorgang und liefert
-// einen Client, dessen Cookie-Jar die entstandene Sitzung für alle
-// folgenden Anfragen an srv mitträgt.
+// loginViaFakeOIDC runs through the full login flow and returns a client
+// whose cookie jar carries the resulting session for all following
+// requests to srv.
 func loginViaFakeOIDC(t *testing.T, srv *Server) *http.Client {
 	t.Helper()
 
@@ -177,10 +176,10 @@ func loginViaFakeOIDC(t *testing.T, srv *Server) *http.Client {
 
 	resp := httpGet(t, client, callbackURL)
 	defer func() { _ = resp.Body.Close() }()
-	require.Equal(t, http.StatusSeeOther, resp.StatusCode, "erfolgreiche anmeldung sollte auf / weiterleiten")
+	require.Equal(t, http.StatusSeeOther, resp.StatusCode, "a successful login should redirect to /")
 
 	jar, _ := client.Jar.(*testCookieJar)
-	require.NotEmpty(t, jar.cookiesNamed(sessionCookieName), "erfolgreiche anmeldung sollte eine sitzung anlegen")
+	require.NotEmpty(t, jar.cookiesNamed(sessionCookieName), "a successful login should create a session")
 
 	return client
 }
@@ -196,7 +195,7 @@ func TestNew_UnreachableIssuer_ReturnsError(t *testing.T) {
 func TestNew_InvalidRedirectURL_ReturnsError(t *testing.T) {
 	provider := newFakeOIDCProvider(t)
 	opts := testOIDCOptions(provider.issuer())
-	opts.OIDC.RedirectURL = "nicht-vollstaendig"
+	opts.OIDC.RedirectURL = "not-complete"
 
 	_, err := New(context.Background(), testDeps(), opts)
 
@@ -215,7 +214,7 @@ func TestServer_LoginFlow_ValidAdminGroup_GrantsSessionAndAccess(t *testing.T) {
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(body), "Übersicht")
+	require.Contains(t, string(body), "Overview")
 }
 
 func TestServer_LoginFlow_WithoutAdminGroup_Returns403AndNoSession(t *testing.T) {
@@ -229,14 +228,15 @@ func TestServer_LoginFlow_WithoutAdminGroup_Returns403AndNoSession(t *testing.T)
 	require.Equal(t, http.StatusForbidden, resp.StatusCode)
 
 	jar, _ := client.Jar.(*testCookieJar)
-	require.Empty(t, jar.cookiesNamed(sessionCookieName), "ohne admin-gruppe darf keine sitzung entstehen")
+	require.Empty(t, jar.cookiesNamed(sessionCookieName), "no session may be created without the admin group")
 
-	// Erklärende HTML-Seite statt nacktem Klartext (verifiziert
-	// 2026-09-19: vorher stand dort außer dem einen Satz nichts).
+	// Explanatory HTML page instead of bare plaintext (verified
+	// 2026-09-19: before this, apart from that one sentence, the page was
+	// empty).
 	require.Contains(t, resp.Header.Get("Content-Type"), "text/html")
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(body), "Zugriff verweigert")
+	require.Contains(t, string(body), "Access denied")
 	require.Contains(t, string(body), "normal@example.com")
 	require.Contains(t, string(body), `href="/anmelden"`)
 }
@@ -304,18 +304,18 @@ func TestServer_HealthEndpoint_ServedWithoutSession(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 }
 
-// TestServer_HealthEndpoint_IgnoresHostHeader ist eine Regression für einen
-// per "docker run" gefundenen Fehler: Dockers HEALTHCHECK
-// (cmd_healthcheck.go) verbindet sich containerintern über
-// "127.0.0.1:<port>" — der Host-Header trägt dabei nie den öffentlichen
-// Hostnamen aus DMARC_OIDC_REDIRECT_URL. Läge /gesund hinter requireHost,
-// wäre der Container dauerhaft "unhealthy" (siehe routes.go-Kommentar).
+// TestServer_HealthEndpoint_IgnoresHostHeader is a regression test for a
+// bug found via "docker run": Docker's HEALTHCHECK (cmd_healthcheck.go)
+// connects within the container via "127.0.0.1:<port>" — the Host
+// header never carries the public hostname from DMARC_OIDC_REDIRECT_URL
+// in that case. If /gesund were behind requireHost, the container would
+// be permanently "unhealthy" (see the routes.go comment).
 func TestServer_HealthEndpoint_IgnoresHostHeader(t *testing.T) {
 	srv, _ := newTestServer(t)
 
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://"+srv.Addr()+"/gesund", nil)
 	require.NoError(t, err)
-	req.Host = "127.0.0.1:12345" // wie beim containerinternen Docker-Healthcheck, nicht testPublicHost
+	req.Host = "127.0.0.1:12345" // like the in-container Docker healthcheck, not testPublicHost
 
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)

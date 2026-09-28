@@ -13,6 +13,6 @@ func TestByName_KnownTerm_ReturnsTerm(t *testing.T) {
 }
 
 func TestByName_UnknownTerm_ReturnsFalse(t *testing.T) {
-	_, ok := ByName("nicht im glossar")
+	_, ok := ByName("not in the glossary")
 	require.False(t, ok)
 }

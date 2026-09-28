@@ -1,11 +1,10 @@
-// Sync-Fortschritt (MIGRATIONSPLAN.md Meilenstein M3: "Sync-Knopf mit
-// Fortschritt (SSE) und Abbruch"). Bewusst dünn — die eigentliche Logik
-// (höchstens ein Lauf gleichzeitig, Abbruch, Aufsummieren über mehrere
-// Konten) steckt serverseitig in internal/app/syncjob, dieses Skript
-// zeigt nur den zuletzt vom Server gemeldeten Zustand an und reicht
-// Start/Abbruch als ganz normale Formular-POSTs weiter (kein eigener
-// Ajax-Aufruf nötig — /abgleich und /abgleich/abbrechen leiten nach dem
-// POST auf die aktuelle Seite zurück).
+// Sync progress (MIGRATIONSPLAN.md milestone M3: "sync button with
+// progress (SSE) and cancel"). Deliberately thin — the actual logic (at
+// most one run at a time, cancel, summing up across several accounts)
+// lives server-side in internal/app/syncjob; this script only displays
+// the state last reported by the server and forwards start/cancel as
+// plain form POSTs (no dedicated Ajax call needed — /abgleich and
+// /abgleich/abbrechen redirect back to the current page after the POST).
 (function () {
   "use strict";
 
@@ -17,20 +16,19 @@
   }
 
   function progressText(p) {
-    return p.processed + " verarbeitet, " + p.new + " neu, " + p.skipped + " übersprungen, " + p.failed + " fehlerhaft";
+    return p.processed + " processed, " + p.new + " new, " + p.skipped + " skipped, " + p.failed + " failed";
   }
 
   function totalText(t) {
-    return t.new + " neu, " + t.skipped + " übersprungen, " + t.failed + " fehlerhaft";
+    return t.new + " new, " + t.skipped + " skipped, " + t.failed + " failed";
   }
 
-  // notifyResult zeigt eine Browser-Benachrichtigung für ein beendetes
-  // Sync-Ergebnis (AP 7: "Browser-Benachrichtigung bei offenem Tab") — nur
-  // wenn die Berechtigung bereits erteilt ist (siehe unten, Abschnitt
-  // "Browser-Benachrichtigungen"). Ein serverseitig laufender Abgleich
-  // läuft über die HTTP-Anfrage hinaus weiter (internal/app/syncjob) —
-  // diese Benachrichtigung ist der einzige Hinweis, wenn der Tab
-  // währenddessen in den Hintergrund gerückt ist.
+  // notifyResult shows a browser notification for a finished sync result
+  // (AP 7: "browser notification with an open tab") — only if permission
+  // has already been granted (see below, "browser notifications"
+  // section). A sync running server-side keeps going beyond the HTTP
+  // request (internal/app/syncjob) — this notification is the only hint
+  // if the tab was pushed into the background in the meantime.
   function notifyResult(title, body) {
     if (!("Notification" in window) || Notification.permission !== "granted") {
       return;
@@ -38,16 +36,16 @@
     try {
       new Notification(title, { body: body, tag: "dmarc-analyzer-sync" });
     } catch (err) {
-      console.error("Benachrichtigung konnte nicht angezeigt werden", err);
+      console.error("could not show notification", err);
     }
   }
 
-  // lastStatus verfolgt den zuletzt gerenderten Status, damit
-  // notifyResult nur beim ÜBERGANG von "running" zu einem Endzustand
-  // feuert — nicht bei jedem der vielen Fortschritts-Ereignisse während
-  // eines laufenden Abgleichs, und nicht erneut beim ersten Ereignis nach
-  // einem Seitenwechsel (das den zuletzt beendeten Lauf lediglich erneut
-  // meldet, siehe Runner.Subscribe-Dokumentation).
+  // lastStatus tracks the last rendered status, so notifyResult only
+  // fires on the TRANSITION from "running" to a final state — not on
+  // every one of the many progress events during a running sync, and not
+  // again on the first event after a page change (which just reports the
+  // most recently finished run again, see the Runner.Subscribe
+  // documentation).
   var lastStatus = null;
 
   function render(state) {
@@ -62,7 +60,7 @@
       startForm.hidden = true;
       cancelForm.hidden = false;
       var account = state.currentAccount ? " (" + state.currentAccount + ")" : "";
-      statusEl.textContent = "Abgleich läuft" + account + ": " + progressText(state.progress);
+      statusEl.textContent = "Sync running" + account + ": " + progressText(state.progress);
       return;
     }
 
@@ -71,21 +69,21 @@
 
     switch (state.status) {
       case "done":
-        statusEl.textContent = "Letzter Abgleich: " + totalText(state.total);
+        statusEl.textContent = "Last sync: " + totalText(state.total);
         if (wasRunning) {
-          notifyResult("Abgleich abgeschlossen", totalText(state.total));
+          notifyResult("Sync completed", totalText(state.total));
         }
         break;
       case "cancelled":
-        statusEl.textContent = "Abgleich abgebrochen.";
+        statusEl.textContent = "Sync cancelled.";
         if (wasRunning) {
-          notifyResult("Abgleich abgebrochen", "");
+          notifyResult("Sync cancelled", "");
         }
         break;
       case "failed":
-        statusEl.textContent = "Abgleich fehlgeschlagen" + (state.err ? ": " + state.err : ".");
+        statusEl.textContent = "Sync failed" + (state.err ? ": " + state.err : ".");
         if (wasRunning) {
-          notifyResult("Abgleich fehlgeschlagen", state.err || "");
+          notifyResult("Sync failed", state.err || "");
         }
         break;
       default:
@@ -98,19 +96,18 @@
     try {
       render(JSON.parse(event.data));
     } catch (err) {
-      console.error("Sync-Ereignis konnte nicht gelesen werden", err);
+      console.error("could not read sync event", err);
     }
   };
 })();
 
-// Browser-Benachrichtigungen aktivieren (AP 7) — der Knopf sitzt auf
-// settings.html, existiert also nur dort; die eigentliche Anzeige einer
-// Benachrichtigung (notifyResult oben) läuft seitenunabhängig, sobald die
-// Berechtigung einmal erteilt ist (der Browser merkt sie sich dauerhaft,
-// keine eigene Ablage nötig). Berechtigungen werden bewusst nur auf einen
-// Klick hin angefragt (Nutzergeste), nie automatisch beim Laden — die
-// meisten Browser blenden einen unaufgeforderten Prompt ohnehin aus oder
-// verweigern ihn.
+// Enable browser notifications (AP 7) — the button sits on
+// settings.html, so it only exists there; the actual display of a
+// notification (notifyResult above) runs independently of the page, once
+// permission has been granted (the browser remembers it permanently, no
+// separate storage needed). Permission is deliberately only requested on
+// a click (a user gesture), never automatically on load — most browsers
+// suppress or deny an unsolicited prompt anyway.
 (function () {
   "use strict";
 
@@ -124,11 +121,11 @@
     switch (Notification.permission) {
       case "granted":
         button.hidden = true;
-        status.textContent = "Browser-Benachrichtigungen sind aktiviert.";
+        status.textContent = "Browser notifications are enabled.";
         break;
       case "denied":
         button.hidden = true;
-        status.textContent = "Browser-Benachrichtigungen wurden blockiert — Berechtigung in den Browser-Einstellungen dieser Seite ändern.";
+        status.textContent = "Browser notifications were blocked — change the permission in this site's browser settings.";
         break;
       default:
         button.hidden = false;
@@ -143,11 +140,11 @@
   render();
 })();
 
-// Bestätigungsabfrage vor destruktiven Formularen (z. B. Konto löschen,
-// settings.html) — dieselbe Sicherheitsnetz-Idee wie zuvor
-// dialog.ShowConfirm in internal/ui/settings.View.confirmDelete. Ein
-// generischer, delegierter Listener statt eines Inline-onsubmit-
-// Attributs (von der CSP ohnehin verboten).
+// Confirmation prompt before destructive forms (e.g. delete account,
+// settings.html) — the same safety-net idea as formerly
+// dialog.ShowConfirm in internal/ui/settings.View.confirmDelete. A
+// generic, delegated listener instead of an inline onsubmit attribute
+// (forbidden by the CSP anyway).
 document.addEventListener("submit", function (event) {
   var form = event.target;
   if (form && form.dataset && form.dataset.confirm && !window.confirm(form.dataset.confirm)) {
@@ -155,13 +152,12 @@ document.addEventListener("submit", function (event) {
   }
 });
 
-// Datei-Import: Drag & Drop (MIGRATIONSPLAN.md Meilenstein M4). Die
-// eigentliche Dateiübernahme funktioniert bereits nativ (Browser lassen
-// Dateien direkt auf ein <input type="file"> fallen) — dieses Skript
-// sorgt nur für optisches Feedback (Rahmen hervorheben, sobald über der
-// gesamten Fläche gezogen wird, nicht nur über dem oft winzigen
-// <input>) und zeigt die ausgewählten Dateinamen an, egal ob per Klick
-// oder per Drop ausgewählt.
+// File import: drag & drop (MIGRATIONSPLAN.md milestone M4). Taking over
+// the files themselves already works natively (browsers let files be
+// dropped directly onto an <input type="file">) — this script only
+// provides visual feedback (highlight the border as soon as something is
+// dragged over the whole area, not just over the often tiny <input>) and
+// shows the selected file names, whether chosen by click or by drop.
 (function () {
   "use strict";
 
@@ -178,7 +174,7 @@ document.addEventListener("submit", function (event) {
     }
     var files = fileInput.files;
     if (!files || files.length === 0) {
-      text.textContent = "Dateien hierher ziehen oder klicken zum Auswählen";
+      text.textContent = "Drag files here or click to choose";
       return;
     }
     var names = [];
@@ -209,18 +205,17 @@ document.addEventListener("submit", function (event) {
   fileInput.addEventListener("change", updateLabel);
 })();
 
-// Filter je Ansicht merken (Dashboard, Berichte, Domains, Quellen haben
-// jeweils ihr eigenes filter-bar-Formular, siehe internal/web/filter.go —
-// "Filter stehen in der URL"). Ohne dieses Skript vergisst jede Ansicht
-// ihren Filter beim Wechseln, weil ein Klick in der Hauptnavigation immer
-// auf die reine Seiten-URL ohne Query-Parameter führt. Absendens des
-// Filterformulars merkt die dabei entstehende Query-String je Seitenpfad
-// in localStorage; ein späterer Aufruf derselben Ansicht ohne
-// Query-Parameter stellt sie wieder her. Der "Filter zurücksetzen"-Link
-// löscht den gemerkten Zustand, bevor er auf die parameterlose URL
-// zurückführt. Bewusst kein serverseitiger Zustand (keine
-// Zustandsänderung im Sinne von AGENTS.md) — reine Anzeige-Bequemlichkeit
-// pro Browser, kein POST/CSRF nötig.
+// Remember the filter per view (dashboard, reports, domains, sources
+// each have their own filter-bar form, see internal/web/filter.go —
+// "filters live in the URL"). Without this script, every view forgets
+// its filter when switching, because clicking the main nav always leads
+// to the plain page URL without query parameters. Submitting the filter
+// form remembers the resulting query string in localStorage per page
+// path; a later visit to the same view without query parameters
+// restores it. The "reset filter" link clears the remembered state
+// before it leads back to the parameter-less URL. Deliberately no
+// server-side state (not a state change in the sense of AGENTS.md) —
+// pure display convenience per browser, no POST/CSRF needed.
 (function () {
   "use strict";
 
@@ -240,9 +235,8 @@ document.addEventListener("submit", function (event) {
       }
     }
   } catch (err) {
-    // localStorage kann in privaten Modi oder durch Browser-Einstellungen
-    // fehlschlagen — Filter funktionieren dann einfach wie zuvor, ohne
-    // sich den Zustand zu merken.
+    // localStorage can fail in private modes or due to browser settings
+    // — filters then simply work as before, without remembering state.
   }
 
   document.addEventListener("click", function (event) {
@@ -252,8 +246,7 @@ document.addEventListener("submit", function (event) {
     try {
       window.localStorage.removeItem(storageKey);
     } catch (err) {
-      // s.o.
+      // see above.
     }
   });
 })();
-

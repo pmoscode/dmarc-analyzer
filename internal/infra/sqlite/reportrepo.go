@@ -15,7 +15,7 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/report"
 )
 
-// ReportRepository implementiert report.Repository gegen SQLite.
+// ReportRepository implements report.Repository against SQLite.
 type ReportRepository struct {
 	db *sql.DB
 }
@@ -23,29 +23,28 @@ type ReportRepository struct {
 var _ report.Repository = (*ReportRepository)(nil)
 var _ report.Pruner = (*ReportRepository)(nil)
 
-// NewReportRepository erzeugt ein einsatzbereites Repository. db muss
-// bereits über Open() geöffnet (und damit migriert) sein.
+// NewReportRepository creates a ready-to-use repository. db must
+// already be opened via Open() (and thus migrated).
 func NewReportRepository(db *sql.DB) *ReportRepository {
 	return &ReportRepository{db: db}
 }
 
-// Save speichert einen Report vollständig oder gar nicht: Report, Records,
-// Auth-Ergebnisse und Reasons laufen in einer Transaktion
-// (IMPLEMENTIERUNG.md Abschnitt 7.2/8.2). Bei Erfolg setzt Save r.ID auf
-// den vergebenen Primärschlüssel.
+// Save saves a report completely or not at all: report, records, auth
+// results, and reasons run in one transaction (IMPLEMENTIERUNG.md section
+// 7.2/8.2). On success, Save sets r.ID to the assigned primary key.
 func (repo *ReportRepository) Save(ctx context.Context, r *report.AggregateReport) error {
 	tx, err := repo.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("transaktion konnte nicht gestartet werden: %w", err)
+		return fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer func() { _ = tx.Rollback() }() // no-op, wenn bereits committed
+	defer func() { _ = tx.Rollback() }() // no-op if already committed
 
 	reportID, err := insertReport(ctx, tx, r)
 	if err != nil {
 		if isUniqueConstraintError(err) {
 			return report.ErrDuplicate
 		}
-		return fmt.Errorf("report konnte nicht gespeichert werden: %w", err)
+		return fmt.Errorf("could not save report: %w", err)
 	}
 
 	if err := insertReportErrors(ctx, tx, reportID, r.Metadata.Errors); err != nil {
@@ -57,7 +56,7 @@ func (repo *ReportRepository) Save(ctx context.Context, r *report.AggregateRepor
 	}
 
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("transaktion konnte nicht committed werden: %w", err)
+		return fmt.Errorf("could not commit transaction: %w", err)
 	}
 
 	r.ID = report.ReportID(reportID)
@@ -97,21 +96,21 @@ func insertReportErrors(ctx context.Context, tx *sql.Tx, reportID int64, message
 
 	stmt, err := tx.PrepareContext(ctx, "INSERT INTO report_errors (report_id, message) VALUES (?, ?)")
 	if err != nil {
-		return fmt.Errorf("report_errors-statement konnte nicht vorbereitet werden: %w", err)
+		return fmt.Errorf("could not prepare report_errors statement: %w", err)
 	}
 	defer func() { _ = stmt.Close() }()
 
 	for _, msg := range messages {
 		if _, err := stmt.ExecContext(ctx, reportID, msg); err != nil {
-			return fmt.Errorf("report_errors konnte nicht gespeichert werden: %w", err)
+			return fmt.Errorf("could not save report_errors: %w", err)
 		}
 	}
 	return nil
 }
 
-// insertRecords fügt alle Records eines Reports per vorbereiteter
-// Statements ein (Batch-Insert innerhalb der laufenden Transaktion,
-// IMPLEMENTIERUNG.md Abschnitt 8.2).
+// insertRecords inserts all records of a report using prepared
+// statements (batch insert within the running transaction,
+// IMPLEMENTIERUNG.md section 8.2).
 func insertRecords(ctx context.Context, tx *sql.Tx, reportID int64, records []report.Record) error {
 	if len(records) == 0 {
 		return nil
@@ -123,28 +122,28 @@ func insertRecords(ctx context.Context, tx *sql.Tx, reportID int64, records []re
 			header_from, envelope_from, envelope_to
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
-		return fmt.Errorf("records-statement konnte nicht vorbereitet werden: %w", err)
+		return fmt.Errorf("could not prepare records statement: %w", err)
 	}
 	defer func() { _ = recordStmt.Close() }()
 
 	reasonStmt, err := tx.PrepareContext(ctx,
 		"INSERT INTO record_reasons (record_id, type, comment) VALUES (?, ?, ?)")
 	if err != nil {
-		return fmt.Errorf("record_reasons-statement konnte nicht vorbereitet werden: %w", err)
+		return fmt.Errorf("could not prepare record_reasons statement: %w", err)
 	}
 	defer func() { _ = reasonStmt.Close() }()
 
 	dkimStmt, err := tx.PrepareContext(ctx,
 		"INSERT INTO auth_results_dkim (record_id, domain, selector, result, human_result) VALUES (?, ?, ?, ?, ?)")
 	if err != nil {
-		return fmt.Errorf("auth_results_dkim-statement konnte nicht vorbereitet werden: %w", err)
+		return fmt.Errorf("could not prepare auth_results_dkim statement: %w", err)
 	}
 	defer func() { _ = dkimStmt.Close() }()
 
 	spfStmt, err := tx.PrepareContext(ctx,
 		"INSERT INTO auth_results_spf (record_id, domain, scope, result) VALUES (?, ?, ?, ?)")
 	if err != nil {
-		return fmt.Errorf("auth_results_spf-statement konnte nicht vorbereitet werden: %w", err)
+		return fmt.Errorf("could not prepare auth_results_spf statement: %w", err)
 	}
 	defer func() { _ = spfStmt.Close() }()
 
@@ -156,29 +155,29 @@ func insertRecords(ctx context.Context, tx *sql.Tx, reportID int64, records []re
 			nullableString(rec.Identifiers.EnvelopeFrom), nullableString(rec.Identifiers.EnvelopeTo),
 		)
 		if err != nil {
-			return fmt.Errorf("record konnte nicht gespeichert werden: %w", err)
+			return fmt.Errorf("could not save record: %w", err)
 		}
 
 		recordID, err := res.LastInsertId()
 		if err != nil {
-			return fmt.Errorf("record-id konnte nicht ermittelt werden: %w", err)
+			return fmt.Errorf("could not determine record ID: %w", err)
 		}
 
 		for _, reason := range rec.Evaluated.Reasons {
 			if _, err := reasonStmt.ExecContext(ctx, recordID, reason.Type, reason.Comment); err != nil {
-				return fmt.Errorf("record_reason konnte nicht gespeichert werden: %w", err)
+				return fmt.Errorf("could not save record_reason: %w", err)
 			}
 		}
 
 		for _, dkim := range rec.Auth.DKIM {
 			if _, err := dkimStmt.ExecContext(ctx, recordID, dkim.Domain, dkim.Selector, string(dkim.Result), dkim.HumanResult); err != nil {
-				return fmt.Errorf("auth_results_dkim konnte nicht gespeichert werden: %w", err)
+				return fmt.Errorf("could not save auth_results_dkim: %w", err)
 			}
 		}
 
 		for _, spf := range rec.Auth.SPF {
 			if _, err := spfStmt.ExecContext(ctx, recordID, spf.Domain, spf.Scope, string(spf.Result)); err != nil {
-				return fmt.Errorf("auth_results_spf konnte nicht gespeichert werden: %w", err)
+				return fmt.Errorf("could not save auth_results_spf: %w", err)
 			}
 		}
 	}
@@ -186,25 +185,25 @@ func insertRecords(ctx context.Context, tx *sql.Tx, reportID int64, records []re
 	return nil
 }
 
-// DeleteOlderThan implementiert report.Pruner — löscht per DELETE ... WHERE
-// mit den bestehenden Fremdschlüsseln (ON DELETE CASCADE, siehe
-// migrations/0001_init.sql), keine separate Transaktion nötig: ein
-// einzelnes DELETE ist bereits atomar.
+// DeleteOlderThan implements report.Pruner — deletes via DELETE ... WHERE
+// using the existing foreign keys (ON DELETE CASCADE, see
+// migrations/0001_init.sql); no separate transaction needed since a
+// single DELETE is already atomic.
 func (repo *ReportRepository) DeleteOlderThan(ctx context.Context, cutoff time.Time) (int64, error) {
 	res, err := repo.db.ExecContext(ctx, "DELETE FROM reports WHERE date_end < ?", cutoff.Unix())
 	if err != nil {
-		return 0, fmt.Errorf("alte reports konnten nicht gelöscht werden: %w", err)
+		return 0, fmt.Errorf("could not delete old reports: %w", err)
 	}
 
 	n, err := res.RowsAffected()
 	if err != nil {
-		return 0, fmt.Errorf("anzahl gelöschter reports konnte nicht ermittelt werden: %w", err)
+		return 0, fmt.Errorf("could not determine number of deleted reports: %w", err)
 	}
 	return n, nil
 }
 
-// Exists prüft die fachliche Identität (Abschnitt 6.3), Grundlage der
-// Deduplizierung beim Import.
+// Exists checks the domain identity (section 6.3), the basis for
+// deduplication on import.
 func (repo *ReportRepository) Exists(ctx context.Context, key report.Key) (bool, error) {
 	const stmt = `SELECT 1 FROM reports WHERE org_name = ? AND report_id = ? AND date_begin = ? LIMIT 1`
 
@@ -214,13 +213,13 @@ func (repo *ReportRepository) Exists(ctx context.Context, key report.Key) (bool,
 	case errors.Is(err, sql.ErrNoRows):
 		return false, nil
 	case err != nil:
-		return false, fmt.Errorf("existenz konnte nicht geprüft werden: %w", err)
+		return false, fmt.Errorf("could not check existence: %w", err)
 	default:
 		return true, nil
 	}
 }
 
-// FindByID lädt einen Report vollständig, inklusive aller Records.
+// FindByID loads a report completely, including all records.
 func (repo *ReportRepository) FindByID(ctx context.Context, id report.ReportID) (*report.AggregateReport, error) {
 	reports, err := loadReports(ctx, repo.db, "WHERE r.id = ?", []any{int64(id)}, "", 0, true)
 	if err != nil {
@@ -251,13 +250,13 @@ func nullableUint32(v uint32) any {
 	return v
 }
 
-// toUint32 konvertiert einen aus SQLite gelesenen int64 (message_uid, dort
-// ohne eigenes UNSIGNED-Konzept gespeichert) zurück nach uint32 — mit
-// Bereichsprüfung statt stillem Abschneiden, falls die Datei jemals von
-// außerhalb dieses Programms verändert wurde.
+// toUint32 converts an int64 read from SQLite (message_uid, stored there
+// without its own UNSIGNED concept) back to uint32 — with range checking
+// instead of silent truncation, in case the file was ever modified from
+// outside this program.
 func toUint32(v int64) (uint32, error) {
 	if v < 0 || v > math.MaxUint32 {
-		return 0, fmt.Errorf("wert %d liegt außerhalb des uint32-bereichs", v)
+		return 0, fmt.Errorf("value %d is outside the uint32 range", v)
 	}
 	return uint32(v), nil
 }

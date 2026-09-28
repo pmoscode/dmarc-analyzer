@@ -10,8 +10,8 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/report"
 )
 
-// fakeResolver ersetzt den echten DNS-Resolver in Tests — kein Netzwerk,
-// deterministisch, zählt Aufrufe zum Nachweis des Caches.
+// fakeResolver replaces the real DNS resolver in tests — no network,
+// deterministic, counts calls to prove the cache works.
 type fakeResolver struct {
 	names map[string][]string
 	err   error
@@ -41,7 +41,7 @@ func TestEnricher_Enrich_ResolvesHostnameAndKnownService(t *testing.T) {
 
 	got := e.Enrich(context.Background(), mustSourceIP(t, "203.0.113.1"))
 
-	require.Equal(t, "mail-sor-f41.google.com", got.Hostname, "trailing dot muss entfernt werden")
+	require.Equal(t, "mail-sor-f41.google.com", got.Hostname, "trailing dot must be removed")
 	require.Equal(t, "Google Workspace", got.Service)
 }
 
@@ -58,7 +58,7 @@ func TestEnricher_Enrich_UnknownHostname_NoServiceButHostnameSet(t *testing.T) {
 }
 
 func TestEnricher_Enrich_LookupFails_ReturnsEmptyEnrichmentNoPanic(t *testing.T) {
-	resolver := &fakeResolver{err: errors.New("kein ptr-eintrag")}
+	resolver := &fakeResolver{err: errors.New("no ptr record")}
 	e := &Enricher{resolver: resolver}
 
 	got := e.Enrich(context.Background(), mustSourceIP(t, "203.0.113.3"))
@@ -78,13 +78,13 @@ func TestEnricher_Enrich_CachesResultAcrossCalls(t *testing.T) {
 	second := e.Enrich(context.Background(), ip)
 
 	require.Equal(t, first, second)
-	require.Equal(t, 1, resolver.calls, "zweiter Aufruf muss aus dem Cache kommen, nicht erneut auflösen")
+	require.Equal(t, 1, resolver.calls, "second call must come from the cache, not resolve again")
 }
 
 func TestDetectService_MatchesKnownSuffixesCaseInsensitively(t *testing.T) {
 	require.Equal(t, "Microsoft 365", detectService("MAIL.PROTECTION.OUTLOOK.COM"))
 	require.Equal(t, "Mailchimp", detectService("mail123.mcdlv.net"))
-	require.Equal(t, "Brevo (vormals Sendinblue)", detectService("mta1.brevo.com"))
-	require.Empty(t, detectService("unbekannt.example.com"))
+	require.Equal(t, "Brevo (formerly Sendinblue)", detectService("mta1.brevo.com"))
+	require.Empty(t, detectService("unknown.example.com"))
 	require.Empty(t, detectService(""))
 }

@@ -5,11 +5,10 @@ import (
 	"errors"
 )
 
-// SaveIfNew prüft die fachliche Identität von r gegen repo und speichert
-// ihn nur, wenn er noch nicht existiert — die gemeinsame
-// Deduplizierungslogik für alle Importwege (IMAP-Sync, Datei-Import),
-// hier einmal implementiert statt in jedem Use Case wiederholt. Liefert
-// true, wenn r tatsächlich neu gespeichert wurde.
+// SaveIfNew checks r's business identity against repo and only saves it
+// if it doesn't already exist — the shared deduplication logic for all
+// import paths (IMAP sync, file import), implemented once here instead of
+// repeated in every use case. Returns true if r was actually newly saved.
 func SaveIfNew(ctx context.Context, repo Repository, r *AggregateReport) (imported bool, err error) {
 	exists, err := repo.Exists(ctx, r.Key())
 	if err != nil {
@@ -21,8 +20,8 @@ func SaveIfNew(ctx context.Context, repo Repository, r *AggregateReport) (import
 
 	if err := repo.Save(ctx, r); err != nil {
 		if errors.Is(err, ErrDuplicate) {
-			// Race zwischen Exists und Save (z. B. derselbe Report über
-			// zwei parallele Importwege) — kein Fehler, nur kein Neuimport.
+			// Race between Exists and Save (e.g. the same report via two
+			// parallel import paths) — not an error, just no new import.
 			return false, nil
 		}
 		return false, err

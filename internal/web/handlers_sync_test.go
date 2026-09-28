@@ -12,7 +12,7 @@ import (
 )
 
 func TestHandleSyncStart_StartsJobAndRedirectsBack(t *testing.T) {
-	srv, fd := newTestServerWithAccounts(t, mustAccount(t, "Konto 1"))
+	srv, fd := newTestServerWithAccounts(t, mustAccount(t, "Account 1"))
 	client := authenticatedClient(t, srv)
 
 	req := newRequest(t, http.MethodPost, "http://"+srv.Addr()+"/abgleich", nil)
@@ -28,12 +28,12 @@ func TestHandleSyncStart_StartsJobAndRedirectsBack(t *testing.T) {
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	// Redirect landet auf /berichte (Referer), Client folgt ihm.
-	require.Contains(t, string(body), "Berichte")
+	// Redirect lands on /berichte (Referer), client follows it.
+	require.Contains(t, string(body), "Reports")
 }
 
 func TestHandleSyncStart_AlreadyRunning_StillRedirectsWithoutError(t *testing.T) {
-	srv, fd := newTestServerWithAccounts(t, mustAccount(t, "Konto 1"))
+	srv, fd := newTestServerWithAccounts(t, mustAccount(t, "Account 1"))
 	fd.syncer.block = true
 	client := authenticatedClient(t, srv)
 
@@ -49,7 +49,7 @@ func TestHandleSyncStart_AlreadyRunning_StillRedirectsWithoutError(t *testing.T)
 }
 
 func TestHandleSyncCancel_StopsRunningJob(t *testing.T) {
-	srv, fd := newTestServerWithAccounts(t, mustAccount(t, "Konto 1"))
+	srv, fd := newTestServerWithAccounts(t, mustAccount(t, "Account 1"))
 	fd.syncer.block = true
 	client := authenticatedClient(t, srv)
 
@@ -65,7 +65,7 @@ func TestHandleSyncCancel_StopsRunningJob(t *testing.T) {
 }
 
 func TestHandleEvents_SendsCurrentStateImmediately(t *testing.T) {
-	srv, _ := newTestServerWithAccounts(t, mustAccount(t, "Konto 1"))
+	srv, _ := newTestServerWithAccounts(t, mustAccount(t, "Account 1"))
 	client := authenticatedClient(t, srv)
 
 	resp, err := client.Do(newRequest(t, http.MethodGet, "http://"+srv.Addr()+"/ereignisse", nil))

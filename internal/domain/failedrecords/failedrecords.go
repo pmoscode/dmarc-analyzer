@@ -1,13 +1,13 @@
-// Package failedrecords enthält die berichtsübergreifende Sicht auf
-// einzelne Records, bei denen DMARC nicht bestanden wurde (weder DKIM
-// noch SPF aligned, siehe report.PolicyEvaluation.PassesDMARC) —
-// dieselbe Idee wie internal/domain/domainstats/sources (dort
-// aggregiert), hier aber unaggregiert: eine Zeile je fehlgeschlagenem
-// Record, mit allen Rohdaten (rec.Auth, rec.Identifiers,
-// rec.Evaluated.Reasons). Nötig, weil report.Repository.Query bewusst
-// berichtsweise arbeitet (eine Zeile je Report, siehe dortige
-// Dokumentation) — Records einzelner Berichte liefert bisher nur
-// FindByID, nie berichtsübergreifend gefiltert/sortiert/paginiert.
+// Package failedrecords contains the cross-report view of individual
+// records where DMARC failed (neither DKIM nor SPF aligned, see
+// report.PolicyEvaluation.PassesDMARC) — the same idea as
+// internal/domain/domainstats/sources (aggregated there), but
+// unaggregated here: one row per failed record, with all the raw data
+// (rec.Auth, rec.Identifiers, rec.Evaluated.Reasons). Needed because
+// report.Repository.Query deliberately works per-report (one row per
+// report, see its documentation) — records of individual reports have so
+// far only been available via FindByID, never filtered/sorted/paginated
+// across reports.
 package failedrecords
 
 import (
@@ -17,10 +17,9 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/report"
 )
 
-// Record ist ein einzelner, berichtsübergreifend gefundener Datensatz,
-// bei dem DMARC nicht bestanden wurde — mit genug Kontext (Organisation,
-// Zeitraum, Report-ID) für einen Link zurück auf den vollständigen
-// Bericht, plus den vollen Rohdaten für die Detailanzeige.
+// Record is a single record found across reports where DMARC failed —
+// with enough context (organization, period, report ID) for a link back
+// to the full report, plus the full raw data for the detail view.
 type Record struct {
 	ReportID     report.ReportID
 	OrgName      string
@@ -39,44 +38,43 @@ type Record struct {
 	Reasons     []report.PolicyOverrideReason
 }
 
-// SortField ist ein Sortierschlüssel für Query.
+// SortField is a sort key for Query.
 type SortField string
 
-// Sortierschlüssel für Query.SortField. SortByDate ist die Voreinstellung
-// (neuester Bericht zuerst) — SortBySourceIP gruppiert wiederholte
-// Fehlschläge desselben Absenders sichtbar nebeneinander.
+// Sort keys for Query.SortField. SortByDate is the default (newest report
+// first) — SortBySourceIP visibly groups repeated failures from the same
+// sender next to each other.
 const (
 	SortByDate     SortField = "date_begin"
 	SortBySourceIP SortField = "source_ip"
 )
 
-// Query grenzt die Fehlschläge-Suche ein und paginiert per Keyset-Cursor
-// — dieselbe Umsetzung wie domainstats.Query/sources.Query.
+// Query narrows down the failure search and paginates via a keyset
+// cursor — the same implementation as domainstats.Query/sources.Query.
 type Query struct {
 	Period   *report.DateRange
 	Domain   string
 	SourceIP string
 
-	// SortField ist standardmäßig SortByDate.
+	// SortField defaults to SortByDate.
 	SortField SortField
 
-	// Limit begrenzt die Seitengröße. 0 bedeutet: Standardgröße des
-	// Adapters.
+	// Limit caps the page size. 0 means: the adapter's default size.
 	Limit int
-	// Cursor ist ein opaker Keyset-Cursor aus Page.NextCursor, leer für
-	// die erste Seite.
+	// Cursor is an opaque keyset cursor from Page.NextCursor, empty for
+	// the first page.
 	Cursor string
 }
 
-// Page ist eine Seite fehlgeschlagener Records.
+// Page is a page of failed records.
 type Page struct {
 	Records []Record
-	// NextCursor ist leer, wenn keine weitere Seite existiert.
+	// NextCursor is empty when no further page exists.
 	NextCursor string
 }
 
-// Repository ist der Port zur berichtsübergreifenden Suche nach
-// fehlgeschlagenen Records. Implementiert gegen SQLite
+// Repository is the port for the cross-report search for failed records.
+// Implemented against SQLite
 // (internal/infra/sqlite.FailedRecordsRepository).
 type Repository interface {
 	Query(ctx context.Context, q Query) (Page, error)

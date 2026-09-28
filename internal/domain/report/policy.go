@@ -2,9 +2,9 @@ package report
 
 import "fmt"
 
-// PublishedPolicy ist die vom Domaininhaber veröffentlichte DMARC-Policy
-// (Element "policy_published"), gegen die der berichtende Empfänger
-// bewertet hat.
+// PublishedPolicy is the DMARC policy published by the domain owner
+// (element "policy_published") that the reporting recipient evaluated
+// against.
 type PublishedPolicy struct {
 	Domain          DomainName
 	SubdomainPolicy Policy
@@ -15,8 +15,8 @@ type PublishedPolicy struct {
 	FailureOptions  string
 }
 
-// NewPublishedPolicy erzwingt Percentage in [0, 100]
-// (IMPLEMENTIERUNG.md Abschnitt 6.2).
+// NewPublishedPolicy enforces Percentage in [0, 100]
+// (IMPLEMENTIERUNG.md section 6.2).
 func NewPublishedPolicy(
 	domain DomainName,
 	subdomainPolicy, policy Policy,
@@ -25,7 +25,7 @@ func NewPublishedPolicy(
 	failureOptions string,
 ) (PublishedPolicy, error) {
 	if percentage < 0 || percentage > 100 {
-		return PublishedPolicy{}, fmt.Errorf("percentage muss in [0, 100] liegen, war %d", percentage)
+		return PublishedPolicy{}, fmt.Errorf("percentage must be in [0, 100], was %d", percentage)
 	}
 
 	return PublishedPolicy{

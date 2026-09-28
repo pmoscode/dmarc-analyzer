@@ -1,13 +1,13 @@
-// Package exportdata exportiert gefilterte Ansichten als CSV sowie
-// Diagramme als PNG (FEATURES.md Vorschlag 11.4).
+// Package exportdata exports filtered views as CSV and charts as PNG
+// (FEATURES.md proposal 11.4).
 //
-// Reine Formatierungsfunktionen ohne eigene Ports: sie schreiben in einen
-// vom Aufrufer übergebenen io.Writer (Datei, HTTP-Response, Puffer für
-// einen Zwischenspeicher-Export) und lösen selbst keine I/O aus. Der
-// PNG-Export nimmt bewusst ein bereits gerendertes image.Image entgegen,
-// nicht den ChartRenderer-Port selbst — das Rendern ist Sache des
-// Aufrufers (internal/ui/dashboard hat das Bild ohnehin schon für die
-// Anzeige erzeugt), dieses Paket kümmert sich nur um die Kodierung.
+// Pure formatting functions without their own ports: they write into an
+// io.Writer passed in by the caller (file, HTTP response, buffer for an
+// in-memory export) and don't trigger any I/O themselves. The PNG export
+// deliberately takes an already-rendered image.Image, not the
+// ChartRenderer port itself — rendering is the caller's job
+// (internal/ui/dashboard has already produced the image for display
+// anyway), this package only handles encoding.
 package exportdata
 
 import (
@@ -20,10 +20,10 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/report"
 )
 
-// WriteReportsCSV exportiert eine Liste von Reports (z. B. das Ergebnis
-// einer queryreports.List) als CSV — eine Zeile pro Report, passend zur
-// Berichtstabelle. Erwartet keine geladenen Records (siehe
-// report.Repository.Query-Dokumentation).
+// WriteReportsCSV exports a list of reports (e.g. the result of a
+// queryreports.List) as CSV — one row per report, matching the reports
+// table. Expects no loaded records (see report.Repository.Query
+// documentation).
 func WriteReportsCSV(w io.Writer, reports []report.AggregateReport) error {
 	cw := csv.NewWriter(w)
 	if err := WriteReportsCSVHeader(cw); err != nil {
@@ -36,30 +36,30 @@ func WriteReportsCSV(w io.Writer, reports []report.AggregateReport) error {
 	}
 	cw.Flush()
 	if err := cw.Error(); err != nil {
-		return fmt.Errorf("csv konnte nicht vollständig geschrieben werden: %w", err)
+		return fmt.Errorf("csv could not be fully written: %w", err)
 	}
 	return nil
 }
 
-// WriteReportsCSVHeader schreibt die Kopfzeile für WriteReportCSVRow —
-// beide einzeln exportiert für einen Aufrufer, der viele Seiten (z. B.
-// über Keyset-Pagination) nacheinander in denselben csv.Writer schreiben
-// und zwischendurch flushen will, ohne den gesamten gefilterten Bestand
-// vorher im Speicher zu sammeln (MIGRATIONSPLAN.md Meilenstein M4:
-// "CSV-Export ... gestreamt", siehe internal/web/handlers_export.go).
+// WriteReportsCSVHeader writes the header row for WriteReportCSVRow —
+// both exported separately for a caller that wants to write many pages
+// (e.g. via keyset pagination) one after another into the same csv.Writer
+// and flush in between, without first collecting the entire filtered
+// result set in memory (MIGRATIONSPLAN.md milestone M4: "CSV export ...
+// streamed", see internal/web/handlers_export.go).
 func WriteReportsCSVHeader(cw *csv.Writer) error {
 	header := []string{
 		"OrgName", "ReportID", "Domain", "PeriodBegin", "PeriodEnd",
 		"Policy", "SubdomainPolicy", "Percentage", "DKIMAlignment", "SPFAlignment",
 	}
 	if err := cw.Write(header); err != nil {
-		return fmt.Errorf("csv-kopfzeile konnte nicht geschrieben werden: %w", err)
+		return fmt.Errorf("csv header could not be written: %w", err)
 	}
 	return nil
 }
 
-// WriteReportCSVRow schreibt eine einzelne Report-Zeile passend zur
-// Kopfzeile aus WriteReportsCSVHeader.
+// WriteReportCSVRow writes a single report row matching the header from
+// WriteReportsCSVHeader.
 func WriteReportCSVRow(cw *csv.Writer, r report.AggregateReport) error {
 	row := []string{
 		r.Metadata.OrgName,
@@ -74,13 +74,13 @@ func WriteReportCSVRow(cw *csv.Writer, r report.AggregateReport) error {
 		string(r.Policy.SPFAlignment),
 	}
 	if err := cw.Write(row); err != nil {
-		return fmt.Errorf("csv-zeile für report %q konnte nicht geschrieben werden: %w", r.Metadata.ReportID, err)
+		return fmt.Errorf("csv row for report %q could not be written: %w", r.Metadata.ReportID, err)
 	}
 	return nil
 }
 
-// WriteRecordsCSV exportiert die Records eines einzelnen Reports (die
-// Bericht-Detailansicht) als CSV — eine Zeile pro Sendequelle.
+// WriteRecordsCSV exports the records of a single report (the report
+// detail view) as CSV — one row per sending source.
 func WriteRecordsCSV(w io.Writer, r *report.AggregateReport) error {
 	cw := csv.NewWriter(w)
 
@@ -88,7 +88,7 @@ func WriteRecordsCSV(w io.Writer, r *report.AggregateReport) error {
 		"SourceIP", "MessageCount", "Disposition", "DKIM", "SPF", "HeaderFrom", "EnvelopeFrom", "EnvelopeTo",
 	}
 	if err := cw.Write(header); err != nil {
-		return fmt.Errorf("csv-kopfzeile konnte nicht geschrieben werden: %w", err)
+		return fmt.Errorf("csv header could not be written: %w", err)
 	}
 
 	for _, rec := range r.Records {
@@ -103,13 +103,13 @@ func WriteRecordsCSV(w io.Writer, r *report.AggregateReport) error {
 			rec.Identifiers.EnvelopeTo,
 		}
 		if err := cw.Write(row); err != nil {
-			return fmt.Errorf("csv-zeile für quell-ip %q konnte nicht geschrieben werden: %w", rec.SourceIP.String(), err)
+			return fmt.Errorf("csv row for source IP %q could not be written: %w", rec.SourceIP.String(), err)
 		}
 	}
 
 	cw.Flush()
 	if err := cw.Error(); err != nil {
-		return fmt.Errorf("csv konnte nicht vollständig geschrieben werden: %w", err)
+		return fmt.Errorf("csv could not be fully written: %w", err)
 	}
 	return nil
 }

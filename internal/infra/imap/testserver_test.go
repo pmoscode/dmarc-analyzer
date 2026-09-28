@@ -17,13 +17,13 @@ import (
 
 const (
 	testUsername = "dmarc-test"
-	testPassword = "test-passwort-123"
+	testPassword = "test-password-123"
 	testMailbox  = "INBOX"
 )
 
-// literalBytes implementiert imap.LiteralReader (io.Reader + Size() int64)
-// für ein festes []byte — die Bibliothek liefert dafür keinen fertigen
-// Helfer, User.Append verlangt aber genau dieses Interface.
+// literalBytes implements imap.LiteralReader (io.Reader + Size() int64) for
+// a fixed []byte — the library doesn't provide a ready-made helper for
+// this, but User.Append requires exactly this interface.
 type literalBytes struct {
 	*bytes.Reader
 	size int64
@@ -37,25 +37,25 @@ func (l literalBytes) Size() int64 {
 	return l.size
 }
 
-// testServer bündelt den in-process IMAP-Testserver mit dem User, gegen
-// den Adapter-Tests laufen.
+// testServer bundles the in-process IMAP test server with the user that
+// Adapter tests run against.
 type testServer struct {
 	addr string
 	mem  *imapmemserver.Server
 	user *imapmemserver.User
 }
 
-// newTestServer startet einen in-process IMAP-Server (imapmemserver, die
-// go-imap-eigene Testserver-Komponente) auf einem lokalen Ephemeral-Port
-// und legt einen Benutzer mit leerem INBOX-Postfach an. TLS bewusst nicht
-// konfiguriert — der Test prüft Protokolllogik, nicht Transportsicherheit
-// (siehe account.MailAccount.UseTLS-Kommentar).
+// newTestServer starts an in-process IMAP server (imapmemserver, go-imap's
+// own test server component) on a local ephemeral port and creates a user
+// with an empty INBOX mailbox. TLS deliberately not configured — the test
+// checks protocol logic, not transport security (see the
+// account.MailAccount.UseTLS comment).
 func newTestServer(t *testing.T) *testServer {
 	t.Helper()
 
 	ln, err := new(net.ListenConfig).Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
-		t.Fatalf("test-listener konnte nicht gestartet werden: %v", err)
+		t.Fatalf("failed to start test listener: %v", err)
 	}
 
 	ts := newTestServerOnAddr(t, ln.Addr().String())
@@ -63,9 +63,9 @@ func newTestServer(t *testing.T) *testServer {
 	return ts
 }
 
-// newTestServerOnAddr erzeugt einen Testserver mit Benutzer und Postfach,
-// startet aber noch keinen Listener — für Tests, die den Zeitpunkt des
-// tatsächlichen Verbindungsaufbaus selbst steuern wollen (siehe start()).
+// newTestServerOnAddr creates a test server with user and mailbox, but does
+// not yet start a listener — for tests that want to control the timing of
+// the actual connection setup themselves (see start()).
 func newTestServerOnAddr(t *testing.T, addr string) *testServer {
 	t.Helper()
 
@@ -73,22 +73,21 @@ func newTestServerOnAddr(t *testing.T, addr string) *testServer {
 	user := imapmemserver.NewUser(testUsername, testPassword)
 	memServer.AddUser(user)
 	if err := user.Create(testMailbox, nil); err != nil {
-		t.Fatalf("testpostfach konnte nicht angelegt werden: %v", err)
+		t.Fatalf("failed to create test mailbox: %v", err)
 	}
 
 	return &testServer{addr: addr, mem: memServer, user: user}
 }
 
-// start bindet den Listener auf ts.addr und bedient ihn. Für den
-// Normalfall übernimmt newTestServer das bereits; eigenständig nützlich,
-// um einen Verbindungsaufbau gezielt erst verspätet erfolgreich werden zu
-// lassen (Retry-Test).
+// start binds the listener on ts.addr and serves it. newTestServer already
+// handles this for the normal case; useful on its own to deliberately let a
+// connection attempt succeed only after a delay (retry test).
 func (ts *testServer) start(t *testing.T) {
 	t.Helper()
 
 	ln, err := new(net.ListenConfig).Listen(context.Background(), "tcp", ts.addr)
 	if err != nil {
-		t.Fatalf("test-listener konnte nicht auf %q gestartet werden: %v", ts.addr, err)
+		t.Fatalf("failed to start test listener on %q: %v", ts.addr, err)
 	}
 	ts.serve(t, ln)
 }
@@ -100,7 +99,7 @@ func (ts *testServer) serve(t *testing.T, ln net.Listener) {
 		NewSession: func(*imapserver.Conn) (imapserver.Session, *imapserver.GreetingData, error) {
 			return ts.mem.NewSession(), nil, nil
 		},
-		InsecureAuth: true, // Test läuft ohne TLS
+		InsecureAuth: true, // test runs without TLS
 		Caps:         imap.CapSet{imap.CapIMAP4rev1: struct{}{}},
 	})
 
@@ -108,57 +107,58 @@ func (ts *testServer) serve(t *testing.T, ln net.Listener) {
 	t.Cleanup(func() { _ = srv.Close() })
 }
 
-// account liefert ein MailAccount, das auf diesen Testserver zeigt.
+// account returns a MailAccount pointing at this test server.
 func (ts *testServer) account(t *testing.T) account.MailAccount {
 	t.Helper()
 
 	host, portStr, err := net.SplitHostPort(ts.addr)
 	if err != nil {
-		t.Fatalf("test-adresse %q konnte nicht zerlegt werden: %v", ts.addr, err)
+		t.Fatalf("failed to split test address %q: %v", ts.addr, err)
 	}
 	port, err := strconv.Atoi(portStr)
 	if err != nil {
-		t.Fatalf("test-port %q konnte nicht geparst werden: %v", portStr, err)
+		t.Fatalf("failed to parse test port %q: %v", portStr, err)
 	}
 
 	acc, err := account.NewMailAccount("test-account", "Test", host, port, testUsername, testMailbox, false, time.Now())
 	if err != nil {
-		t.Fatalf("test-account konnte nicht erzeugt werden: %v", err)
+		t.Fatalf("failed to create test account: %v", err)
 	}
 	return *acc
 }
 
-// appendMessage fügt eine Testnachricht mit fortlaufender UID ein.
+// appendMessage inserts a test message with a sequential UID.
 //
-// Übergibt bewusst &imap.AppendOptions{} statt nil: imapmemserver v2.0.0-
-// beta.8 dereferenziert options ungeprüft (appendBytes in mailbox.go liest
-// options.Time/.Flags ohne Nil-Check) — mit nil als Options panickt der
-// Server. Bug der Beta-Bibliothek, hier umgangen statt gewartet.
+// Deliberately passes &imap.AppendOptions{} instead of nil: imapmemserver
+// v2.0.0-beta.8 dereferences options without a nil check (appendBytes in
+// mailbox.go reads options.Time/.Flags unchecked) — passing nil as Options
+// panics the server. A bug in the beta library, worked around here rather
+// than waited out.
 func (ts *testServer) appendMessage(t *testing.T, raw string) {
 	t.Helper()
 
 	if _, err := ts.user.Append(testMailbox, newLiteralBytes([]byte(raw)), &imap.AppendOptions{}); err != nil {
-		t.Fatalf("testnachricht konnte nicht angehängt werden: %v", err)
+		t.Fatalf("failed to append test message: %v", err)
 	}
 }
 
-// recreateMailbox löscht und legt das Postfach neu an — imapmemserver
-// vergibt dabei eine neue, garantiert höhere UIDVALIDITY
-// (siehe user.go: prevUidValidity wird bei jedem Create hochgezählt).
-// Simuliert den in IMPLEMENTIERUNG.md Abschnitt 7.1 beschriebenen Fall
-// eines UIDVALIDITY-Wechsels (z. B. nach Wiederherstellen des Postfachs).
+// recreateMailbox deletes and recreates the mailbox — imapmemserver assigns
+// a new, guaranteed-higher UIDVALIDITY in the process (see user.go:
+// prevUidValidity is incremented on every Create). Simulates the
+// UIDVALIDITY-change case described in IMPLEMENTIERUNG.md section 7.1
+// (e.g. after restoring the mailbox).
 func (ts *testServer) recreateMailbox(t *testing.T) {
 	t.Helper()
 
 	if err := ts.user.Delete(testMailbox); err != nil {
-		t.Fatalf("testpostfach konnte nicht gelöscht werden: %v", err)
+		t.Fatalf("failed to delete test mailbox: %v", err)
 	}
 	if err := ts.user.Create(testMailbox, nil); err != nil {
-		t.Fatalf("testpostfach konnte nicht neu angelegt werden: %v", err)
+		t.Fatalf("failed to recreate test mailbox: %v", err)
 	}
 }
 
-// testMessage baut eine minimale, aber gültige RFC822-Nachricht.
+// testMessage builds a minimal but valid RFC822 message.
 func testMessage(subject, body string) string {
 	return "From: sender@example.com\r\n" +
 		"To: " + testUsername + "@example.com\r\n" +

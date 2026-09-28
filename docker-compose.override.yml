@@ -1,45 +1,44 @@
-# Lokales Test-Setup: TLS-Terminierung (Caddy, selbstsigniertes Zertifikat)
-# + Mock-OIDC-Provider statt eines echten Authentik — NUR zum lokalen
-# Durchspielen des Anmeldeablaufs, niemals für Produktion gedacht.
+# Local test setup: TLS termination (Caddy, self-signed certificate)
+# + mock OIDC provider instead of a real Authentik — for locally trying
+# out the login flow ONLY, never intended for production.
 #
-# `docker compose up` lädt diese Datei automatisch zusätzlich zu
-# docker-compose.yml (Compose-Konvention "docker-compose.override.yml").
-# Um stattdessen "echt" (ohne dieses Override) zu testen:
+# `docker compose up` automatically loads this file in addition to
+# docker-compose.yml (Compose convention "docker-compose.override.yml").
+# To test "for real" instead (without this override):
 #   docker compose -f docker-compose.yml up
 #
-# Voraussetzung: .env mit den Werten aus .env.local.example (nicht aus
-# .env.example — andere OIDC-Parameter; IMAP-Werte dürfen Platzhalter
-# bleiben, für den Login-Test wird kein echtes Postfach gebraucht).
+# Prerequisite: .env with the values from .env.local.example (not from
+# .env.example — different OIDC parameters; IMAP values may stay as
+# placeholders, no real mailbox is needed for the login test).
 #
-# Ablauf:
+# Steps:
 #   1. cp .env.local.example .env
-#   2. task compose:build   (oder: docker compose build dmarc-analyzer —
-#      dann ohne Version/Commit in der Oberfläche)
-#   3. ./caddy/local-ca/generate.sh   (einmalig — lokale Test-CA/Zertifikat)
-#   4. task compose:up      (oder: docker compose up)
-#   5. Browser: https://dmarc.localtest.me öffnen, Zertifikatswarnung
-#      bestätigen (selbstsigniert), Login-Weiterleitung zu
-#      https://idp.localtest.me ebenfalls bestätigen.
-#   6. Am Mock-IdP mit admin/admin anmelden (siehe mock-idp/users.json).
+#   2. task compose:build   (or: docker compose build dmarc-analyzer —
+#      then without version/commit shown in the UI)
+#   3. ./caddy/local-ca/generate.sh   (one-time — local test CA/certificate)
+#   4. task compose:up      (or: docker compose up)
+#   5. Browser: open https://dmarc.localtest.me, confirm the certificate
+#      warning (self-signed), also confirm the login redirect to
+#      https://idp.localtest.me.
+#   6. Log in at the mock IdP with admin/admin (see mock-idp/users.json).
 #
-# "*.localtest.me" ist eine öffentliche DNS-Zone, die auf 127.0.0.1
-# auflöst — kein Eintrag in /etc/hosts nötig. Innerhalb des
-# Docker-Netzwerks lösen dmarc-analyzer und mock-idp dieselben Namen über
-# den Netzwerk-Alias von Caddy auf (s. u.), sodass Server- und
-# Browser-Anfragen konsistent beim selben Hostnamen landen.
+# "*.localtest.me" is a public DNS zone that resolves to 127.0.0.1 — no
+# /etc/hosts entry needed. Inside the Docker network, dmarc-analyzer and
+# mock-idp resolve the same names via Caddy's network alias (see below),
+# so server and browser requests consistently end up at the same
+# hostname.
 services:
   dmarc-analyzer:
-    # !reset statt einfach "[]": Compose hängt Listen zwischen Dateien
-    # standardmäßig an, statt sie zu ersetzen — ohne !reset bliebe
-    # "8080:8080" aus docker-compose.yml zusätzlich veröffentlicht.
+    # !reset instead of just "[]": Compose appends lists between files
+    # by default instead of replacing them — without !reset, "8080:8080"
+    # from docker-compose.yml would remain published in addition.
     ports: !reset []
     networks:
       - edge
     volumes:
-      # Damit die OIDC-Discovery/Token-Aufrufe des Go-Binaries der
-      # lokalen Test-CA vertrauen (siehe caddy/local-ca/generate.sh) —
-      # ersetzt genau die Datei, die Go/Debian standardmäßig als
-      # System-Vertrauensanker liest.
+      # So the Go binary's OIDC discovery/token calls trust the local
+      # test CA (see caddy/local-ca/generate.sh) — replaces exactly the
+      # file Go/Debian read by default as the system trust anchor.
       - ./caddy/local-ca/combined-ca-bundle.crt:/etc/ssl/certs/ca-certificates.crt:ro
 
   caddy:
@@ -63,32 +62,32 @@ services:
 
   mock-idp:
     image: ghcr.io/soluto/oidc-server-mock:latest
-    # Das arm64-Image dieses Tags stürzt beim Start ab
-    # (System.IO.FileLoadException auf OpenIdConnectServerMock.dll,
-    # reproduzierbar auch ohne unsere Mounts) — auf Apple-Silicon-Hosts
-    # per Rosetta-Emulation als amd64 laufen lassen, das funktioniert.
+    # The arm64 image of this tag crashes on startup
+    # (System.IO.FileLoadException on OpenIdConnectServerMock.dll,
+    # reproducible even without our mounts) — run it as amd64 via
+    # Rosetta emulation on Apple Silicon hosts, that works.
     platform: linux/amd64
     environment:
       ASPNETCORE_URLS: http://+:80
-      # Ohne dieses Signal hält sich der Container selbst für "nur HTTP"
-      # (Caddy terminiert TLS extern) und setzt sein Auth-Cookie
-      # ('idsrv', SameSite=None) ohne Secure-Flag — Chrome verwirft ein
-      # solches Cookie sofort wieder, die Session geht direkt nach dem
-      # Login verloren (Endlosschleife zurück zum Login). Dieses Flag
-      # lässt den Container Caddys X-Forwarded-Proto-Header auswerten.
+      # Without this signal, the container considers itself "HTTP only"
+      # (Caddy terminates TLS externally) and sets its auth cookie
+      # ('idsrv', SameSite=None) without the Secure flag — Chrome
+      # immediately discards such a cookie, so the session is lost right
+      # after login (endless loop back to login). This flag lets the
+      # container honor Caddy's X-Forwarded-Proto header.
       ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
-      # IssuerUri: Discovery-Dokument, "iss"-Claim der ID-Tokens und
-      # Endpunkt-URLs verweisen auf den öffentlichen Namen statt auf den
-      # internen Container-Hostnamen — sonst schlägt die
-      # Issuer-Validierung in dmarc-analyzer fehl (siehe
-      # docs/features/auth.md, Schritt 3 im Ablauf).
+      # IssuerUri: the discovery document, the "iss" claim of the ID
+      # tokens, and endpoint URLs point to the public name instead of
+      # the internal container hostname — otherwise issuer validation in
+      # dmarc-analyzer fails (see docs/features/auth.md, step 3 of the
+      # flow).
       SERVER_OPTIONS_INLINE: '{"IssuerUri": "https://idp.localtest.me"}'
       CLIENTS_CONFIGURATION_PATH: /tmp/config/clients.json
       USERS_CONFIGURATION_PATH: /tmp/config/users.json
-      # "groups" ist keine der eingebauten Standard-Identity-Resources
-      # (openid/profile/email) — ohne diese Registrierung lehnt
-      # IdentityServer den von dmarc-analyzer fest angeforderten
-      # "groups"-Scope mit "invalid_scope" ab.
+      # "groups" is not one of the built-in standard identity resources
+      # (openid/profile/email) — without this registration, IdentityServer
+      # rejects the "groups" scope that dmarc-analyzer hardcodes in its
+      # request with "invalid_scope".
       IDENTITY_RESOURCES_PATH: /tmp/config/identity-resources.json
     volumes:
       - ./mock-idp/clients.json:/tmp/config/clients.json:ro
@@ -96,11 +95,11 @@ services:
       - ./mock-idp/identity-resources.json:/tmp/config/identity-resources.json:ro
     networks:
       - edge
-    # Der eingebaute Healthcheck prüft https://localhost/health — der
-    # Container selbst spricht hier aber bewusst nur HTTP, TLS übernimmt
-    # Caddy. Ohne diese Zeile bliebe der Container dauerhaft "unhealthy"
-    # (harmlos, da nichts service_healthy davon abhängig macht, aber
-    # irreführend in "docker compose ps").
+    # The built-in healthcheck checks https://localhost/health — but the
+    # container itself deliberately speaks only HTTP here, TLS is
+    # handled by Caddy. Without this line the container would stay
+    # "unhealthy" forever (harmless, since nothing depends on
+    # service_healthy for it, but misleading in "docker compose ps").
     healthcheck:
       disable: true
 

@@ -1,8 +1,8 @@
-/* Farbwerte identisch zur früheren Fyne-Oberfläche (internal/ui/theme.go)
-   und zu internal/infra/charts — dieselbe, mit der dataviz-Skill
-   validierte Referenzpalette (Kategorie-Slot 1 als Primärfarbe, feste
-   Statusfarben). Siehe MIGRATIONSPLAN.md Abschnitt 8: "dieselben
-   Farbwerte (dataviz-Referenzpalette)". */
+/* Color values identical to the former Fyne UI (internal/ui/theme.go)
+   and to internal/infra/charts — the same reference palette validated
+   with the dataviz skill (category slot 1 as the primary color, fixed
+   status colors). See MIGRATIONSPLAN.md section 8: "same color values
+   (dataviz reference palette)". */
 :root {
   color-scheme: light;
 
@@ -94,9 +94,9 @@ a {
   line-height: 1.15;
 }
 
-/* Version und Git-Commit direkt unter dem Schriftzug (layout.html) —
-   deutlich kleiner und gedämpft, reine Diagnoseinformation. Der volle
-   Commit-Hash steht im title des gekürzten. */
+/* Version and git commit directly below the wordmark (layout.html) —
+   noticeably smaller and muted, purely diagnostic information. The full
+   commit hash is in the title of the shortened one. */
 .app-build {
   margin: 2px 0 0;
   font-size: 11px;
@@ -257,10 +257,10 @@ a {
   border-bottom: none;
 }
 
-/* .badge zeigt eine kurze Einordnung inline in einer Tabellenzelle (z. B.
-   "Autorisiert" / "Nicht bestätigt — prüfen" für Sendequellen, siehe
-   classifySource in handlers_sources.go) — Ton per Modifier-Klasse, aus
-   denselben Statusfarben wie Trend/Formularmeldungen. */
+/* .badge shows a short classification inline in a table cell (e.g.
+   "Authorized" / "Unconfirmed — review" for sending sources, see
+   classifySource in handlers_sources.go) — tone via modifier class, from
+   the same status colors as trend/form messages. */
 .badge {
   display: inline-block;
   padding: 2px 9px;
@@ -602,12 +602,11 @@ a {
   box-shadow: var(--shadow-md);
 }
 
-/* .filter-reset wird sowohl innerhalb einer .filter-bar (dort per
-   align-self neben den Formularfeldern zentriert) als auch alleinstehend
-   verwendet (report_detail.html: "Nur fehlgeschlagene anzeigen"-
-   Umschalter neben der Sendequellen-Tabelle, außerhalb jeder
-   Filterleiste) — deshalb hier bewusst nicht auf .filter-bar
-   eingeschränkt. */
+/* .filter-reset is used both inside a .filter-bar (centered there next
+   to the form fields via align-self) and standalone (report_detail.html:
+   the "show only failed" toggle next to the sending-sources table,
+   outside any filter bar) — hence deliberately not scoped to .filter-bar
+   here. */
 .filter-reset {
   align-self: center;
   font-size: 13px;
@@ -618,11 +617,11 @@ a {
   color: var(--primary);
 }
 
-/* .record-detail ist das <details>-Element in der letzten Tabellenspalte
-   der Sendequellen-Tabelle (report_detail.html) bzw. der
-   Fehlschläge-Ansicht (failed_records.html) — zeigt auf Wunsch die
-   rohen DKIM-/SPF-Prüfergebnisse, Absenderkennungen und Override-Gründe
-   eines einzelnen Records, ohne die Tabelle standardmäßig zu überladen. */
+/* .record-detail is the <details> element in the last table column of
+   the sending-sources table (report_detail.html) or the failures view
+   (failed_records.html) — shows the raw DKIM/SPF check results, sender
+   identifiers, and override reasons of a single record on demand,
+   without cluttering the table by default. */
 .record-detail summary {
   cursor: pointer;
   color: var(--primary);
@@ -716,13 +715,13 @@ a {
   }
 }
 
-/* .glossary-hint ist ein <button> (kein Link mehr — es gibt keine
-   Glossarseite, auf die er verweisen könnte): die Erklärung steckt direkt
-   in data-tip und erscheint als schwebendes Tooltip bei Hover/Fokus, kein
-   Seitenwechsel nötig. Reines CSS, kein JavaScript — .glossary-hint[data-tip]
-   erzeugt das Tooltip per ::after, positioniert per ::before als kleinen
-   Pfeil, beide zunächst unsichtbar (opacity 0 + kein pointer-events) und
-   erst bei :hover/:focus-visible eingeblendet. */
+/* .glossary-hint is a <button> (no longer a link — there's no glossary
+   page for it to link to): the explanation sits directly in data-tip and
+   appears as a floating tooltip on hover/focus, no page change needed.
+   Pure CSS, no JavaScript — .glossary-hint[data-tip] generates the
+   tooltip via ::after, positions a small arrow via ::before, both
+   initially invisible (opacity 0 + no pointer-events) and only shown on
+   :hover/:focus-visible. */
 .glossary-hint {
   position: relative;
   display: inline-flex;
@@ -796,12 +795,11 @@ a {
   transform: translate(-50%, 0);
 }
 
-/* In einer Tabellenkopfzeile sitzt der Hinweis dicht unter dem Sticky-
-   Header (.app-header) — ein wie sonst nach OBEN aufklappendes Tooltip
-   würde dort über den sichtbaren Bereich hinaus abgeschnitten. Für
-   Vorkommen innerhalb von th deshalb nach UNTEN öffnen (nur Position und
-   Ruhezustand-Transform ändern sich, der eingeblendete Zustand bleibt
-   dieselbe Regel oben). */
+/* In a table header row, the hint sits right under the sticky header
+   (.app-header) — a tooltip that otherwise opens UPWARD would get
+   clipped beyond the visible area there. For occurrences inside th,
+   therefore open DOWNWARD instead (only the position and resting-state
+   transform change; the shown state stays the same rule above). */
 .data-table th .glossary-hint[data-tip]::after,
 .data-table th .glossary-hint[data-tip]::before {
   bottom: auto;
@@ -859,22 +857,22 @@ a {
   background: var(--ink-muted);
 }
 
-/* chart-canvas-wrap ist der direkte Elternknoten jedes <canvas> mit
-   Chart.js im "responsive: true, maintainAspectRatio: false"-Modus.
-   Chart.js beobachtet per ResizeObserver genau dieses Elternelement, um
-   die Canvas-Größe fortlaufend anzupassen — hat DIESES Element (statt
-   einer festen Höhe per CSS/JS) selbst nur eine vom Inhalt abgeleitete
-   Höhe ("Höhe: auto", wie es .chart-card ohne diesen Wrapper hätte),
-   entsteht eine Rückkopplungsschleife: das Canvas wächst → der
-   Elternknoten wächst mit (seine Höhe hängt ja vom Canvas ab) → Chart.js
-   beobachtet die neue Elternhöhe und vergrößert das Canvas erneut →
-   unendliches Wachstum nach unten. Deshalb bekommt genau dieser Wrapper
-   (nicht das Canvas selbst!) eine explizite, vom Canvas UNABHÄNGIGE Höhe
-   (fest per CSS für Nachrichtenvolumen/Disposition, dynamisch per JS
-   für Top-Sendequellen/Heatmap, siehe charts.js) sowie position:relative
-   (von Chart.js für die responsive Größenberechnung vorausgesetzt).
-   Canvas.style.height wird bewusst NICHT mehr gesetzt — das widerspräche
-   sich mit Chart.js' eigener Verwaltung von Canvas-Breite/-Höhe. */
+/* chart-canvas-wrap is the direct parent node of every <canvas> using
+   Chart.js in "responsive: true, maintainAspectRatio: false" mode.
+   Chart.js watches exactly this parent element via ResizeObserver to
+   keep adjusting the canvas size — if THIS element (instead of a fixed
+   height via CSS/JS) only has a height derived from its content ("height:
+   auto", as .chart-card would have without this wrapper), a feedback
+   loop occurs: the canvas grows → the parent node grows with it (its
+   height depends on the canvas after all) → Chart.js observes the new
+   parent height and enlarges the canvas again → infinite growth
+   downward. That's why exactly this wrapper (not the canvas itself!)
+   gets an explicit height INDEPENDENT of the canvas (fixed via CSS for
+   message volume/disposition, dynamic via JS for top sending
+   sources/heatmap, see charts.js) as well as position:relative (required
+   by Chart.js for its responsive size calculation). Canvas.style.height
+   is deliberately NOT set anymore — that would conflict with Chart.js'
+   own management of canvas width/height. */
 .chart-canvas-wrap {
   position: relative;
   width: 100%;
@@ -950,9 +948,9 @@ a {
   text-decoration: underline;
 }
 
-/* Eigenständige Seiten ohne app-Layout (z. B. access_denied.html) — es
-   existiert an dieser Stelle keine Sitzung, .app-header/.app-main passen
-   hier nicht (siehe views.go:renderNamed, Block "fullpage"). */
+/* Standalone pages without the app layout (e.g. access_denied.html) — no
+   session exists at this point, .app-header/.app-main don't fit here
+   (see views.go:renderNamed, "fullpage" block). */
 .standalone-body {
   min-height: 100vh;
   display: flex;

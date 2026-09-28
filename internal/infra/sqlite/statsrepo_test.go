@@ -12,9 +12,9 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/infra/sqlite"
 )
 
-// saveReportWithRecords speichert einen Report mit synthetischen Records:
-// je Eintrag in specs ein Record mit gegebenem Count, Disposition und
-// aligned DKIM/SPF-Ergebnis.
+// saveReportWithRecords saves a report with synthetic records: one
+// record per entry in specs, with the given count, disposition, and
+// aligned DKIM/SPF result.
 type recordSpec struct {
 	count       int
 	disposition report.Disposition
@@ -84,7 +84,7 @@ func TestStatisticsRepository_Compute_BasicRates(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, 20, got.TotalMessages) // 10+5+3+2
-	// pass: dkim=pass ODER spf=pass → records 1,2,3 zählen (10+5+3=18), record 4 nicht (2)
+	// pass: dkim=pass OR spf=pass → records 1,2,3 count (10+5+3=18), record 4 doesn't (2)
 	require.InDelta(t, 18.0/20.0, got.PassRate, 0.0001)
 	// dkim=pass: records 1,2 → 15
 	require.InDelta(t, 15.0/20.0, got.DKIMAlignmentRate, 0.0001)
@@ -136,7 +136,7 @@ func TestStatisticsRepository_Compute_FiltersByPeriod(t *testing.T) {
 
 	got, err := stats.Compute(ctx, analysis.Query{Period: period})
 	require.NoError(t, err)
-	require.Equal(t, 7, got.TotalMessages, "Januar-Report liegt außerhalb des Zeitraums")
+	require.Equal(t, 7, got.TotalMessages, "January report is outside the period")
 }
 
 func TestStatisticsRepository_Compute_FiltersByDomain(t *testing.T) {
@@ -158,7 +158,7 @@ func TestStatisticsRepository_Compute_FiltersByDomain(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 42, gotMatch.TotalMessages)
 
-	gotNoMatch, err := stats.Compute(ctx, analysis.Query{Period: period, Domain: "andere-domain.example"})
+	gotNoMatch, err := stats.Compute(ctx, analysis.Query{Period: period, Domain: "other-domain.example"})
 	require.NoError(t, err)
 	require.Zero(t, gotNoMatch.TotalMessages)
 }

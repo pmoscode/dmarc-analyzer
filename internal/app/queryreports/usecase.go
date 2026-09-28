@@ -1,12 +1,12 @@
-// Package queryreports orchestriert das Filtern, Sortieren und
-// Gruppieren gespeicherter Reports sowie das Laden eines einzelnen
-// Reports für die Detailansicht (IMPLEMENTIERUNG.md Abschnitt 10.1).
+// Package queryreports orchestrates filtering, sorting and grouping
+// saved reports, and loading a single report for the detail view
+// (IMPLEMENTIERUNG.md section 10.1).
 //
-// Bewusst dünn: die eigentliche Filter-/Sortier-/Paginierungslogik steckt
-// im report.Repository-Adapter (AP 2). Dieser Use Case ist trotzdem kein
-// überflüssiger Umweg — er ist die Nahtstelle, an der internal/ui hängt,
-// statt direkt an einem Infra-Adapter (AGENTS.md: "internal/ui/*: ruft
-// ausschließlich Use Cases aus internal/app auf").
+// Deliberately thin: the actual filter/sort/pagination logic lives in
+// the report.Repository adapter (work package 2). This use case is still
+// not a superfluous detour — it's the seam that internal/ui depends on,
+// instead of on an infra adapter directly (AGENTS.md: "internal/ui/*:
+// calls only use cases from internal/app").
 package queryreports
 
 import (
@@ -15,18 +15,18 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/report"
 )
 
-// UseCase orchestriert Abfragen gespeicherter Reports.
+// UseCase orchestrates queries for saved reports.
 type UseCase struct {
 	Reports report.Repository
 }
 
-// List liefert eine Seite von Reports gemäß q — für die Berichtstabelle.
+// List returns a page of reports according to q — for the reports table.
 func (uc *UseCase) List(ctx context.Context, q report.Query) (report.Page, error) {
 	return uc.Reports.Query(ctx, q)
 }
 
-// Get lädt einen Report vollständig, inklusive aller Records — für die
-// Bericht-Detailansicht.
+// Get loads a report completely, including all records — for the report
+// detail view.
 func (uc *UseCase) Get(ctx context.Context, id report.ReportID) (*report.AggregateReport, error) {
 	return uc.Reports.FindByID(ctx, id)
 }

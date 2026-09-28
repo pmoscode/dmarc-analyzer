@@ -2,18 +2,16 @@ package web
 
 import "github.com/pmoscode/dmarc-analyzer/internal/domain/report"
 
-// recordDetailView ist die für die Anzeige aufbereitete Sicht auf die
-// rohen Auth-Ergebnisse eines Records (rec.Auth), seine Absenderkennungen
-// (rec.Identifiers) und etwaige Override-Gründe (rec.Evaluated.Reasons) —
-// im Unterschied zu recordRowView.DKIM/SPF (die bereits vom Empfänger
-// ausgewerteten, aligned Ergebnisse) die Rohdaten dahinter: welche
-// DKIM-Signatur/SPF-Prüfung genau mit welchem Domain/Selector/Scope
-// geprüft wurde. Gemeinsam genutzt von der Berichts-Detailseite
-// (report_detail.html) und der berichtsübergreifenden
-// Fehlschläge-Ansicht (failed_records.html) — beide werden unabhängig
-// voneinander mit layout.html geparst (views.go: kein gemeinsamer
-// Vorlagenbaum), deshalb liegt hier nur der Go-Baustein, das
-// <details>-Markup pflegt jede Vorlage für sich.
+// recordDetailView is the display-ready view of a record's raw auth
+// results (rec.Auth), its sender identifiers (rec.Identifiers), and any
+// override reasons (rec.Evaluated.Reasons) — unlike recordRowView.DKIM/SPF
+// (the already recipient-evaluated, aligned results), the raw data behind
+// them: which DKIM signature/SPF check was checked exactly, with which
+// domain/selector/scope. Shared by the report detail page
+// (report_detail.html) and the cross-report failures view
+// (failed_records.html) — both are parsed independently with layout.html
+// (views.go: no shared template tree), so only the Go building block
+// lives here; each template maintains its own <details> markup.
 type recordDetailView struct {
 	HeaderFrom   string
 	EnvelopeFrom string
@@ -23,34 +21,34 @@ type recordDetailView struct {
 	Reasons      []reasonView
 }
 
-// dkimResultView ist ein einzelnes rohes DKIM-Prüfergebnis
-// (auth_results/dkim), fertig für die Vorlage aufbereitet.
+// dkimResultView is a single raw DKIM check result (auth_results/dkim),
+// ready-prepared for the template.
 type dkimResultView struct {
 	Domain   string
 	Selector string
 	Result   string
 }
 
-// spfResultView ist ein einzelnes rohes SPF-Prüfergebnis
-// (auth_results/spf), fertig für die Vorlage aufbereitet.
+// spfResultView is a single raw SPF check result (auth_results/spf),
+// ready-prepared for the template.
 type spfResultView struct {
 	Domain string
 	Scope  string
 	Result string
 }
 
-// reasonView ist ein Override-Grund (policy_evaluated/reason), fertig für
-// die Vorlage aufbereitet.
+// reasonView is an override reason (policy_evaluated/reason),
+// ready-prepared for the template.
 type reasonView struct {
 	Type    string
 	Comment string
 }
 
-// buildRecordDetailView baut die Detailsicht aus den Rohdaten eines
-// Records — nimmt bewusst die einzelnen Bestandteile entgegen statt eines
-// report.Record, weil die Fehlschläge-Ansicht (handlers_failedrecords.go)
-// dieselben Rohdaten über failedrecords.Record erhält, einen eigenen,
-// berichtsübergreifenden Typ, keinen report.Record.
+// buildRecordDetailView builds the detail view from a record's raw data
+// — deliberately takes the individual pieces instead of a report.Record,
+// because the failures view (handlers_failedrecords.go) receives the
+// same raw data via failedrecords.Record, its own cross-report type, not
+// report.Record.
 func buildRecordDetailView(identifiers report.Identifiers, auth report.AuthResults, reasons []report.PolicyOverrideReason) recordDetailView {
 	dkim := make([]dkimResultView, len(auth.DKIM))
 	for i, d := range auth.DKIM {
@@ -75,12 +73,11 @@ func buildRecordDetailView(identifiers report.Identifiers, auth report.AuthResul
 	}
 }
 
-// authResultTone liefert die Badge-Farbklasse (app.css: .badge-good/
-// .badge-warning/.badge-critical) für einen Auth-Result-Wert — "gut" nur
-// bei explizitem Bestehen, "kritisch" nur bei explizitem Fehlschlag,
-// alles andere (softfail, neutral, policy, temperror, permerror, none,
-// unknown) als Warnung, weil weder eindeutig bestanden noch eindeutig
-// fehlgeschlagen.
+// authResultTone returns the badge color class (app.css: .badge-good/
+// .badge-warning/.badge-critical) for an auth result value — "good" only
+// for an explicit pass, "critical" only for an explicit fail, everything
+// else (softfail, neutral, policy, temperror, permerror, none, unknown)
+// as a warning, since it's neither clearly passed nor clearly failed.
 func authResultTone(v report.AuthResultValue) string {
 	switch v {
 	case report.AuthResultPass:
@@ -92,8 +89,8 @@ func authResultTone(v report.AuthResultValue) string {
 	}
 }
 
-// dispositionTone liefert die Badge-Farbklasse für eine angewendete
-// Disposition.
+// dispositionTone returns the badge color class for an applied
+// disposition.
 func dispositionTone(d report.Disposition) string {
 	switch d {
 	case report.DispositionNone:

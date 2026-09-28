@@ -72,7 +72,7 @@ func TestHandleFailedRecords_RendersFilterResetLink(t *testing.T) {
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(body), `<a href="/fehlschlaege" class="filter-reset">Filter zurücksetzen</a>`)
+	require.Contains(t, string(body), `<a href="/fehlschlaege" class="filter-reset">Reset filter</a>`)
 }
 
 func TestHandleFailedRecords_EmptyResult_ShowsEmptyState(t *testing.T) {
@@ -84,7 +84,7 @@ func TestHandleFailedRecords_EmptyResult_ShowsEmptyState(t *testing.T) {
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(body), "Keine fehlgeschlagenen Datensätze")
+	require.Contains(t, string(body), "No failed records")
 }
 
 func TestHandleFailedRecords_FilterParamsReachRepository(t *testing.T) {
@@ -156,5 +156,5 @@ func TestHandleFailedRecordsPage_NoMorePages_OmitsLoadMoreButton(t *testing.T) {
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.NotContains(t, string(body), "Weitere laden")
+	require.NotContains(t, string(body), "Load more")
 }

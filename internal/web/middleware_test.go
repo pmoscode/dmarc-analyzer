@@ -42,9 +42,9 @@ func TestRequireHost_ForeignHost_Rejected(t *testing.T) {
 }
 
 func TestRequireHost_DNSRebindingAttempt_Rejected(t *testing.T) {
-	// Eine fremde Domain, die selbst auf 127.0.0.1 auflöst (DNS-Rebinding):
-	// der Host-Header trägt trotzdem den fremden Namen, nicht den
-	// erlaubten öffentlichen Hostnamen.
+	// A foreign domain that itself resolves to 127.0.0.1 (DNS rebinding):
+	// the Host header still carries the foreign name, not the allowed
+	// public hostname.
 	handler := requireHost("dmarc.example.com", okHandler())
 
 	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://rebind.example.com/", nil)
@@ -62,17 +62,17 @@ func TestBuildContentSecurityPolicy_TableDriven(t *testing.T) {
 		wantFormAction   string
 	}{
 		{
-			name:             "ohne issuer-origin nur 'self'",
+			name:             "without issuer origin, only 'self'",
 			oidcIssuerOrigin: "",
 			wantFormAction:   "form-action 'self'",
 		},
 		{
-			name:             "mit issuer-origin zusaetzlich erlaubt",
+			name:             "with issuer origin additionally allowed",
 			oidcIssuerOrigin: "https://auth.example.com",
-			// form-action muss die Issuer-Origin enthalten, sonst blockiert der
-			// Browser den RP-Initiated-Logout-Redirect zu end_session_endpoint
-			// (siehe securityHeaders-Kommentar) — genau der Bug, der hier
-			// verhindert werden soll.
+			// form-action must contain the issuer origin, otherwise the
+			// browser blocks the RP-initiated logout redirect to
+			// end_session_endpoint (see the securityHeaders comment) —
+			// exactly the bug this is meant to prevent.
 			wantFormAction: "form-action 'self' https://auth.example.com",
 		},
 	}
@@ -133,7 +133,7 @@ func TestRequireSession_ValidCookie_PassesThrough(t *testing.T) {
 
 func TestRecoverPanic_HandlerPanics_Returns500WithoutCrashingProcess(t *testing.T) {
 	panicking := http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		panic("etwas ist kaputt")
+		panic("something is broken")
 	})
 	handler := recoverPanic(slog.New(slog.DiscardHandler), panicking)
 
@@ -144,11 +144,11 @@ func TestRecoverPanic_HandlerPanics_Returns500WithoutCrashingProcess(t *testing.
 	require.Equal(t, http.StatusInternalServerError, rec.Code)
 }
 
-// newAuthenticatedRequest baut eine POST-Anfrage gegen
-// "http://127.0.0.1:1234/konten" mit gültigem Sitzungs-Cookie und liefert
-// zusätzlich das zugehörige CSRF-Token — die meisten requireCSRF-Tests
-// brauchen beides: ohne eine gültige Sitzung schlägt validCSRFToken schon
-// an sessionFromRequest, nicht am eigentlich zu testenden Token-Vergleich.
+// newAuthenticatedRequest builds a POST request against
+// "http://127.0.0.1:1234/konten" with a valid session cookie and also
+// returns the matching CSRF token — most requireCSRF tests need both:
+// without a valid session, validCSRFToken already fails at
+// sessionFromRequest, not at the actual token comparison under test.
 func newAuthenticatedRequest(t *testing.T, a *auth) (*http.Request, string) {
 	t.Helper()
 	cookieValue, csrfToken, err := a.createSession("admin@example.com")
@@ -164,9 +164,9 @@ func TestRequireCSRF_GetRequest_NeverChecked(t *testing.T) {
 	a := newAuth()
 	handler := requireCSRF(a, okHandler())
 
-	// Weder Origin/Sec-Fetch-Site noch Token noch Sitzungs-Cookie gesetzt
-	// — GET muss trotzdem durchgehen, CSRF betrifft nur zustandsändernde
-	// Methoden.
+	// Neither Origin/Sec-Fetch-Site nor token nor session cookie set —
+	// GET must still pass through, CSRF only applies to state-changing
+	// methods.
 	r := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "http://127.0.0.1:1234/", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, r)
@@ -247,8 +247,8 @@ func TestRequireCSRF_PostWithoutOriginOrSecFetchSite_Returns403(t *testing.T) {
 	a := newAuth()
 	handler := requireCSRF(a, okHandler())
 
-	// Weder Origin noch Sec-Fetch-Site gesetzt — sicherheitshalber
-	// ablehnen statt anzunehmen, es sei schon in Ordnung.
+	// Neither Origin nor Sec-Fetch-Site set — reject to be safe instead
+	// of assuming it's fine.
 	r, token := newAuthenticatedRequest(t, a)
 	r.Header.Set(csrfTokenHeader, token)
 	rec := httptest.NewRecorder()
@@ -261,9 +261,9 @@ func TestRequireCSRF_PostWithValidTokenAndSecFetchSiteSameOrigin_PassesThrough(t
 	a := newAuth()
 	handler := requireCSRF(a, okHandler())
 
-	// Kein Origin-Header, aber Sec-Fetch-Site: same-origin — manche
-	// Browser lassen Origin bei einfachen same-origin-POSTs weg, senden
-	// aber Sec-Fetch-Site (Fetch Metadata Request Headers).
+	// No Origin header, but Sec-Fetch-Site: same-origin — some browsers
+	// omit Origin on simple same-origin POSTs, but send Sec-Fetch-Site
+	// (Fetch Metadata Request Headers).
 	r, token := newAuthenticatedRequest(t, a)
 	r.Header.Set("Sec-Fetch-Site", "same-origin")
 	r.Header.Set(csrfTokenHeader, token)
@@ -277,12 +277,12 @@ func TestRequireCSRF_PostWithNullOriginAndSecFetchSiteSameOrigin_PassesThrough(t
 	a := newAuth()
 	handler := requireCSRF(a, okHandler())
 
-	// Origin: null (wörtlich) statt eines fehlenden Headers — das
-	// schicken Browser für gewöhnliche (nicht per fetch/htmx ausgelöste)
-	// Formular-POSTs auf Seiten mit Referrer-Policy: no-referrer, auch
-	// wenn die Anfrage tatsächlich same-origin ist (reproduziert beim
-	// "Abgleich starten"-Formular). Sec-Fetch-Site bleibt zuverlässig und
-	// muss weiterhin als Fallback greifen statt an "null" zu scheitern.
+	// Origin: null (literally) instead of a missing header — browsers
+	// send this for ordinary (not fetch/htmx-triggered) form POSTs on
+	// pages with Referrer-Policy: no-referrer, even when the request is
+	// actually same-origin (reproduced with the "Start sync" form).
+	// Sec-Fetch-Site stays reliable and must still work as a fallback
+	// instead of failing on "null".
 	r, token := newAuthenticatedRequest(t, a)
 	r.Header.Set("Origin", "null")
 	r.Header.Set("Sec-Fetch-Site", "same-origin")
@@ -297,9 +297,9 @@ func TestRequireCSRF_PostWithNullOriginNoSecFetchSite_Returns403(t *testing.T) {
 	a := newAuth()
 	handler := requireCSRF(a, okHandler())
 
-	// Origin: null ohne Sec-Fetch-Site-Fallback muss weiterhin abgelehnt
-	// werden — genau dieser Fall tritt bei einer echten fremden
-	// Sandbox-iframe-Anfrage auf (siehe sameOrigin-Kommentar).
+	// Origin: null without a Sec-Fetch-Site fallback must still be
+	// rejected — this is exactly the case that occurs with a real
+	// foreign sandboxed-iframe request (see the sameOrigin comment).
 	r, token := newAuthenticatedRequest(t, a)
 	r.Header.Set("Origin", "null")
 	r.Header.Set(csrfTokenHeader, token)

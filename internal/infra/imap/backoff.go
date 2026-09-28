@@ -6,23 +6,23 @@ import (
 	"time"
 )
 
-// maxAttempts setzt IMPLEMENTIERUNG.md Abschnitt 7.2 um: "bei temporären
-// IMAP-Fehlern exponentiell gestaffelte Wiederholung (3 Versuche), danach
-// sauberer Abbruch mit verständlicher Meldung."
+// maxAttempts implements IMPLEMENTIERUNG.md section 7.2: "on transient
+// IMAP errors, exponentially staggered retry (3 attempts), then a clean
+// abort with an understandable message."
 const maxAttempts = 3
 
-// backoffDelays sind die Wartezeiten vor dem 2. und 3. Versuch
-// (exponentiell). Eine feste, kleine Tabelle statt eines Bit-Shifts auf
-// der Versuchsnummer — bei nur drei Versuchen lesbarer und ohne jede
-// Ganzzahl-Konvertierungsfrage.
+// backoffDelays are the wait times before the 2nd and 3rd attempt
+// (exponential). A fixed, small table instead of a bit shift on the
+// attempt number — more readable with only three attempts, and without any
+// integer-conversion questions.
 var backoffDelays = [maxAttempts - 1]time.Duration{
 	200 * time.Millisecond,
 	400 * time.Millisecond,
 }
 
-// retry führt fn bis zu maxAttempts Mal aus, mit exponentiell steigender
-// Wartezeit zwischen den Versuchen. Bricht sofort ab, wenn ctx erledigt
-// ist — auch während der Wartezeit zwischen zwei Versuchen.
+// retry runs fn up to maxAttempts times, with exponentially increasing wait
+// time between attempts. Aborts immediately once ctx is done — even during
+// the wait between two attempts.
 func retry(ctx context.Context, fn func() error) error {
 	var lastErr error
 	for attempt := 0; attempt < maxAttempts; attempt++ {
@@ -42,5 +42,5 @@ func retry(ctx context.Context, fn func() error) error {
 			return ctx.Err()
 		}
 	}
-	return fmt.Errorf("nach %d versuchen fehlgeschlagen: %w", maxAttempts, lastErr)
+	return fmt.Errorf("failed after %d attempts: %w", maxAttempts, lastErr)
 }

@@ -35,7 +35,7 @@ func TestStatisticsRepository_DailyVolumes_BucketsByReportDay(t *testing.T) {
 
 	got, err := stats.DailyVolumes(ctx, analysis.Query{Period: period})
 	require.NoError(t, err)
-	require.Len(t, got, 2, "zwei unterschiedliche Report-Tage")
+	require.Len(t, got, 2, "two different report days")
 
 	require.Equal(t, time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), got[0].Day)
 	require.Equal(t, 10, got[0].Pass)
@@ -65,7 +65,7 @@ func TestStatisticsRepository_TopSources_SortedByVolumeDescending(t *testing.T) 
 
 	got, err := stats.TopSources(ctx, analysis.Query{Period: period}, 2)
 	require.NoError(t, err)
-	require.Len(t, got, 2, "limit muss respektiert werden")
+	require.Len(t, got, 2, "limit must be respected")
 
 	require.Equal(t, "203.0.113.2", got[0].SourceIP.String())
 	require.Equal(t, 50, got[0].Total)
@@ -100,13 +100,13 @@ func TestStatisticsRepository_Heatmap_MarksMissingDaysAsNoData(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, []string{"203.0.113.1"}, ipStrings(got.Sources))
-	require.Len(t, got.Days, 3, "1., 2. und 3. September")
+	require.Len(t, got.Days, 3, "1st, 2nd, and 3rd of September")
 
 	require.True(t, got.Cells[0][0].HasData)
 	require.InDelta(t, 1.0, got.Cells[0][0].PassRate, 0.0001)
 	require.Equal(t, 10, got.Cells[0][0].Total)
 
-	require.False(t, got.Cells[0][1].HasData, "2. September hat keine Nachrichten dieser Quelle")
+	require.False(t, got.Cells[0][1].HasData, "2nd of September has no messages from this source")
 	require.Zero(t, got.Cells[0][1].Total)
 
 	require.True(t, got.Cells[0][2].HasData)

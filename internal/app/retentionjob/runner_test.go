@@ -65,12 +65,12 @@ func TestRun_StopsWhenContextCancelled(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(time.Second):
-		t.Fatal("Run() ist nach Kontextabbruch nicht zurückgekehrt")
+		t.Fatal("Run() did not return after context cancellation")
 	}
 }
 
 func TestRun_LogsErrorButKeepsRunning(t *testing.T) {
-	applier := &fakeApplier{err: errors.New("kaputt")}
+	applier := &fakeApplier{err: errors.New("broken")}
 	r := retentionjob.NewRunner(applier, 10*time.Millisecond, silentLogger())
 	ctx, cancel := context.WithTimeout(context.Background(), 35*time.Millisecond)
 	defer cancel()

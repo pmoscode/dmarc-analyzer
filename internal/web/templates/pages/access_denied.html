@@ -1,28 +1,27 @@
-{{/* Eigenständige Seite, NICHT über layout.html eingebunden (siehe
-     views.go:renderNamed) — an dieser Stelle existiert keine Sitzung, das
-     app-Layout (Nav, Abgleich-Knopf, Abmelden-Formular) würde einen
-     angemeldeten Zustand vortäuschen, den es nicht gibt. */}}
+{{/* Standalone page, NOT included via layout.html (see
+     views.go:renderNamed) — no session exists at this point, so the
+     app layout (nav, sync button, logout form) would fake a logged-in
+     state that doesn't actually exist. */}}
 {{define "fullpage"}}
 <!doctype html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Zugriff verweigert — DMARC Analyzer</title>
+  <title>Access denied — DMARC Analyzer</title>
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body class="standalone-body">
   <main class="standalone-card">
-    <h1>Zugriff verweigert</h1>
+    <h1>Access denied</h1>
     <p>
-      Das Konto <strong>{{.Account}}</strong> ist nicht Mitglied der
-      berechtigten Gruppe und hat deshalb keinen Zugriff auf DMARC Analyzer.
+      The account <strong>{{.Account}}</strong> is not a member of the
+      authorized group and therefore has no access to DMARC Analyzer.
     </p>
     <p class="standalone-hint">
-      Wende dich an eine Administratorin oder einen Administrator, wenn du
-      Zugriff benötigst.
+      Contact an administrator if you need access.
     </p>
-    <a class="button-link" href="/anmelden">Erneut versuchen</a>
+    <a class="button-link" href="/anmelden">Try again</a>
   </main>
 </body>
 </html>

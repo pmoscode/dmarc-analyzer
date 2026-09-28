@@ -1,17 +1,16 @@
-// Package importfiles importiert DMARC-Reports aus lokalen Dateien
-// (.eml, .xml, .xml.gz, .zip) — FEATURES.md Vorschlag 11.1: "Datei-/
-// Ordner-Import per Drag & Drop einlesen. Schon für die Entwicklung
-// unverzichtbar, ermöglicht Offline-Betrieb und Migration von
-// Altbeständen."
+// Package importfiles imports DMARC reports from local files (.eml,
+// .xml, .xml.gz, .zip) — FEATURES.md proposal 11.1: "read file/folder
+// import via drag & drop. Indispensable for development already, enables
+// offline operation and migration of legacy data."
 //
-// Bewusste Abweichung vom ursprünglichen Entwurf ("fällt fast nebenbei
-// ab, weil MessageSource bereits abstrahiert ist", IMPLEMENTIERUNG.md
-// Vorschlag 11.1): sync.MessageSource.Connect verlangt account.MailAccount
-// und ein Secret — ein lokaler Dateiimport hat keine IMAP-Zugangsdaten,
-// durch dieses Interface zu gehen wäre erzwungen statt natürlich. Dieser
-// Use Case teilt sich stattdessen die MIME-Zerlegung
-// (sync.MessageDecoder) und das Parsen (sync.ReportParser) mit
-// syncreports, ohne MessageSource selbst zu implementieren.
+// Deliberate deviation from the original design ("comes almost for free,
+// since MessageSource is already abstracted", IMPLEMENTIERUNG.md
+// proposal 11.1): sync.MessageSource.Connect requires account.MailAccount
+// and a Secret — a local file import has no IMAP credentials, going
+// through this interface would be forced rather than natural. This use
+// case instead shares the MIME decomposition (sync.MessageDecoder) and
+// parsing (sync.ReportParser) with syncreports, without implementing
+// MessageSource itself.
 package importfiles
 
 import (
@@ -25,7 +24,7 @@ import (
 	domainsync "github.com/pmoscode/dmarc-analyzer/internal/domain/sync"
 )
 
-// UseCase orchestriert den Datei-Import.
+// UseCase orchestrates the file import.
 type UseCase struct {
 	Reports       report.Repository
 	FailedImports domainsync.FailedImportRepository
@@ -33,7 +32,7 @@ type UseCase struct {
 	Parsers       []domainsync.ReportParser
 }
 
-// Result fasst einen Importlauf zusammen, analog zu syncreports.Result.
+// Result summarizes an import run, analogous to syncreports.Result.
 type Result struct {
 	New     int
 	Skipped int
@@ -48,9 +47,9 @@ func (r *Result) add(other Result) {
 	r.Errors = append(r.Errors, other.Errors...)
 }
 
-// ImportPaths importiert jede angegebene Datei. Eine einzelne kaputte
-// Datei bricht den gesamten Lauf nicht ab (IMPLEMENTIERUNG.md
-// Abschnitt 7.2: Fehlerquarantäne statt Abbruch).
+// ImportPaths imports each given file. A single broken file doesn't
+// abort the whole run (IMPLEMENTIERUNG.md section 7.2: error quarantine
+// instead of abort).
 func (uc *UseCase) ImportPaths(ctx context.Context, paths []string) (Result, error) {
 	total := Result{}
 	for _, path := range paths {
@@ -61,7 +60,7 @@ func (uc *UseCase) ImportPaths(ctx context.Context, paths []string) (Result, err
 		res, err := uc.ImportFile(ctx, path)
 		if err != nil {
 			total.Failed++
-			total.Errors = append(total.Errors, fmt.Errorf("datei %q: %w", path, err))
+			total.Errors = append(total.Errors, fmt.Errorf("file %q: %w", path, err))
 			continue
 		}
 		total.add(res)
@@ -69,25 +68,24 @@ func (uc *UseCase) ImportPaths(ctx context.Context, paths []string) (Result, err
 	return total, nil
 }
 
-// ImportFile liest eine einzelne Datei und importiert alle darin
-// enthaltenen Reports (bei .eml ggf. mehrere Anhänge, bei .zip ggf.
-// mehrere Reports in einem Anhang — siehe dmarcxml.Parser.ParseAll).
+// ImportFile reads a single file and imports all reports contained in it
+// (possibly several attachments for .eml, possibly several reports in
+// one attachment for .zip — see dmarcxml.Parser.ParseAll).
 func (uc *UseCase) ImportFile(ctx context.Context, path string) (Result, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return Result{}, fmt.Errorf("datei konnte nicht gelesen werden: %w", err)
+		return Result{}, fmt.Errorf("file could not be read: %w", err)
 	}
 
 	return uc.ImportData(ctx, filepath.Base(path), data)
 }
 
-// ImportData importiert eine Datei, die bereits als Bytes im Speicher
-// vorliegt, statt von der Festplatte gelesen zu werden — Grundlage für
-// den Datei-Upload der Web-Oberfläche (MIGRATIONSPLAN.md Erweiterung
-// 9.3: "Import aus Bytes"), die keinen lokalen Dateipfad hat (nur den
-// vom Browser mitgeschickten Dateinamen und den Anfrage-Body). Dieselbe
-// Logik wie ImportFile ab dem Punkt, an dem die Datei bereits gelesen
-// ist.
+// ImportData imports a file that already exists as bytes in memory,
+// instead of being read from disk — the basis for the web UI's file
+// upload (MIGRATIONSPLAN.md extension 9.3: "import from bytes"), which
+// has no local file path (only the filename sent by the browser and the
+// request body). Same logic as ImportFile from the point where the file
+// has already been read.
 func (uc *UseCase) ImportData(ctx context.Context, filename string, data []byte) (Result, error) {
 	attachments, err := uc.extractAttachments(filename, data)
 	if err != nil {
@@ -99,15 +97,15 @@ func (uc *UseCase) ImportData(ctx context.Context, filename string, data []byte)
 	return uc.importAttachments(ctx, attachments), nil
 }
 
-// extractAttachments liefert bei einer .eml-Datei deren MIME-Anhänge,
-// sonst die Datei selbst als einzigen Anhang — dieselbe Unterscheidung,
-// die eine IMAP-Nachricht (immer MIME) von einem bereits extrahierten
-// Anhang unterscheidet.
+// extractAttachments returns the MIME attachments of an .eml file, or
+// the file itself as the only attachment otherwise — the same
+// distinction that separates an IMAP message (always MIME) from an
+// already extracted attachment.
 func (uc *UseCase) extractAttachments(filename string, data []byte) ([]domainsync.RawAttachment, error) {
 	if strings.HasSuffix(strings.ToLower(filename), ".eml") {
 		attachments, err := uc.Decoder.Decode(data)
 		if err != nil {
-			return nil, fmt.Errorf("nachricht konnte nicht zerlegt werden: %w", err)
+			return nil, fmt.Errorf("message could not be decoded: %w", err)
 		}
 		return attachments, nil
 	}
@@ -119,17 +117,17 @@ func (uc *UseCase) importAttachments(ctx context.Context, attachments []domainsy
 	for _, att := range attachments {
 		parser := uc.findParser(att)
 		if parser == nil {
-			continue // kein DMARC-Report, z. B. der Textkörper einer .eml
+			continue // not a DMARC report, e.g. the text body of an .eml
 		}
 
-		// ParseAttachment nutzt ParseAll, falls der Parser das zusätzlich
-		// implementiert (z. B. dmarcxml.Parser bei einem .zip mit
-		// mehreren XML-Dateien) — ein einzelner Anhang kann so mehrere
-		// Reports liefern (siehe domainsync.ParseAttachment-Dokumentation).
+		// ParseAttachment uses ParseAll if the parser additionally
+		// implements it (e.g. dmarcxml.Parser for a .zip with multiple
+		// XML files) — a single attachment can thus yield multiple
+		// reports (see domainsync.ParseAttachment documentation).
 		reports, err := domainsync.ParseAttachment(ctx, parser, att)
 		if err != nil {
 			result.Failed++
-			result.Errors = append(result.Errors, fmt.Errorf("anhang %q: %w", att.Filename, err))
+			result.Errors = append(result.Errors, fmt.Errorf("attachment %q: %w", att.Filename, err))
 			uc.recordFailure(ctx, att.Filename, att.Data, err)
 			continue
 		}
@@ -138,7 +136,7 @@ func (uc *UseCase) importAttachments(ctx context.Context, attachments []domainsy
 			imported, err := report.SaveIfNew(ctx, uc.Reports, rep)
 			if err != nil {
 				result.Failed++
-				result.Errors = append(result.Errors, fmt.Errorf("anhang %q: report konnte nicht gespeichert werden: %w", att.Filename, err))
+				result.Errors = append(result.Errors, fmt.Errorf("attachment %q: report could not be saved: %w", att.Filename, err))
 				continue
 			}
 			if imported {

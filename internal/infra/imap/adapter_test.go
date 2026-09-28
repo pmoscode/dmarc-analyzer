@@ -34,25 +34,25 @@ func TestConnect_WrongPassword_FailsWithoutHanging(t *testing.T) {
 	acc := ts.account(t)
 
 	a := imapadapter.NewAdapter()
-	secret := account.NewSecretFromString("definitiv-falsch")
+	secret := account.NewSecretFromString("definitely-wrong")
 
 	start := time.Now()
 	err := a.Connect(context.Background(), acc, secret)
 	elapsed := time.Since(start)
 
 	require.Error(t, err)
-	// Ein Anmeldefehler wird nicht mit Backoff wiederholt (siehe
-	// adapter.go-Kommentar) — muss deutlich schneller scheitern, als drei
-	// Versuche mit Backoff bräuchten (200ms+400ms allein an Wartezeit).
+	// A login error is not retried with backoff (see the adapter.go
+	// comment) — must fail noticeably faster than three attempts with
+	// backoff would take (200ms+400ms of wait time alone).
 	require.Less(t, elapsed, 150*time.Millisecond,
-		"Anmeldefehler darf nicht wiederholt werden (falsches Passwort wird durch Retry nicht richtig)")
+		"a login error must not be retried (a wrong password doesn't become correct via retry)")
 }
 
 func TestFetchNew_FirstSync_ReturnsAllMessagesAndSetsUIDValidity(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
-	ts.appendMessage(t, testMessage("Report 1", "Inhalt 1"))
-	ts.appendMessage(t, testMessage("Report 2", "Inhalt 2"))
+	ts.appendMessage(t, testMessage("Report 1", "Content 1"))
+	ts.appendMessage(t, testMessage("Report 2", "Content 2"))
 
 	a := imapadapter.NewAdapter()
 	require.NoError(t, a.Connect(context.Background(), ts.account(t), account.NewSecretFromString(testPassword)))
@@ -61,7 +61,7 @@ func TestFetchNew_FirstSync_ReturnsAllMessagesAndSetsUIDValidity(t *testing.T) {
 	seq, baseline, err := a.FetchNew(context.Background(), sync.State{Mailbox: testMailbox})
 	require.NoError(t, err)
 	require.NotZero(t, baseline.UIDValidity)
-	require.Zero(t, baseline.LastUID, "beim ersten Sync gibt es noch keinen Fortschritt")
+	require.Zero(t, baseline.LastUID, "there is no progress yet on the first sync")
 
 	var messages []sync.RawMessage
 	for msg, err := range seq {
@@ -77,11 +77,11 @@ func TestFetchNew_FirstSync_ReturnsAllMessagesAndSetsUIDValidity(t *testing.T) {
 }
 
 func TestFetchNew_SecondSync_ReturnsNoNewMessages(t *testing.T) {
-	// Der in UMSETZUNGSPLAN.md AP 3 geforderte Kernfall: "Zweiter Sync-Lauf
-	// direkt nach dem ersten holt null Nachrichten."
+	// The core case required by UMSETZUNGSPLAN.md AP 3: "a second sync run
+	// right after the first fetches zero messages."
 	t.Parallel()
 	ts := newTestServer(t)
-	ts.appendMessage(t, testMessage("Report 1", "Inhalt 1"))
+	ts.appendMessage(t, testMessage("Report 1", "Content 1"))
 
 	a := imapadapter.NewAdapter()
 	require.NoError(t, a.Connect(context.Background(), ts.account(t), account.NewSecretFromString(testPassword)))
@@ -98,7 +98,7 @@ func TestFetchNew_SecondSync_ReturnsNoNewMessages(t *testing.T) {
 		lastUID = msg.UID
 	}
 	require.NotZero(t, lastUID)
-	state.LastUID = lastUID // wie es der Aufrufer (SyncReports, AP4) tun würde
+	state.LastUID = lastUID // as the caller (SyncReports, AP4) would do
 
 	seq, _, err = a.FetchNew(ctx, state)
 	require.NoError(t, err)
@@ -108,13 +108,13 @@ func TestFetchNew_SecondSync_ReturnsNoNewMessages(t *testing.T) {
 		require.NoError(t, err)
 		second = append(second, msg)
 	}
-	require.Empty(t, second, "zweiter Sync mit fortgeschriebenem State darf nichts Neues liefern")
+	require.Empty(t, second, "a second sync with an advanced state must not return anything new")
 }
 
 func TestFetchNew_OnlyFetchesMessagesAfterLastUID(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
-	ts.appendMessage(t, testMessage("Alt", "vor dem State"))
+	ts.appendMessage(t, testMessage("Old", "before the state"))
 
 	a := imapadapter.NewAdapter()
 	require.NoError(t, a.Connect(context.Background(), ts.account(t), account.NewSecretFromString(testPassword)))
@@ -127,7 +127,7 @@ func TestFetchNew_OnlyFetchesMessagesAfterLastUID(t *testing.T) {
 		state.LastUID = msg.UID
 	}
 
-	ts.appendMessage(t, testMessage("Neu", "nach dem State"))
+	ts.appendMessage(t, testMessage("New", "after the state"))
 
 	seq, _, err = a.FetchNew(ctx, state)
 	require.NoError(t, err)
@@ -138,13 +138,13 @@ func TestFetchNew_OnlyFetchesMessagesAfterLastUID(t *testing.T) {
 		messages = append(messages, msg)
 	}
 	require.Len(t, messages, 1)
-	require.Contains(t, string(messages[0].Data), "Neu")
+	require.Contains(t, string(messages[0].Data), "New")
 }
 
 func TestFetchNew_UIDValidityChange_TriggersFullRescan(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
-	ts.appendMessage(t, testMessage("Vor dem Wechsel", "..."))
+	ts.appendMessage(t, testMessage("Before the change", "..."))
 
 	a := imapadapter.NewAdapter()
 	require.NoError(t, a.Connect(context.Background(), ts.account(t), account.NewSecretFromString(testPassword)))
@@ -161,10 +161,10 @@ func TestFetchNew_UIDValidityChange_TriggersFullRescan(t *testing.T) {
 	require.Len(t, firstRun, 1)
 	oldUIDValidity := state.UIDValidity
 
-	// Postfach neu anlegen → neue UIDVALIDITY, wie nach einem
-	// Wiederherstellen des Postfachs auf dem Server.
+	// Recreate the mailbox → new UIDVALIDITY, as would happen after
+	// restoring the mailbox on the server.
 	ts.recreateMailbox(t)
-	ts.appendMessage(t, testMessage("Nach dem Wechsel", "..."))
+	ts.appendMessage(t, testMessage("After the change", "..."))
 
 	seq, newBaseline, err := a.FetchNew(ctx, state)
 	require.NoError(t, err)
@@ -175,17 +175,17 @@ func TestFetchNew_UIDValidityChange_TriggersFullRescan(t *testing.T) {
 		require.NoError(t, err)
 		secondRun = append(secondRun, msg)
 	}
-	// Voller Rescan: die (einzige) Nachricht im neuen Postfach wird erneut
-	// geliefert, auch wenn ihre UID zufällig <= der alten LastUID wäre.
-	// Duplikate fängt der UNIQUE-Index in der Persistenz ab (AP 2).
+	// Full rescan: the (only) message in the new mailbox is delivered
+	// again, even if its UID happened to be <= the old LastUID. Duplicates
+	// are caught by the UNIQUE index in persistence (AP 2).
 	require.Len(t, secondRun, 1)
-	require.Contains(t, string(secondRun[0].Data), "Nach dem Wechsel")
+	require.Contains(t, string(secondRun[0].Data), "After the change")
 }
 
 func TestFetchNew_UsesPeek_DoesNotSetSeenFlag(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
-	ts.appendMessage(t, testMessage("Unberührt bleiben", "..."))
+	ts.appendMessage(t, testMessage("Stay untouched", "..."))
 
 	a := imapadapter.NewAdapter()
 	require.NoError(t, a.Connect(context.Background(), ts.account(t), account.NewSecretFromString(testPassword)))
@@ -195,11 +195,11 @@ func TestFetchNew_UsesPeek_DoesNotSetSeenFlag(t *testing.T) {
 	seq, _, err := a.FetchNew(ctx, sync.State{Mailbox: testMailbox})
 	require.NoError(t, err)
 	for range seq {
-		// nur konsumieren
+		// just consume
 	}
 
-	// Mit einem zweiten, unabhängigen Client die Flags prüfen — BODY.PEEK[]
-	// darf \Seen nicht gesetzt haben (IMPLEMENTIERUNG.md Abschnitt 7.1).
+	// Check the flags with a second, independent client — BODY.PEEK[] must
+	// not have set \Seen (IMPLEMENTIERUNG.md section 7.1).
 	client, err := imapclient.DialInsecure(ts.addr, nil)
 	require.NoError(t, err)
 	defer func() { _ = client.Close() }()
@@ -232,10 +232,10 @@ func TestFetchNew_ContextAlreadyCancelled_FailsFast(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	// Bereits vor dem SELECT abgebrochener Kontext lässt FetchNew selbst
-	// scheitern (über runCtx bei der SELECT-Anfrage) — kein Grund, erst
-	// einen Iterator zurückzugeben, dessen erster Schritt sowieso nur den
-	// Abbruch melden würde.
+	// A context already cancelled before the SELECT makes FetchNew itself
+	// fail (via runCtx during the SELECT request) — no reason to first
+	// return an iterator whose first step would only report the
+	// cancellation anyway.
 	_, _, err := a.FetchNew(ctx, sync.State{Mailbox: testMailbox})
 	require.ErrorIs(t, err, context.Canceled)
 }
@@ -243,7 +243,7 @@ func TestFetchNew_ContextAlreadyCancelled_FailsFast(t *testing.T) {
 func TestFetchNew_ContextCancelledDuringIteration_StopsPromptly(t *testing.T) {
 	t.Parallel()
 	ts := newTestServer(t)
-	ts.appendMessage(t, testMessage("Egal", "..."))
+	ts.appendMessage(t, testMessage("Doesn't matter", "..."))
 
 	a := imapadapter.NewAdapter()
 	require.NoError(t, a.Connect(context.Background(), ts.account(t), account.NewSecretFromString(testPassword)))
@@ -251,11 +251,11 @@ func TestFetchNew_ContextCancelledDuringIteration_StopsPromptly(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	// SELECT läuft mit gültigem Kontext, der Abbruch passiert erst
-	// zwischen dem Erhalt des Iterators und seinem Konsum — das übt den
-	// Abbruchpfad innerhalb der Iteration aus (fetch.go: ctx.Err()-Prüfung
-	// zu Beginn jeder Schleifenrunde bzw. Schließen der Verbindung durch
-	// den Watcher, falls der Server noch mitten in der Antwort ist).
+	// SELECT runs with a valid context; the cancellation only happens
+	// between obtaining the iterator and consuming it — this exercises the
+	// cancellation path within the iteration (fetch.go: ctx.Err() check at
+	// the start of every loop iteration, or the connection being closed by
+	// the watcher if the server is still mid-response).
 	seq, _, err := a.FetchNew(ctx, sync.State{Mailbox: testMailbox})
 	require.NoError(t, err)
 	cancel()
@@ -273,9 +273,9 @@ func TestFetchNew_ContextCancelledDuringIteration_StopsPromptly(t *testing.T) {
 func TestConnect_RetriesTransientDialFailure(t *testing.T) {
 	t.Parallel()
 
-	// Ephemeral-Port reservieren, sofort wieder freigeben — beim ersten
-	// Connect-Versuch lehnt das Betriebssystem die Verbindung ab
-	// (ECONNREFUSED), das ist der zu wiederholende, transiente Fehler.
+	// Reserve an ephemeral port, release it right away — on the first
+	// Connect attempt the operating system refuses the connection
+	// (ECONNREFUSED), that's the transient error to be retried.
 	probe, err := new(net.ListenConfig).Listen(context.Background(), "tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	addr := probe.Addr().String()
@@ -290,17 +290,17 @@ func TestConnect_RetriesTransientDialFailure(t *testing.T) {
 		done <- a.Connect(context.Background(), ts.account(t), account.NewSecretFromString(testPassword))
 	}()
 
-	// Der Server startet erst, während retry() bereits zwischen dem 1.
-	// und 2. Versuch wartet (backoffDelays[0] = 200ms) — der 2. oder 3.
-	// Versuch muss den dann laufenden Server erreichen.
+	// The server only starts while retry() is already waiting between the
+	// 1st and 2nd attempt (backoffDelays[0] = 200ms) — the 2nd or 3rd
+	// attempt must reach the then-running server.
 	time.Sleep(80 * time.Millisecond)
 	ts.start(t)
 
 	select {
 	case err := <-done:
-		require.NoError(t, err, "Connect sollte nach einem transienten Fehler über Retry doch noch gelingen")
+		require.NoError(t, err, "Connect should still succeed via retry after a transient error")
 	case <-time.After(5 * time.Second):
-		t.Fatal("Connect kehrte nicht zurück — Retry hängt oder greift nicht")
+		t.Fatal("Connect did not return — retry is hanging or not kicking in")
 	}
 	require.NoError(t, a.Close())
 }

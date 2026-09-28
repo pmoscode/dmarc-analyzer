@@ -10,38 +10,38 @@ import (
 	"time"
 )
 
-// sessionTTL ist die feste Gültigkeitsdauer einer Sitzung nach der
-// Authentik-Anmeldung — kein Refresh, kein "angemeldet bleiben": nach
-// Ablauf meldet sich ein Admin erneut über /anmelden an (i. d. R.
-// transparent, weil Authentiks eigene SSO-Sitzung meist noch gültig ist).
+// sessionTTL is the fixed validity period of a session after the
+// Authentik login — no refresh, no "stay logged in": once it expires, an
+// admin logs in again via /anmelden (usually transparent, since
+// Authentik's own SSO session is typically still valid).
 const sessionTTL = 12 * time.Hour
 
-// pendingLoginTTL begrenzt, wie lange zwischen /anmelden (Redirect zu
-// Authentik) und /anmelden/callback vergehen darf — schützt vor einem
-// state/nonce-Wert, der beliebig lange wiederverwendet werden könnte.
+// pendingLoginTTL limits how long may pass between /anmelden (redirect to
+// Authentik) and /anmelden/callback — protects against a state/nonce
+// value that could otherwise be reused indefinitely.
 const pendingLoginTTL = 10 * time.Minute
 
-// sessionCookieName und pendingLoginCookieName sind die Namen der beiden
-// Cookies: eines für eine abgeschlossene Anmeldung (Sitzung), eines nur
-// während des OIDC-Umwegs über Authentik (siehe handlers_login.go).
+// sessionCookieName and pendingLoginCookieName are the names of the two
+// cookies: one for a completed login (session), one only during the OIDC
+// detour through Authentik (see handlers_login.go).
 const (
 	sessionCookieName      = "dmarc_session"
 	pendingLoginCookieName = "dmarc_login"
 )
 
-// session ist eine abgeschlossene Anmeldung — mehrere gleichzeitig
-// möglich (verschiedene Admins/Browser), anders als das frühere
-// Ein-Sitzung-Modell der Desktop-Ära.
+// session is a completed login — several can exist at once (different
+// admins/browsers), unlike the former single-session model from the
+// desktop era.
 type session struct {
 	username  string
 	csrfToken string
 	expiresAt time.Time
 }
 
-// pendingLogin hält state/nonce/PKCE-Verifier eines laufenden
-// OIDC-Anmeldevorgangs (siehe handlers_login.go handleLoginStart/
-// handleLoginCallback) — kurzlebig, ein Eintrag pro noch nicht
-// abgeschlossenem Redirect zu Authentik.
+// pendingLogin holds the state/nonce/PKCE verifier of an in-progress OIDC
+// login attempt (see handlers_login.go handleLoginStart/
+// handleLoginCallback) — short-lived, one entry per redirect to Authentik
+// that hasn't completed yet.
 type pendingLogin struct {
 	state        string
 	nonce        string
@@ -49,8 +49,8 @@ type pendingLogin struct {
 	expiresAt    time.Time
 }
 
-// auth verwaltet alle aktiven Sitzungen und laufenden Anmeldevorgänge
-// dieses Serverlaufs.
+// auth manages all active sessions and in-progress login attempts for
+// this server run.
 type auth struct {
 	mu       sync.Mutex
 	sessions map[string]session
@@ -67,14 +67,14 @@ func newAuth() *auth {
 func randomHex(n int) (string, error) {
 	b := make([]byte, n)
 	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("zufallswert konnte nicht erzeugt werden: %w", err)
+		return "", fmt.Errorf("could not generate random value: %w", err)
 	}
 	return hex.EncodeToString(b), nil
 }
 
-// beginLogin erzeugt einen neuen, pendingLoginTTL gültigen Anmeldevorgang
-// und liefert dessen ID (Cookie-Wert) sowie state/nonce/PKCE-Verifier für
-// die Authorization-Request an Authentik.
+// beginLogin creates a new login attempt valid for pendingLoginTTL and
+// returns its ID (cookie value) plus state/nonce/PKCE verifier for the
+// authorization request to Authentik.
 func (a *auth) beginLogin() (id string, p pendingLogin, err error) {
 	id, err = randomHex(16)
 	if err != nil {
@@ -102,9 +102,9 @@ func (a *auth) beginLogin() (id string, p pendingLogin, err error) {
 	return id, p, nil
 }
 
-// redeemLogin prüft id+state gegen einen ausstehenden Anmeldevorgang und
-// verwirft ihn in jedem Fall — bei Erfolg wie bei Fehlschlag —, damit ein
-// Callback nie zweimal eingelöst werden kann.
+// redeemLogin checks id+state against a pending login attempt and
+// discards it either way — on success as well as on failure — so a
+// callback can never be redeemed twice.
 func (a *auth) redeemLogin(id, state string) (pendingLogin, bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -121,8 +121,8 @@ func (a *auth) redeemLogin(id, state string) (pendingLogin, bool) {
 	return p, true
 }
 
-// createSession legt nach erfolgreicher OIDC-Anmeldung eine neue Sitzung
-// für username an und liefert Cookie-Wert und CSRF-Token.
+// createSession creates a new session for username after a successful
+// OIDC login and returns the cookie value and CSRF token.
 func (a *auth) createSession(username string) (cookieValue, csrfToken string, err error) {
 	cookieValue, err = randomHex(32)
 	if err != nil {
@@ -140,9 +140,8 @@ func (a *auth) createSession(username string) (cookieValue, csrfToken string, er
 	return cookieValue, csrfToken, nil
 }
 
-// sessionFromRequest liefert die Sitzung von r, falls das Cookie ein noch
-// gültiges Sitzungs-Cookie ist — abgelaufene Einträge werden dabei
-// gleich entfernt.
+// sessionFromRequest returns the session from r if the cookie is still a
+// valid session cookie — expired entries are removed along the way.
 func (a *auth) sessionFromRequest(r *http.Request) (session, bool) {
 	cookie, err := r.Cookie(sessionCookieName)
 	if err != nil {
@@ -163,28 +162,28 @@ func (a *auth) sessionFromRequest(r *http.Request) (session, bool) {
 	return s, true
 }
 
-// validSession meldet, ob r ein gültiges Sitzungs-Cookie mitbringt.
+// validSession reports whether r carries a valid session cookie.
 func (a *auth) validSession(r *http.Request) bool {
 	_, ok := a.sessionFromRequest(r)
 	return ok
 }
 
-// csrfTokenForRequest liefert das CSRF-Token der Sitzung von r, oder einen
-// leeren String ohne gültige Sitzung — für views.go beim Rendern eines
-// Formulars.
+// csrfTokenForRequest returns the CSRF token of the session from r, or an
+// empty string without a valid session — used by views.go when rendering
+// a form.
 func (a *auth) csrfTokenForRequest(r *http.Request) string {
 	s, _ := a.sessionFromRequest(r)
 	return s.csrfToken
 }
 
-// validCSRFToken meldet, ob token mit dem CSRF-Token der Sitzung von r
-// übereinstimmt (siehe middleware.go requireCSRF).
+// validCSRFToken reports whether token matches the CSRF token of the
+// session from r (see middleware.go requireCSRF).
 func (a *auth) validCSRFToken(r *http.Request, token string) bool {
 	s, ok := a.sessionFromRequest(r)
 	return ok && token != "" && subtle.ConstantTimeCompare([]byte(token), []byte(s.csrfToken)) == 1
 }
 
-// endSession entfernt die Sitzung von r, falls vorhanden — für /abmelden.
+// endSession removes the session from r, if any — for /abmelden.
 func (a *auth) endSession(r *http.Request) {
 	cookie, err := r.Cookie(sessionCookieName)
 	if err != nil {
@@ -195,13 +194,12 @@ func (a *auth) endSession(r *http.Request) {
 	a.mu.Unlock()
 }
 
-// setSessionCookie setzt das Sitzungs-Cookie nach erfolgreicher
-// Authentik-Anmeldung. Secure+HttpOnly+SameSite=Lax: Lax statt Strict,
-// weil der Browser dieses Cookie beim zurückkehrenden Redirect von
-// Authentik (einem Cross-Site-Navigationsziel) mitschicken muss, damit
-// /anmelden/callback die Sitzung setzen kann; ein direkter Angreifer kann
-// über SameSite=Lax weiterhin keine zustandsändernde Anfrage auslösen
-// (siehe requireCSRF zusätzlich dazu).
+// setSessionCookie sets the session cookie after a successful Authentik
+// login. Secure+HttpOnly+SameSite=Lax: Lax instead of Strict, because the
+// browser must send this cookie on the returning redirect from Authentik
+// (a cross-site navigation target) so that /anmelden/callback can set the
+// session; a direct attacker still can't trigger a state-changing request
+// via SameSite=Lax (see requireCSRF in addition to this).
 func setSessionCookie(w http.ResponseWriter, value string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
@@ -214,8 +212,8 @@ func setSessionCookie(w http.ResponseWriter, value string) {
 	})
 }
 
-// clearSessionCookie löscht das Sitzungs-Cookie beim Browser (Ablaufzeit
-// in der Vergangenheit) — für /abmelden.
+// clearSessionCookie deletes the session cookie on the browser (expiry in
+// the past) — for /abmelden.
 func clearSessionCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
@@ -228,9 +226,9 @@ func clearSessionCookie(w http.ResponseWriter) {
 	})
 }
 
-// setPendingLoginCookie/clearPendingLoginCookie verwalten das kurzlebige
-// Cookie, das die ID des laufenden OIDC-Anmeldevorgangs zwischen
-// /anmelden und /anmelden/callback transportiert.
+// setPendingLoginCookie/clearPendingLoginCookie manage the short-lived
+// cookie that carries the ID of the in-progress OIDC login attempt
+// between /anmelden and /anmelden/callback.
 func setPendingLoginCookie(w http.ResponseWriter, id string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     pendingLoginCookieName,

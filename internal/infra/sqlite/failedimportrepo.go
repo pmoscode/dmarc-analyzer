@@ -9,22 +9,22 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/sync"
 )
 
-// FailedImportRepository implementiert sync.FailedImportRepository gegen
-// SQLite (Tabelle failed_imports).
+// FailedImportRepository implements sync.FailedImportRepository against
+// SQLite (table failed_imports).
 type FailedImportRepository struct {
 	db *sql.DB
 }
 
 var _ sync.FailedImportRepository = (*FailedImportRepository)(nil)
 
-// NewFailedImportRepository erzeugt ein einsatzbereites Repository.
+// NewFailedImportRepository creates a ready-to-use repository.
 func NewFailedImportRepository(db *sql.DB) *FailedImportRepository {
 	return &FailedImportRepository{db: db}
 }
 
-// Record vermerkt einen fehlgeschlagenen Import. Absichtlich kein
-// Fremdschlüssel auf accounts(id) im Schema — ein fehlerhafter Import soll
-// auch dann einsehbar bleiben, wenn das Konto inzwischen gelöscht wurde.
+// Record notes a failed import. Deliberately no foreign key to
+// accounts(id) in the schema — a failed import should remain visible even
+// after the account has since been deleted.
 func (r *FailedImportRepository) Record(ctx context.Context, f sync.FailedImport) error {
 	occurredAt := f.OccurredAt
 	if occurredAt.IsZero() {
@@ -40,7 +40,7 @@ func (r *FailedImportRepository) Record(ctx context.Context, f sync.FailedImport
 		f.Error, f.Raw, occurredAt.UTC().Format(time.RFC3339Nano),
 	)
 	if err != nil {
-		return fmt.Errorf("fehlgeschlagener import konnte nicht vermerkt werden: %w", err)
+		return fmt.Errorf("could not record failed import: %w", err)
 	}
 	return nil
 }

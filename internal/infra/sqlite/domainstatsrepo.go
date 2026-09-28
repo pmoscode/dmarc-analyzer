@@ -18,21 +18,21 @@ const (
 	maxDomainPageSize     = 500
 )
 
-// DomainStatsRepository implementiert domainstats.Repository gegen
-// SQLite: nach Policy-Domain gruppierte SQL-Aggregation über
-// records/reports, analog zu SourceStatsRepository.
+// DomainStatsRepository implements domainstats.Repository against
+// SQLite: SQL aggregation over records/reports grouped by policy domain,
+// analogous to SourceStatsRepository.
 type DomainStatsRepository struct {
 	db *sql.DB
 }
 
 var _ domainstats.Repository = (*DomainStatsRepository)(nil)
 
-// NewDomainStatsRepository erzeugt ein einsatzbereites Repository.
+// NewDomainStatsRepository creates a ready-to-use repository.
 func NewDomainStatsRepository(db *sql.DB) *DomainStatsRepository {
 	return &DomainStatsRepository{db: db}
 }
 
-// Query liefert eine Seite nach Policy-Domain aggregierter Statistiken.
+// Query returns a page of statistics aggregated by policy domain.
 func (r *DomainStatsRepository) Query(ctx context.Context, q domainstats.Query) (domainstats.Page, error) {
 	limit := q.Limit
 	if limit <= 0 {
@@ -54,9 +54,9 @@ func (r *DomainStatsRepository) Query(ctx context.Context, q domainstats.Query) 
 	}
 	args = append(args, cursorArgs...)
 
-	// limit+1: ein zusätzliches Ergebnis anfordern, um ohne separates
-	// COUNT(*) zu erkennen, ob eine weitere Seite existiert (wie
-	// reportquery.go/sourcestatsrepo.go).
+	// limit+1: request one extra result to detect whether another page
+	// exists without a separate COUNT(*) (like reportquery.go/
+	// sourcestatsrepo.go).
 	args = append(args, limit+1)
 
 	query := fmt.Sprintf(`
@@ -79,7 +79,7 @@ func (r *DomainStatsRepository) Query(ctx context.Context, q domainstats.Query) 
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return domainstats.Page{}, fmt.Errorf("domains konnten nicht aggregiert werden: %w", err)
+		return domainstats.Page{}, fmt.Errorf("could not aggregate domains: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -90,11 +90,11 @@ func (r *DomainStatsRepository) Query(ctx context.Context, q domainstats.Query) 
 		var reportCount, distinctSources int
 		var firstSeen, lastSeen int64
 		if err := rows.Scan(&rawDomain, &total, &passed, &reportCount, &distinctSources, &firstSeen, &lastSeen); err != nil {
-			return domainstats.Page{}, fmt.Errorf("domain-zeile konnte nicht gelesen werden: %w", err)
+			return domainstats.Page{}, fmt.Errorf("could not read domain row: %w", err)
 		}
 		domain, err := report.NewDomainName(rawDomain)
 		if err != nil {
-			return domainstats.Page{}, fmt.Errorf("gespeicherte policy-domain %q ist ungültig: %w", rawDomain, err)
+			return domainstats.Page{}, fmt.Errorf("stored policy domain %q is invalid: %w", rawDomain, err)
 		}
 		stats = append(stats, domainstats.Stat{
 			Domain:          domain,
@@ -107,7 +107,7 @@ func (r *DomainStatsRepository) Query(ctx context.Context, q domainstats.Query) 
 		})
 	}
 	if err := rows.Err(); err != nil {
-		return domainstats.Page{}, fmt.Errorf("domains konnten nicht vollständig gelesen werden: %w", err)
+		return domainstats.Page{}, fmt.Errorf("could not fully read domains: %w", err)
 	}
 
 	page := domainstats.Page{Stats: stats}
@@ -134,11 +134,11 @@ func domainsWhere(q domainstats.Query) ([]string, []any) {
 	return clauses, args
 }
 
-// domainsOrderAndCursor liefert die ORDER-BY-Klausel sowie — falls
-// q.Cursor gesetzt ist — die WHERE-Klausel und Parameter für die zweite
-// und folgende Seiten. Da domain nach der Gruppierung je Zeile eindeutig
-// ist, braucht der Keyset-Vergleich (wie bei sourcesOrderAndCursor) keine
-// zusätzliche ID-Spalte als Tiebreaker.
+// domainsOrderAndCursor returns the ORDER BY clause and — if q.Cursor is
+// set — the WHERE clause and parameters for the second and subsequent
+// pages. Since domain is unique per row after grouping, the keyset
+// comparison (like sourcesOrderAndCursor) doesn't need an extra ID column
+// as a tiebreaker.
 func domainsOrderAndCursor(q domainstats.Query) (orderBy, cursorSQL string, args []any, err error) {
 	var cur domainCursor
 	if q.Cursor != "" {
@@ -157,7 +157,7 @@ func domainsOrderAndCursor(q domainstats.Query) (orderBy, cursorSQL string, args
 		return orderBy, cursorSQL, args, nil
 	}
 
-	// Standard: SortByVolume, größte Domain zuerst.
+	// Default: SortByVolume, largest domain first.
 	orderBy = "ORDER BY total DESC, domain DESC"
 	if q.Cursor != "" {
 		cursorSQL = "WHERE (total, domain) < (?, ?)"
@@ -166,8 +166,8 @@ func domainsOrderAndCursor(q domainstats.Query) (orderBy, cursorSQL string, args
 	return orderBy, cursorSQL, args, nil
 }
 
-// domainCursor ist die interne, typisierte Form von
-// domainstats.Query.Cursor / domainstats.Page.NextCursor.
+// domainCursor is the internal, typed form of domainstats.Query.Cursor /
+// domainstats.Page.NextCursor.
 type domainCursor struct {
 	Domain string `json:"d"`
 	Total  int64  `json:"t,omitempty"`
@@ -176,7 +176,7 @@ type domainCursor struct {
 func (c domainCursor) encode() string {
 	data, err := json.Marshal(c)
 	if err != nil {
-		panic(fmt.Sprintf("domainCursor konnte nicht kodiert werden: %v", err))
+		panic(fmt.Sprintf("domainCursor could not be encoded: %v", err))
 	}
 	return base64.RawURLEncoding.EncodeToString(data)
 }
@@ -185,10 +185,10 @@ func decodeDomainCursor(s string) (domainCursor, error) {
 	var c domainCursor
 	data, err := base64.RawURLEncoding.DecodeString(s)
 	if err != nil {
-		return domainCursor{}, fmt.Errorf("cursor konnte nicht dekodiert werden: %w", err)
+		return domainCursor{}, fmt.Errorf("could not decode cursor: %w", err)
 	}
 	if err := json.Unmarshal(data, &c); err != nil {
-		return domainCursor{}, fmt.Errorf("cursor hat ein ungültiges format: %w", err)
+		return domainCursor{}, fmt.Errorf("cursor has an invalid format: %w", err)
 	}
 	return c, nil
 }

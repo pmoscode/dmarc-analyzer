@@ -1,98 +1,98 @@
-// Package glossary stellt Begriffserklärungen rund um DMARC bereit —
-// dieselben Daten wie zuvor internal/ui/glossary/terms.go (MIGRATIONSPLAN.md
-// Meilenstein M2: "Glossarseite und Begriffs-Tooltips").
+// Package glossary provides term explanations around DMARC — the same
+// data as formerly internal/ui/glossary/terms.go (MIGRATIONSPLAN.md
+// milestone M2: "glossary page and term tooltips").
 package glossary
 
-// Term ist ein Glossareintrag: Begriff und Erklärung.
+// Term is a glossary entry: term and explanation.
 //
-// Inhalt unverändert aus internal/ui/glossary/terms.go übernommen (bis
-// M5 dort weiterhin dupliziert, siehe MIGRATIONSPLAN.md M1-Notiz zu
-// "i18n und Glossar-Daten verschoben": ein echter Verschub jetzt würde
-// internal/ui — bis M3 Standardoberfläche — die Pakete unter den Füßen
-// wegziehen bzw. eine verbotene ui→web-Abhängigkeit erzwingen).
+// Content taken over unchanged from internal/ui/glossary/terms.go (still
+// duplicated there until M5, see the MIGRATIONSPLAN.md M1 note on
+// "i18n and glossary data moved": actually moving it now would pull the
+// rug out from under internal/ui — the default UI until M3 — or force a
+// forbidden ui→web dependency).
 type Term struct {
 	Name       string
 	Definition string
 }
 
-// Terms sind alle Glossareinträge, in Anzeigereihenfolge.
+// Terms are all glossary entries, in display order.
 var Terms = []Term{
 	{
 		Name:       "DMARC",
-		Definition: "Domain-based Message Authentication, Reporting & Conformance (RFC 7489). Legt fest, wie ein Empfänger mit Nachrichten umgeht, die SPF und DKIM nicht bestehen, und liefert dem Domaininhaber Berichte darüber.",
+		Definition: "Domain-based Message Authentication, Reporting & Conformance (RFC 7489). Defines how a recipient handles messages that fail SPF and DKIM, and provides the domain owner with reports about it.",
 	},
 	{
 		Name:       "SPF",
-		Definition: "Sender Policy Framework — prüft, ob der sendende Mailserver für die Domain im Envelope-From autorisiert ist (per DNS-TXT-Eintrag).",
+		Definition: "Sender Policy Framework — checks whether the sending mail server is authorized for the domain in the envelope-from (via a DNS TXT record).",
 	},
 	{
 		Name:       "DKIM",
-		Definition: "DomainKeys Identified Mail — signiert Nachrichten kryptografisch; der Empfänger prüft die Signatur gegen einen im DNS veröffentlichten öffentlichen Schlüssel.",
+		Definition: "DomainKeys Identified Mail — cryptographically signs messages; the recipient checks the signature against a public key published in DNS.",
 	},
 	{
 		Name:       "Alignment",
-		Definition: "Ob die bei SPF/DKIM geprüfte Domain mit der im sichtbaren Absender (Header-From) übereinstimmt — ohne Alignment zählt ein bestandenes SPF/DKIM nicht für DMARC.",
+		Definition: "Whether the domain checked by SPF/DKIM matches the visible sender (header-from) — without alignment, a passing SPF/DKIM doesn't count for DMARC.",
 	},
 	{
-		Name:       "DMARC-Pass-Rate",
-		Definition: "Anteil der Nachrichten, bei denen DKIM oder SPF nach Alignment bestehen (dkim=pass ODER spf=pass in policy_evaluated).",
+		Name:       "DMARC pass rate",
+		Definition: "The share of messages where DKIM or SPF pass after alignment (dkim=pass OR spf=pass in policy_evaluated).",
 	},
 	{
 		Name:       "Disposition",
-		Definition: "Die vom Empfänger tatsächlich angewendete Maßnahme: none (keine), quarantine (Quarantäne/Spam-Ordner) oder reject (Zurückweisung).",
+		Definition: "The action the recipient actually applied: none, quarantine (spam folder), or reject.",
 	},
 	{
 		Name:       "Policy (p=)",
-		Definition: "Die vom Domaininhaber im DNS veröffentlichte gewünschte Richtlinie — dieselben Werte wie Disposition, aber Absicht statt tatsächlich angewendeter Maßnahme.",
+		Definition: "The desired policy published by the domain owner in DNS — the same values as disposition, but intent rather than the action actually applied.",
 	},
 	{
 		Name:       "pct",
-		Definition: "Prozentsatz der Nachrichten, auf die die Richtlinie angewendet werden soll — erlaubt einen schrittweisen Rollout von p=none zu p=reject.",
+		Definition: "The percentage of messages the policy should be applied to — allows a gradual rollout from p=none to p=reject.",
 	},
 	{
 		Name:       "Aggregate Report (RUA)",
-		Definition: "Der zusammengefasste, täglich versendete DMARC-Bericht, den dieses Programm abholt und auswertet — enthält Volumen und Ergebnisse je Sendequelle, keine Einzelnachrichten.",
+		Definition: "The summarized, typically daily DMARC report that this program fetches and evaluates — contains volume and results per sending source, not individual messages.",
 	},
 	{
-		Name:       "Quell-IP",
-		Definition: "Die IP-Adresse des Mailservers, der die Nachricht tatsächlich gesendet hat — Grundlage der Sendequellen-Ansicht.",
+		Name:       "Source IP",
+		Definition: "The IP address of the mail server that actually sent the message — the basis of the sending-source view.",
 	},
 	{
 		Name:       "rDNS / PTR",
-		Definition: "Reverse-DNS-Auflösung einer IP-Adresse zu einem Hostnamen — hilft, eine Quell-IP einem bekannten Diensteanbieter zuzuordnen.",
+		Definition: "Reverse DNS lookup of an IP address to a hostname — helps attribute a source IP to a known service provider.",
 	},
 	{
-		Name:       "Einordnung (Sendequelle)",
-		Definition: "Zeigt, ob DKIM und SPF getrennt betrachtet werden sollten: „Autorisiert“ bedeutet, beide bestehen. „Autorisiert (vermutlich Weiterleitung)“ bedeutet, nur DKIM besteht — DMARC besteht trotzdem, aber das Muster ist typisch für Mail-Weiterleitung, weil die DKIM-Signatur eine Weiterleitung übersteht, SPF dabei aber fast immer bricht (die weiterleitende IP steht nicht im SPF-Record der Domain). „Nicht bestätigt — prüfen“ bedeutet, DKIM besteht überwiegend nicht — eine echte Fälschung könnte DKIM nicht bestehen, weil ihr dafür der private Schlüssel der Domain fehlt, das lohnt also einen genaueren Blick.",
+		Name:       "Classification (sending source)",
+		Definition: "Shows whether DKIM and SPF should be considered separately: \"Authorized\" means both pass. \"Authorized (likely forwarding)\" means only DKIM passes — DMARC still passes, but the pattern is typical of mail forwarding, because the DKIM signature survives a forward while SPF almost always breaks (the forwarding IP isn't in the domain's SPF record). \"Unconfirmed — review\" means DKIM predominantly fails — a genuine spoof couldn't pass DKIM, since it lacks the domain's private key, so this is worth a closer look.",
 	},
 	{
-		Name:       "Nachrichtenvolumen pro Tag",
-		Definition: "Ein Balken je Tag, gestapelt aus bestandenen (grün) und fehlgeschlagenen (rot) Nachrichten nach DMARC. Zeigt, ob es an einzelnen Tagen Ausreißer beim Volumen oder bei Fehlschlägen gab.",
+		Name:       "Message volume per day",
+		Definition: "One bar per day, stacked from passed (green) and failed (red) messages per DMARC. Shows whether individual days had outliers in volume or failures.",
 	},
 	{
-		Name:       "Top-Sendequellen",
-		Definition: "Die Sendequellen (IP-Adressen) mit dem größten Nachrichtenvolumen im gewählten Zeitraum. Die Balkenhöhe zeigt die Nachrichtenanzahl, die Farbe die Pass-Rate dieser Quelle (rot = 0 %, grün = 100 %). Eine Quelle kann alle anderen im Volumen deutlich überragen — das ist normal, wenn ein großer Mailanbieter den Großteil der Nachrichten sendet.",
+		Name:       "Top sending sources",
+		Definition: "The sending sources (IP addresses) with the highest message volume in the selected period. Bar height shows the message count, color shows that source's pass rate (red = 0%, green = 100%). One source can dwarf all others in volume — that's normal when a large mail provider sends most of the messages.",
 	},
 	{
-		Name:       "Verteilung nach Disposition",
-		Definition: "Donut-Diagramm der von den Empfängern tatsächlich angewendeten Maßnahme (siehe Begriff „Disposition“): Keine Maßnahme, Quarantäne, Zurückgewiesen oder Unbekannt.",
+		Name:       "Disposition breakdown",
+		Definition: "Donut chart of the action recipients actually applied (see the \"Disposition\" term): none, quarantine, reject, or unknown.",
 	},
 	{
-		Name:       "Sendequelle × Tag (Pass-Rate)",
-		Definition: "Jede Zeile ist eine Sendequelle, jede Spalte ein Tag im gewählten Zeitraum. Die Farbe einer Zelle zeigt die Pass-Rate dieser Quelle an diesem Tag (rot = niedrig, grün = hoch). Eine leere Zelle bedeutet: An diesem Tag hat diese Quelle keine Nachrichten gesendet.",
+		Name:       "Sending source × day (pass rate)",
+		Definition: "Each row is a sending source, each column a day in the selected period. A cell's color shows that source's pass rate on that day (red = low, green = high). An empty cell means that source sent no messages that day.",
 	},
 	{
-		Name:       "DKIM-Selector",
-		Definition: "Kennzeichnet, welcher öffentliche DKIM-Schlüssel zur Prüfung der Signatur verwendet wurde (veröffentlicht als DNS-TXT-Eintrag unter <selector>._domainkey.<domain>) — eine Domain kann mehrere Selektoren gleichzeitig nutzen, z. B. je Versanddienst.",
+		Name:       "DKIM selector",
+		Definition: "Identifies which DKIM public key was used to verify the signature (published as a DNS TXT record under <selector>._domainkey.<domain>) — a domain can use several selectors at once, e.g. one per sending service.",
 	},
 	{
-		Name:       "SPF-Scope",
-		Definition: "Womit die geprüfte SPF-Domain verglichen wurde: „mfrom“ (Envelope-From, der Regelfall) oder „helo“ (der im SMTP-HELO/EHLO angegebene Name).",
+		Name:       "SPF scope",
+		Definition: "What the checked SPF domain was compared against: \"mfrom\" (envelope-from, the usual case) or \"helo\" (the name given in the SMTP HELO/EHLO).",
 	},
 }
 
-// ByName sucht einen Begriff nach Name. ok ist false, wenn der Begriff
-// nicht im Glossar existiert (Programmierfehler beim Aufrufer).
+// ByName looks up a term by name. ok is false if the term doesn't exist
+// in the glossary (a caller bug).
 func ByName(name string) (Term, bool) {
 	for _, t := range Terms {
 		if t.Name == name {

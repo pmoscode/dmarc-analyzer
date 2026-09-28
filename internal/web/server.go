@@ -1,6 +1,5 @@
-// Package web implementiert die eingebettete Web-Oberfläche. Ruft
-// ausschließlich Use Cases aus internal/app auf, nie direkt einen
-// Infra-Adapter (AGENTS.md).
+// Package web implements the embedded web UI. Only calls use cases from
+// internal/app, never a concrete infra adapter directly (AGENTS.md).
 package web
 
 import (
@@ -15,30 +14,30 @@ import (
 	"time"
 )
 
-// Options steuert Adresse, Vorlagen-Quelle und die Authentik-Anbindung.
+// Options controls the address, template source, and the Authentik
+// integration.
 type Options struct {
-	// Addr ist die Adresse, auf die der HTTP-Server bindet (z. B.
-	// ":8080") — kommt aus DMARC_LISTEN_ADDR, siehe
-	// internal/infra/envconfig. Anders als vor dem Umstieg auf Docker ist
-	// hier bewusst KEINE Beschränkung auf Loopback-Adressen mehr
-	// eingebaut: der Container muss von außerhalb erreichbar sein, der
-	// Zugriffsschutz läuft über OIDC (siehe auth.go/oidc.go) statt über
-	// "nur vom selben Rechner erreichbar".
+	// Addr is the address the HTTP server binds to (e.g. ":8080") — comes
+	// from DMARC_LISTEN_ADDR, see internal/infra/envconfig. Unlike before
+	// the move to Docker, this deliberately has NO restriction to loopback
+	// addresses anymore: the container must be reachable from outside,
+	// access control runs via OIDC (see auth.go/oidc.go) instead of "only
+	// reachable from the same machine".
 	Addr string
-	// Dev liest Vorlagen/Statik von der Festplatte statt eingebettet —
-	// für Entwicklung ohne Neubau bei jeder Änderung (Arbeitsverzeichnis
-	// muss die Repository-Wurzel sein), aus DMARC_DEV_MODE.
+	// Dev reads templates/static assets from disk instead of embedded —
+	// for development without a rebuild on every change (the working
+	// directory must be the repository root), from DMARC_DEV_MODE.
 	Dev bool
-	// Logger — nil verwendet slog.Default().
+	// Logger — nil uses slog.Default().
 	Logger *slog.Logger
-	// OIDC sind die Parameter für die Authentik-Anmeldung.
+	// OIDC holds the parameters for the Authentik login.
 	OIDC OIDCConfig
-	// Build sind Version und Git-Commit des laufenden Builds, angezeigt in
-	// der Kopfzeile unter dem Schriftzug jeder Seite (layout.html).
+	// Build holds the version and git commit of the running build, shown
+	// in the header below the wordmark on every page (layout.html).
 	Build BuildInfo
 }
 
-// Server ist die eingebettete Web-Oberfläche.
+// Server is the embedded web UI.
 type Server struct {
 	deps    Dependencies
 	logger  *slog.Logger
@@ -47,15 +46,15 @@ type Server struct {
 	views   *views
 	devMode bool
 
-	// allowedHost ist der öffentliche Hostname (aus OIDC.RedirectURL), den
-	// requireHost gegen den Host-Header eingehender Anfragen prüft (siehe
-	// middleware.go) — ersetzt die frühere, aus der gebundenen
-	// Loopback-Adresse berechnete Zulassungsliste.
+	// allowedHost is the public hostname (from OIDC.RedirectURL) that
+	// requireHost checks incoming requests' Host header against (see
+	// middleware.go) — replaces the former allowlist computed from the
+	// bound loopback address.
 	allowedHost string
-	// oidcIssuerOrigin ist die Origin (scheme://host) des OIDC-Issuers —
-	// wird der CSP-Direktive form-action hinzugefügt, damit der
-	// RP-Initiated-Logout-Redirect zu Authentiks end_session_endpoint nicht
-	// vom Browser blockiert wird (siehe middleware.go:securityHeaders).
+	// oidcIssuerOrigin is the origin (scheme://host) of the OIDC issuer —
+	// added to the CSP form-action directive so the RP-initiated logout
+	// redirect to Authentik's end_session_endpoint isn't blocked by the
+	// browser (see middleware.go:securityHeaders).
 	oidcIssuerOrigin string
 
 	staticFS fs.FS
@@ -64,10 +63,10 @@ type Server struct {
 	listener   net.Listener
 }
 
-// New baut den Server auf (Vorlagen laden, OIDC-Discovery gegen
-// Authentik), bindet aber noch keinen Port — das übernimmt Start().
-// Getrennt, damit Konstruktionsfehler (z. B. Authentik nicht erreichbar,
-// kaputte Vorlage) sich ohne Netzwerk-Seiteneffekt melden.
+// New builds the server (loads templates, OIDC discovery against
+// Authentik), but doesn't bind a port yet — that's Start()'s job.
+// Separated so construction errors (e.g. Authentik unreachable, broken
+// template) can be reported without a network side effect.
 func New(ctx context.Context, deps Dependencies, opts Options) (*Server, error) {
 	logger := opts.Logger
 	if logger == nil {
@@ -76,12 +75,12 @@ func New(ctx context.Context, deps Dependencies, opts Options) (*Server, error) 
 
 	redirectURL, err := url.Parse(opts.OIDC.RedirectURL)
 	if err != nil || redirectURL.Host == "" {
-		return nil, fmt.Errorf("DMARC_OIDC_REDIRECT_URL ist keine vollständige URL: %q", opts.OIDC.RedirectURL)
+		return nil, fmt.Errorf("DMARC_OIDC_REDIRECT_URL is not a complete URL: %q", opts.OIDC.RedirectURL)
 	}
 
 	issuerURL, err := url.Parse(opts.OIDC.IssuerURL)
 	if err != nil || issuerURL.Host == "" {
-		return nil, fmt.Errorf("DMARC_OIDC_ISSUER_URL ist keine vollständige URL: %q", opts.OIDC.IssuerURL)
+		return nil, fmt.Errorf("DMARC_OIDC_ISSUER_URL is not a complete URL: %q", opts.OIDC.IssuerURL)
 	}
 
 	authenticator, err := newOIDCAuthenticator(ctx, opts.OIDC)
@@ -93,7 +92,7 @@ func New(ctx context.Context, deps Dependencies, opts Options) (*Server, error) 
 
 	v, err := newViews(opts.Dev, opts.Build, a.csrfTokenForRequest)
 	if err != nil {
-		return nil, fmt.Errorf("vorlagen konnten nicht geladen werden: %w", err)
+		return nil, fmt.Errorf("could not load templates: %w", err)
 	}
 
 	sfs, err := staticFS(opts.Dev)
@@ -124,34 +123,34 @@ func New(ctx context.Context, deps Dependencies, opts Options) (*Server, error) 
 	return s, nil
 }
 
-// bind bindet den Server an addr.
+// bind binds the server to addr.
 func (s *Server) bind(addr string) error {
 	ln, err := new(net.ListenConfig).Listen(context.Background(), "tcp", addr)
 	if err != nil {
-		return fmt.Errorf("adresse %q konnte nicht gebunden werden: %w", addr, err)
+		return fmt.Errorf("could not bind address %q: %w", addr, err)
 	}
 	s.listener = ln
 	return nil
 }
 
-// Start startet den Server im Hintergrund. Lebenszyklus über
-// SIGINT/SIGTERM (siehe cmd/dmarc-analyzer/cmd_web.go) — "docker stop"
-// sendet SIGTERM.
+// Start starts the server in the background. Lifecycle managed via
+// SIGINT/SIGTERM (see cmd/dmarc-analyzer/cmd_web.go) — "docker stop"
+// sends SIGTERM.
 func (s *Server) Start(context.Context) error {
 	go func() {
 		if err := s.httpServer.Serve(s.listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			s.logger.Error("server beendet", "error", err)
+			s.logger.Error("server stopped", "error", err)
 		}
 	}()
 	return nil
 }
 
-// Shutdown fährt den Server sauber herunter (offene Anfragen fertig).
+// Shutdown shuts the server down cleanly (finishes open requests).
 func (s *Server) Shutdown(ctx context.Context) error {
 	return s.httpServer.Shutdown(ctx)
 }
 
-// Addr liefert die tatsächlich gebundene Adresse.
+// Addr returns the actually bound address.
 func (s *Server) Addr() string {
 	return s.listener.Addr().String()
 }

@@ -42,7 +42,7 @@ func TestRun_IntervalDisabled_NeverStartsAndReturnsImmediately(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(time.Second):
-		t.Fatal("Run() mit interval<=0 hätte sofort zurückkehren müssen")
+		t.Fatal("Run() with interval<=0 should have returned immediately")
 	}
 	require.Equal(t, int32(0), atomic.LoadInt32(&job.starts))
 }
@@ -81,7 +81,7 @@ func TestRun_AlreadyRunningError_IsNotLoggedAsFailure(t *testing.T) {
 }
 
 func TestRun_OtherStartError_KeepsRunning(t *testing.T) {
-	job := &fakeJob{err: errors.New("kaputt")}
+	job := &fakeJob{err: errors.New("broken")}
 	sched := syncscheduler.NewScheduler(job, 10*time.Millisecond, silentLogger())
 	ctx, cancel := context.WithTimeout(context.Background(), 35*time.Millisecond)
 	defer cancel()
@@ -106,6 +106,6 @@ func TestRun_StopsWhenContextCancelled(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(time.Second):
-		t.Fatal("Run() ist nach Kontextabbruch nicht zurückgekehrt")
+		t.Fatal("Run() did not return after context cancellation")
 	}
 }

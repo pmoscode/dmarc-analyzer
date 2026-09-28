@@ -11,25 +11,25 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/report"
 )
 
-// reportsPageSize ist die je Ladeschritt angeforderte Seitengröße —
-// dieselbe Lazy-Nachladelogik wie zuvor internal/ui/reports.View
-// (pageSize), hier über htmx statt über einen Fyne-Button (Abschnitt
-// 7: "GET /berichte/seite | nächste Seite (htmx, Keyset-Cursor)").
+// reportsPageSize is the page size requested per load step — the same
+// lazy-loading logic as formerly internal/ui/reports.View (pageSize),
+// here via htmx instead of a Fyne button (section 7: "GET
+// /berichte/seite | next page (htmx, keyset cursor)").
 const reportsPageSize = 50
 
-// reportsFilter fasst alle Filter-/Sortier-/Gruppierungsparameter von
-// /berichte zusammen — aus der URL gelesen: entweder der geteilten
-// Filterleiste (zeitraum/domain, wie Übersicht) oder den absoluten
-// Drill-down-Parametern eines Diagramm-Klicks (von/bis/quelle/
-// disposition, MIGRATIONSPLAN.md Abschnitt 9.6).
+// reportsFilter combines all filter/sort/grouping parameters of
+// /berichte — read from the URL: either the shared filter bar
+// (zeitraum/domain, like the overview) or the absolute drill-down
+// parameters of a chart click (von/bis/quelle/disposition,
+// MIGRATIONSPLAN.md section 9.6).
 type reportsFilter struct {
 	Period       report.DateRange
 	UsesAbsolute bool
-	PeriodDays   int // nur gültig, wenn !UsesAbsolute
+	PeriodDays   int // only valid when !UsesAbsolute
 
 	Domain      string
 	SourceIP    string
-	Disposition report.Disposition // "" bedeutet: kein Filter
+	Disposition report.Disposition // "" means: no filter
 
 	GroupBy       report.GroupBy
 	SortField     report.SortField
@@ -83,12 +83,12 @@ func parseISODateRange(vonRaw, bisRaw string) (time.Time, time.Time, bool) {
 	return von.UTC(), bis.UTC(), true
 }
 
-// parseGroupBy/parseSortField/parseSortDirection akzeptieren nur genau
-// die von report.Query unterstützten Werte (deren Konstanten-Strings
-// zufällig identisch zu den hier verwendeten Query-Parameter-Werten
-// sind, siehe report.GroupBy/SortField/SortDirection) — jeder andere
-// Wert (auch ein manipulierter Link) fällt auf die jeweilige
-// Voreinstellung zurück, statt die Anfrage abzulehnen.
+// parseGroupBy/parseSortField/parseSortDirection accept only exactly the
+// values report.Query supports (whose constant strings happen to match
+// the query parameter values used here, see
+// report.GroupBy/SortField/SortDirection) — any other value (including a
+// manipulated link) falls back to the respective default instead of
+// rejecting the request.
 func parseGroupBy(raw string) report.GroupBy {
 	switch report.GroupBy(raw) {
 	case report.GroupByDomain, report.GroupByOrg:
@@ -114,12 +114,11 @@ func parseSortDirection(raw string) report.SortDirection {
 	return report.SortDescending
 }
 
-// query baut die Repository-Abfrage für diesen Filter mit dem
-// angegebenen Keyset-Cursor (leer für die erste Seite) und der
-// angegebenen Seitengröße — für die Berichtstabelle selbst immer
-// reportsPageSize, für den CSV-Export eine größere Seitengröße
-// (handlers_export.go: weniger Datenbank-Roundtrips, ohne den gesamten
-// gefilterten Bestand auf einmal zu laden).
+// query builds the repository query for this filter with the given
+// keyset cursor (empty for the first page) and the given page size — for
+// the reports table itself always reportsPageSize, for the CSV export a
+// larger page size (handlers_export.go: fewer database round trips,
+// without loading the entire filtered set at once).
 func (f reportsFilter) query(cursor string, limit int) report.Query {
 	period := f.Period
 	return report.Query{
@@ -135,11 +134,10 @@ func (f reportsFilter) query(cursor string, limit int) report.Query {
 	}
 }
 
-// values baut die Query-Parameter, die den aktuellen Filter vollständig
-// beschreiben — Grundlage für "Weitere laden" (mit zusätzlichem Cursor)
-// und die sortierbaren Spaltenköpfe (mit geändertem
-// sortierung/sortrichtung), damit keiner der beiden den Rest des Filters
-// verliert.
+// values builds the query parameters that fully describe the current
+// filter — the basis for "load more" (with an added cursor) and the
+// sortable column headers (with a changed sortierung/sortrichtung), so
+// neither of the two loses the rest of the filter.
 func (f reportsFilter) values() url.Values {
 	v := url.Values{}
 	if f.UsesAbsolute {
@@ -165,9 +163,9 @@ func (f reportsFilter) values() url.Values {
 	return v
 }
 
-// sortLink baut den Link für einen sortierbaren Spaltenkopf: sortiert
-// nach field, in umgekehrter Richtung, wenn field bereits die aktive
-// Sortierung ist, sonst aufsteigend.
+// sortLink builds the link for a sortable column header: sorts by field,
+// in reverse direction if field is already the active sort, otherwise
+// ascending.
 func (f reportsFilter) sortLink(field report.SortField) string {
 	next := f
 	if f.SortField == field {
@@ -193,7 +191,7 @@ func (f reportsFilter) sortIndicator(field report.SortField) string {
 	return " ▼"
 }
 
-// --- Vorlagendaten -------------------------------------------------------
+// --- Template data ---------------------------------------------------------
 
 type reportRowView struct {
 	ID          string
@@ -240,9 +238,9 @@ type reportsPageData struct {
 	SortPeriodURL       string
 	SortPeriodIndicator string
 
-	// ExportURL exportiert den GESAMTEN aktuell gefilterten Bestand als
-	// CSV (nicht nur die geladene Seite, siehe handlers_export.go) —
-	// derselbe Filter wie die Tabelle gerade zeigt.
+	// ExportURL exports the ENTIRE currently filtered set as CSV (not just
+	// the loaded page, see handlers_export.go) — the same filter the
+	// table is currently showing.
 	ExportURL string
 
 	Rows reportsRowsData
@@ -264,7 +262,7 @@ func reportRows(reports []report.AggregateReport) []reportRowView {
 
 func buildReportsPageData(filter reportsFilter, page report.Page) reportsPageData {
 	data := reportsPageData{
-		Title:               "Berichte",
+		Title:               "Reports",
 		UsesAbsolutePeriod:  filter.UsesAbsolute,
 		Domain:              filter.Domain,
 		SourceIP:            filter.SourceIP,
@@ -293,7 +291,7 @@ func buildReportsPageData(filter reportsFilter, page report.Page) reportsPageDat
 	dispositions := []report.Disposition{"", report.DispositionNone, report.DispositionQuarantine, report.DispositionReject, report.DispositionUnknown}
 	data.DispositionOptions = make([]dispositionOptionView, len(dispositions))
 	for i, d := range dispositions {
-		label := "Alle"
+		label := "All"
 		if d != "" {
 			label = dispositionLabel(d)
 		}
@@ -302,9 +300,9 @@ func buildReportsPageData(filter reportsFilter, page report.Page) reportsPageDat
 
 	groups := []report.GroupBy{report.GroupByNone, report.GroupByDomain, report.GroupByOrg}
 	groupLabels := map[report.GroupBy]string{
-		report.GroupByNone:   "Keine",
+		report.GroupByNone:   "None",
 		report.GroupByDomain: "Domain",
-		report.GroupByOrg:    "Organisation",
+		report.GroupByOrg:    "Organization",
 	}
 	data.GroupOptions = make([]groupOptionView, len(groups))
 	for i, g := range groups {
@@ -314,15 +312,15 @@ func buildReportsPageData(filter reportsFilter, page report.Page) reportsPageDat
 	return data
 }
 
-// reportsPageURL baut den hx-get-Link für "Weitere laden" — derselbe
-// Filter, ergänzt um den Cursor der nächsten Seite.
+// reportsPageURL builds the hx-get link for "load more" — the same
+// filter, with the next page's cursor added.
 func reportsPageURL(filter reportsFilter, cursor string) string {
 	v := filter.values()
 	v.Set("cursor", cursor)
 	return "/berichte/seite?" + v.Encode()
 }
 
-// --- Handler --------------------------------------------------------------
+// --- Handlers ---------------------------------------------------------------
 
 func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 	filter, err := parseReportsFilter(r)
@@ -344,10 +342,10 @@ func (s *Server) handleReports(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleReportsPage liefert die nächste Seite als HTML-Fragment (nur die
-// zusätzlichen Tabellenzeilen plus neue "Weitere laden"-Zeile) — für den
-// htmx-Aufruf des Ladeknopfs, kein voller Seitenaufbau
-// (MIGRATIONSPLAN.md Abschnitt 7).
+// handleReportsPage returns the next page as an HTML fragment (only the
+// additional table rows plus a new "load more" row) — for the htmx call
+// from the load-more button, not a full page build (MIGRATIONSPLAN.md
+// section 7).
 func (s *Server) handleReportsPage(w http.ResponseWriter, r *http.Request) {
 	filter, err := parseReportsFilter(r)
 	if err != nil {
@@ -372,7 +370,7 @@ func (s *Server) handleReportsPage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// --- Detailansicht ---------------------------------------------------------
+// --- Detail view -------------------------------------------------------------
 
 type reportDetailPageData struct {
 	Title string
@@ -391,11 +389,11 @@ type reportDetailPageData struct {
 	SPFAlignment    string
 	Percentage      int
 
-	// OnlyFailed/ToggleURL/ToggleLabel tragen den "nur fehlgeschlagene
-	// anzeigen"-Umschalter (?nur_fehler=1) — ein reiner GET-Anzeigefilter
-	// auf den bereits geladenen Records dieses einen Berichts, keine
-	// Zustandsänderung, deshalb ein einfacher Link statt eines
-	// POST-Formulars (wie "Filter zurücksetzen" auf den Listen-Ansichten).
+	// OnlyFailed/ToggleURL/ToggleLabel carry the "show only failed"
+	// toggle (?nur_fehler=1) — a pure GET display filter on the already
+	// loaded records of this one report, not a state change, hence a
+	// plain link instead of a POST form (like "reset filter" on the list
+	// views).
 	OnlyFailed       bool
 	TotalRecordCount int
 	ShownRecordCount int
@@ -417,11 +415,11 @@ type recordRowView struct {
 	Detail          recordDetailView
 }
 
-// buildReportDetailData baut die Anzeigedaten für die Berichts-
-// Detailseite. onlyFailed blendet Records aus, bei denen DMARC bestanden
-// wurde (rec.Evaluated.PassesDMARC()) — "fehlgeschlagen" ist hier wie in
-// der Fehlschläge-Ansicht (handlers_failedrecords.go) einheitlich als
-// !PassesDMARC() definiert.
+// buildReportDetailData builds the display data for the report detail
+// page. onlyFailed hides records where DMARC passed
+// (rec.Evaluated.PassesDMARC()) — "failed" is defined uniformly here as
+// !PassesDMARC(), just like in the failures view
+// (handlers_failedrecords.go).
 func buildReportDetailData(full *report.AggregateReport, onlyFailed bool) reportDetailPageData {
 	shown := full.Records
 	if onlyFailed {
@@ -450,19 +448,19 @@ func buildReportDetailData(full *report.AggregateReport, onlyFailed bool) report
 
 	basePath := fmt.Sprintf("/berichte/%d", full.ID)
 	toggleURL := basePath + "?nur_fehler=1"
-	toggleLabel := "Nur fehlgeschlagene anzeigen"
+	toggleLabel := "Show only failed"
 	if onlyFailed {
 		toggleURL = basePath
-		toggleLabel = "Alle anzeigen"
+		toggleLabel = "Show all"
 	}
 
 	return reportDetailPageData{
-		Title:            fmt.Sprintf("Bericht %s", full.Metadata.ReportID),
+		Title:            fmt.Sprintf("Report %s", full.Metadata.ReportID),
 		OrgName:          full.Metadata.OrgName,
 		Email:            full.Metadata.Email,
 		ExtraContactInfo: full.Metadata.ExtraContactInfo,
 		ReportID:         full.Metadata.ReportID,
-		RangeLabel: full.Metadata.Range.Begin.Format("2006-01-02 15:04") + " bis " +
+		RangeLabel: full.Metadata.Range.Begin.Format("2006-01-02 15:04") + " to " +
 			full.Metadata.Range.End.Format("2006-01-02 15:04"),
 		Domain:           full.Policy.Domain.String(),
 		Policy:           string(full.Policy.Policy),
@@ -489,12 +487,12 @@ func (s *Server) handleReportDetail(w http.ResponseWriter, r *http.Request) {
 
 	full, err := s.deps.Reports.Get(r.Context(), report.ReportID(id))
 	if err != nil {
-		// Kein eigener 404-Pfad: report.Repository.FindByID meldet
-		// "nicht gefunden" über einen technischen Fehler (sql.ErrNoRows,
-		// siehe internal/infra/sqlite), keinen Domänen-Sentinel — dieselbe
-		// Behandlung wie zuvor internal/ui/reports.View.showDetail (jeder
-		// Fehler führt zur selben generischen Fehleranzeige, unabhängig
-		// von der Ursache).
+		// No dedicated 404 path: report.Repository.FindByID reports "not
+		// found" via a technical error (sql.ErrNoRows, see
+		// internal/infra/sqlite), not a domain sentinel — the same
+		// handling as formerly internal/ui/reports.View.showDetail (every
+		// error leads to the same generic error display, regardless of
+		// cause).
 		s.serverError(w, r, err)
 		return
 	}

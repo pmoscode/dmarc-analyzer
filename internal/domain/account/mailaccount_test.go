@@ -10,7 +10,7 @@ import (
 )
 
 func validArgs() (id account.AccountID, displayName, host string, port int, username, mailbox string, useTLS bool, createdAt time.Time) {
-	return "acc-1", "Mein Postfach", "imap.example.com", 993, "user@example.com", "INBOX", true, time.Now()
+	return "acc-1", "My Mailbox", "imap.example.com", 993, "user@example.com", "INBOX", true, time.Now()
 }
 
 func TestNewMailAccount_ValidInput(t *testing.T) {
@@ -59,12 +59,12 @@ func TestNewMailAccount_PortMustBeInValidRange(t *testing.T) {
 		port    int
 		wantErr bool
 	}{
-		{name: "unterer Rand", port: 1},
-		{name: "typisch: IMAPS", port: 993},
-		{name: "oberer Rand", port: 65535},
-		{name: "null", port: 0, wantErr: true},
-		{name: "negativ", port: -1, wantErr: true},
-		{name: "zu groß", port: 65536, wantErr: true},
+		{name: "lower bound", port: 1},
+		{name: "typical: IMAPS", port: 993},
+		{name: "upper bound", port: 65535},
+		{name: "zero", port: 0, wantErr: true},
+		{name: "negative", port: -1, wantErr: true},
+		{name: "too large", port: 65536, wantErr: true},
 	}
 
 	for _, tt := range tests {
@@ -108,9 +108,9 @@ func TestNewMailAccount_EmptyDisplayName_DefaultsToHost(t *testing.T) {
 }
 
 func TestNewMailAccount_UseTLSFalse_IsAllowed(t *testing.T) {
-	// Klartext-IMAP ist erlaubt (die Bestätigung dafür ist Sache der UI,
-	// nicht dieser Invariante) — sonst wäre der Adapter nicht gegen einen
-	// TLS-losen Test-Server nutzbar (siehe internal/infra/imap-Tests).
+	// Plaintext IMAP is allowed (the confirmation for it is the UI's
+	// concern, not this invariant) — otherwise the adapter couldn't be used
+	// against a TLS-less test server (see internal/infra/imap tests).
 	t.Parallel()
 
 	id, displayName, host, port, username, mailbox, _, createdAt := validArgs()

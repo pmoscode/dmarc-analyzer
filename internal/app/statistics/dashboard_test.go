@@ -107,9 +107,9 @@ func TestUseCase_Dashboard_ForwardsErrorsFromEachSource(t *testing.T) {
 	})
 }
 
-// fakeEnricher liefert für jede IP ein festes, konfigurierbares
-// Enrichment — keine echte DNS-Auflösung nötig, um die Label-Zuordnung
-// in Dashboard() zu prüfen.
+// fakeEnricher returns a fixed, configurable Enrichment for each IP — no
+// real DNS resolution needed to verify the label assignment in
+// Dashboard().
 type fakeEnricher struct {
 	byIP map[string]sources.Enrichment
 }
@@ -144,11 +144,11 @@ func TestUseCase_Dashboard_EnrichesTopSourcesAndHeatmapLabels(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, "Google Workspace", got.TopSources[0].Label,
-		"erkannter Dienst geht dem reinen PTR-Hostnamen vor")
-	require.Empty(t, got.TopSources[1].Label, "ohne Enrichment bleibt Label leer — Renderer fällt auf die IP zurück")
+		"recognized service takes precedence over the plain PTR hostname")
+	require.Empty(t, got.TopSources[1].Label, "without enrichment the label stays empty — the renderer falls back to the IP")
 
 	require.Equal(t, []string{"Google Workspace", ""}, got.Heatmap.SourceLabels,
-		"Heatmap-Zeilen übernehmen dieselbe Anreicherung wie die Top-Sendequellen")
+		"heatmap rows use the same enrichment as the top sending sources")
 }
 
 func TestUseCase_Dashboard_NilEnricher_LeavesLabelsEmpty(t *testing.T) {

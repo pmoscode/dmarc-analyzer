@@ -35,7 +35,7 @@ func (f *fakeAccountRepository) Save(_ context.Context, a *account.MailAccount) 
 func (f *fakeAccountRepository) FindByID(_ context.Context, id account.AccountID) (*account.MailAccount, error) {
 	a, ok := f.accounts[id]
 	if !ok {
-		return nil, fmt.Errorf("konto %q: %w", id, errNotFound)
+		return nil, fmt.Errorf("account %q: %w", id, errNotFound)
 	}
 	return &a, nil
 }
@@ -48,16 +48,16 @@ func (f *fakeAccountRepository) FindAll(context.Context) ([]account.MailAccount,
 	return all, nil
 }
 
-var errNotFound = errors.New("nicht gefunden")
+var errNotFound = errors.New("not found")
 
 // --- domainsync.StateRepository -----------------------------------------
 
 type fakeStateRepository struct {
 	mu     stdsync.Mutex
 	states map[string]domainsync.State
-	// saves zählt jeden Save-Aufruf — Tests nutzen das, um zu prüfen, dass
-	// der Fortschritt tatsächlich mehrfach fortgeschrieben wird, nicht nur
-	// einmal am Ende.
+	// saves counts every Save call — tests use this to verify that
+	// progress is actually persisted multiple times, not just once at
+	// the end.
 	saves []domainsync.State
 }
 
@@ -175,17 +175,18 @@ func (f *fakeFailedImportRepository) count() int {
 
 // --- domainsync.MessageDecoder ---------------------------------------------
 
-// fakeDecoder behandelt jede Nachricht als genau einen Anhang mit dem
-// Nachrichteninhalt als Dateiname — reicht für Tests, die nicht wirklich
-// MIME parsen wollen (das prüft internal/infra/mailmime bereits separat).
+// fakeDecoder treats every message as exactly one attachment with the
+// message content as filename — enough for tests that don't actually
+// want to parse MIME (internal/infra/mailmime already tests that
+// separately).
 type fakeDecoder struct{}
 
 func (fakeDecoder) Decode(data []byte) ([]domainsync.RawAttachment, error) {
 	return []domainsync.RawAttachment{{Filename: string(data), Data: data}}, nil
 }
 
-// failingDecoder liefert für jede Nachricht denselben Fehler — simuliert
-// eine kaputte MIME-Struktur.
+// failingDecoder returns the same error for every message — simulates a
+// broken MIME structure.
 type failingDecoder struct{ err error }
 
 func (d failingDecoder) Decode([]byte) ([]domainsync.RawAttachment, error) {
@@ -194,9 +195,9 @@ func (d failingDecoder) Decode([]byte) ([]domainsync.RawAttachment, error) {
 
 // --- domainsync.ReportParser -----------------------------------------------
 
-// fakeParser akzeptiert jeden Anhang und liefert einen Report, dessen
-// ReportID dem Anhangsinhalt entspricht — oder einen vorprogrammierten
-// Fehler, wenn der Anhangsinhalt in failFor steht.
+// fakeParser accepts every attachment and returns a report whose
+// ReportID matches the attachment content — or a preprogrammed error if
+// the attachment content is in failFor.
 type fakeParser struct {
 	failFor map[string]error
 }
@@ -228,10 +229,10 @@ func (p fakeParser) Parse(_ context.Context, att domainsync.RawAttachment) (*rep
 	)
 }
 
-// fakeMultiParser implementiert zusätzlich domainsync.MultiReportParser
-// — simuliert einen Anhang (z. B. ein .zip), der mehrere Reports auf
-// einmal enthält. Anhangsinhalt "multi:a,b,c" liefert drei Reports mit
-// den ReportIDs a, b, c.
+// fakeMultiParser additionally implements domainsync.MultiReportParser
+// — simulates an attachment (e.g. a .zip) that contains multiple reports
+// at once. Attachment content "multi:a,b,c" yields three reports with
+// ReportIDs a, b, c.
 type fakeMultiParser struct{}
 
 func (p fakeMultiParser) Supports(domainsync.RawAttachment) bool { return true }
@@ -276,15 +277,15 @@ func (p fakeMultiParser) ParseAll(_ context.Context, att domainsync.RawAttachmen
 
 // --- domainsync.MessageSource -----------------------------------------------
 
-// fakeMessageSource liefert eine vorprogrammierte Liste von Nachrichten.
-// connectErr/fetchErr simulieren Verbindungs- bzw. Fetch-Fehler.
+// fakeMessageSource returns a preprogrammed list of messages.
+// connectErr/fetchErr simulate connection or fetch errors respectively.
 type fakeMessageSource struct {
 	messages   []domainsync.RawMessage
 	connectErr error
 	fetchErr   error
-	// iterErr wird nach allen messages als letztes (msg, err)-Paar
-	// geliefert, wenn gesetzt — simuliert einen Fehler mitten im Iterator
-	// (z. B. Kontext-Abbruch, siehe internal/infra/imap/fetch.go).
+	// iterErr, if set, is delivered as the last (msg, err) pair after all
+	// messages — simulates an error in the middle of the iterator (e.g.
+	// context cancellation, see internal/infra/imap/fetch.go).
 	iterErr error
 
 	closed bool

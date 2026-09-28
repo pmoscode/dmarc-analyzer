@@ -19,11 +19,11 @@ func TestNewPublishedPolicy_PercentageMustBeInRange(t *testing.T) {
 		percentage int
 		wantErr    bool
 	}{
-		{name: "unterer Rand", percentage: 0},
-		{name: "oberer Rand", percentage: 100},
-		{name: "typischer Wert", percentage: 100},
-		{name: "negativ", percentage: -1, wantErr: true},
-		{name: "über 100", percentage: 101, wantErr: true},
+		{name: "lower bound", percentage: 0},
+		{name: "upper bound", percentage: 100},
+		{name: "typical value", percentage: 100},
+		{name: "negative", percentage: -1, wantErr: true},
+		{name: "above 100", percentage: 101, wantErr: true},
 	}
 
 	for _, tt := range tests {
