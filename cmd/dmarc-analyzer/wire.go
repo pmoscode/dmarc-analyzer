@@ -10,6 +10,7 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/app/domainoverview"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/importfiles"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/manageaccount"
+	"github.com/pmoscode/dmarc-analyzer/internal/app/queryfailedrecords"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/queryreports"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/retention"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/sourcestats"
@@ -37,14 +38,15 @@ type app struct {
 	db     *sql.DB
 	config envconfig.Config
 
-	accounts    *manageaccount.UseCase
-	queries     *queryreports.UseCase
-	sync        *syncreports.UseCase
-	importer    *importfiles.UseCase
-	stats       *statistics.UseCase
-	sourceStats *sourcestats.UseCase
-	domainStats *domainoverview.UseCase
-	retention   *retention.UseCase
+	accounts      *manageaccount.UseCase
+	queries       *queryreports.UseCase
+	sync          *syncreports.UseCase
+	importer      *importfiles.UseCase
+	stats         *statistics.UseCase
+	sourceStats   *sourcestats.UseCase
+	domainStats   *domainoverview.UseCase
+	failedRecords *queryfailedrecords.UseCase
+	retention     *retention.UseCase
 }
 
 // newApp lädt die ENV-Konfiguration, öffnet die Datenbank, legt das eine
@@ -72,6 +74,7 @@ func newApp(ctx context.Context) (*app, error) {
 	statsRepo := sqlite.NewStatisticsRepository(db)
 	sourceStatsRepo := sqlite.NewSourceStatsRepository(db)
 	domainStatsRepo := sqlite.NewDomainStatsRepository(db)
+	failedRecordsRepo := sqlite.NewFailedRecordsRepository(db)
 
 	acc, err := account.NewMailAccount(
 		primaryAccountID, "", cfg.IMAPHost, cfg.IMAPPort, cfg.IMAPUser, cfg.IMAPMailbox, cfg.IMAPTLS, time.Now(),
@@ -110,6 +113,9 @@ func newApp(ctx context.Context) (*app, error) {
 		},
 		domainStats: &domainoverview.UseCase{
 			Domains: domainStatsRepo,
+		},
+		failedRecords: &queryfailedrecords.UseCase{
+			Records: failedRecordsRepo,
 		},
 		retention: &retention.UseCase{
 			RetentionMonths: cfg.RetentionMonths,

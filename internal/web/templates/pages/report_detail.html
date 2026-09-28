@@ -25,26 +25,58 @@
 </section>
 
 <section class="detail-card">
-  <h2>Sendequellen ({{len .Records}})</h2>
+  <h2>Sendequellen ({{.TotalRecordCount}})</h2>
+  <p class="chart-hint">
+    {{if .OnlyFailed}}Zeigt {{.ShownRecordCount}} von {{.TotalRecordCount}} Datensätzen, bei denen DMARC nicht bestanden wurde.{{else}}Zeigt alle Datensätze dieses Berichts.{{end}}
+    <a href="{{.ToggleURL}}" class="filter-reset">{{.ToggleLabel}}</a>
+  </p>
   {{if .Records}}
   <table class="data-table" aria-label="Sendequellen in diesem Bericht">
     <thead>
-      <tr><th>Quell-IP</th><th>Nachrichten</th><th>Disposition</th><th>DKIM</th><th>SPF</th></tr>
+      <tr><th>Quell-IP</th><th>Nachrichten</th><th>Disposition</th><th>DKIM</th><th>SPF</th><th>Details</th></tr>
     </thead>
     <tbody>
       {{range .Records}}
       <tr>
         <td>{{.SourceIP}}</td>
         <td>{{.Count}}</td>
-        <td>{{.Disposition}}</td>
-        <td>{{.DKIM}}</td>
-        <td>{{.SPF}}</td>
+        <td><span class="badge badge-{{.DispositionTone}}">{{.Disposition}}</span></td>
+        <td><span class="badge badge-{{.DKIMTone}}">{{.DKIM}}</span></td>
+        <td><span class="badge badge-{{.SPFTone}}">{{.SPF}}</span></td>
+        <td>
+          <details class="record-detail">
+            <summary>anzeigen</summary>
+            <dl class="detail-list">
+              <dt>Header-From</dt><dd>{{.Detail.HeaderFrom}}</dd>
+              {{if .Detail.EnvelopeFrom}}<dt>Envelope-From</dt><dd>{{.Detail.EnvelopeFrom}}</dd>{{end}}
+              {{if .Detail.EnvelopeTo}}<dt>Envelope-To</dt><dd>{{.Detail.EnvelopeTo}}</dd>{{end}}
+            </dl>
+            {{if .Detail.DKIMResults}}
+            <p class="record-detail-heading">DKIM-Signaturen <button type="button" class="glossary-hint" data-tip="{{glossaryDef "DKIM-Selector"}}" aria-label="Begriff erklären: DKIM-Selector">?</button></p>
+            <ul class="record-detail-list">
+              {{range .Detail.DKIMResults}}<li>Domain {{.Domain}}, Selector {{.Selector}}: {{.Result}}</li>{{end}}
+            </ul>
+            {{end}}
+            {{if .Detail.SPFResults}}
+            <p class="record-detail-heading">SPF-Prüfungen <button type="button" class="glossary-hint" data-tip="{{glossaryDef "SPF-Scope"}}" aria-label="Begriff erklären: SPF-Scope">?</button></p>
+            <ul class="record-detail-list">
+              {{range .Detail.SPFResults}}<li>Domain {{.Domain}}, Scope {{.Scope}}: {{.Result}}</li>{{end}}
+            </ul>
+            {{end}}
+            {{if .Detail.Reasons}}
+            <p class="record-detail-heading">Gründe für Abweichung</p>
+            <ul class="record-detail-list">
+              {{range .Detail.Reasons}}<li>{{.Type}}{{if .Comment}}: {{.Comment}}{{end}}</li>{{end}}
+            </ul>
+            {{end}}
+          </details>
+        </td>
       </tr>
       {{end}}
     </tbody>
   </table>
   {{else}}
-  <p class="empty-state">Keine Sendequellen in diesem Bericht.</p>
+  <p class="empty-state">{{if .OnlyFailed}}Keine fehlgeschlagenen Sendequellen in diesem Bericht.{{else}}Keine Sendequellen in diesem Bericht.{{end}}</p>
   {{end}}
 </section>
 {{end}}

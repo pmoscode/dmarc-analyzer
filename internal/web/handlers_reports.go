@@ -391,27 +391,69 @@ type reportDetailPageData struct {
 	SPFAlignment    string
 	Percentage      int
 
+	// OnlyFailed/ToggleURL/ToggleLabel tragen den "nur fehlgeschlagene
+	// anzeigen"-Umschalter (?nur_fehler=1) — ein reiner GET-Anzeigefilter
+	// auf den bereits geladenen Records dieses einen Berichts, keine
+	// Zustandsänderung, deshalb ein einfacher Link statt eines
+	// POST-Formulars (wie "Filter zurücksetzen" auf den Listen-Ansichten).
+	OnlyFailed       bool
+	TotalRecordCount int
+	ShownRecordCount int
+	ToggleURL        string
+	ToggleLabel      string
+
 	Records []recordRowView
 }
 
 type recordRowView struct {
-	SourceIP    string
-	Count       int
-	Disposition string
-	DKIM        string
-	SPF         string
+	SourceIP        string
+	Count           int
+	Disposition     string
+	DispositionTone string
+	DKIM            string
+	DKIMTone        string
+	SPF             string
+	SPFTone         string
+	Detail          recordDetailView
 }
 
-func buildReportDetailData(full *report.AggregateReport) reportDetailPageData {
-	records := make([]recordRowView, len(full.Records))
-	for i, rec := range full.Records {
-		records[i] = recordRowView{
-			SourceIP:    rec.SourceIP.String(),
-			Count:       rec.Count,
-			Disposition: string(rec.Evaluated.Disposition),
-			DKIM:        string(rec.Evaluated.DKIM),
-			SPF:         string(rec.Evaluated.SPF),
+// buildReportDetailData baut die Anzeigedaten für die Berichts-
+// Detailseite. onlyFailed blendet Records aus, bei denen DMARC bestanden
+// wurde (rec.Evaluated.PassesDMARC()) — "fehlgeschlagen" ist hier wie in
+// der Fehlschläge-Ansicht (handlers_failedrecords.go) einheitlich als
+// !PassesDMARC() definiert.
+func buildReportDetailData(full *report.AggregateReport, onlyFailed bool) reportDetailPageData {
+	shown := full.Records
+	if onlyFailed {
+		shown = make([]report.Record, 0, len(full.Records))
+		for _, rec := range full.Records {
+			if !rec.Evaluated.PassesDMARC() {
+				shown = append(shown, rec)
+			}
 		}
+	}
+
+	records := make([]recordRowView, len(shown))
+	for i, rec := range shown {
+		records[i] = recordRowView{
+			SourceIP:        rec.SourceIP.String(),
+			Count:           rec.Count,
+			Disposition:     string(rec.Evaluated.Disposition),
+			DispositionTone: dispositionTone(rec.Evaluated.Disposition),
+			DKIM:            string(rec.Evaluated.DKIM),
+			DKIMTone:        authResultTone(rec.Evaluated.DKIM),
+			SPF:             string(rec.Evaluated.SPF),
+			SPFTone:         authResultTone(rec.Evaluated.SPF),
+			Detail:          buildRecordDetailView(rec.Identifiers, rec.Auth, rec.Evaluated.Reasons),
+		}
+	}
+
+	basePath := fmt.Sprintf("/berichte/%d", full.ID)
+	toggleURL := basePath + "?nur_fehler=1"
+	toggleLabel := "Nur fehlgeschlagene anzeigen"
+	if onlyFailed {
+		toggleURL = basePath
+		toggleLabel = "Alle anzeigen"
 	}
 
 	return reportDetailPageData{
@@ -422,13 +464,18 @@ func buildReportDetailData(full *report.AggregateReport) reportDetailPageData {
 		ReportID:         full.Metadata.ReportID,
 		RangeLabel: full.Metadata.Range.Begin.Format("2006-01-02 15:04") + " bis " +
 			full.Metadata.Range.End.Format("2006-01-02 15:04"),
-		Domain:          full.Policy.Domain.String(),
-		Policy:          string(full.Policy.Policy),
-		SubdomainPolicy: string(full.Policy.SubdomainPolicy),
-		DKIMAlignment:   string(full.Policy.DKIMAlignment),
-		SPFAlignment:    string(full.Policy.SPFAlignment),
-		Percentage:      full.Policy.Percentage,
-		Records:         records,
+		Domain:           full.Policy.Domain.String(),
+		Policy:           string(full.Policy.Policy),
+		SubdomainPolicy:  string(full.Policy.SubdomainPolicy),
+		DKIMAlignment:    string(full.Policy.DKIMAlignment),
+		SPFAlignment:     string(full.Policy.SPFAlignment),
+		Percentage:       full.Policy.Percentage,
+		OnlyFailed:       onlyFailed,
+		TotalRecordCount: len(full.Records),
+		ShownRecordCount: len(shown),
+		ToggleURL:        toggleURL,
+		ToggleLabel:      toggleLabel,
+		Records:          records,
 	}
 }
 
@@ -452,7 +499,8 @@ func (s *Server) handleReportDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data := buildReportDetailData(full)
+	onlyFailed := r.URL.Query().Get("nur_fehler") == "1"
+	data := buildReportDetailData(full, onlyFailed)
 	data.Nav = navItems("/berichte")
 	if err := s.views.render(w, r, "report_detail.html", data); err != nil {
 		s.serverError(w, r, err)

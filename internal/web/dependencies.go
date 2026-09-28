@@ -4,6 +4,7 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/app/domainoverview"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/importfiles"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/manageaccount"
+	"github.com/pmoscode/dmarc-analyzer/internal/app/queryfailedrecords"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/queryreports"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/retention"
 	"github.com/pmoscode/dmarc-analyzer/internal/app/sourcestats"
@@ -17,8 +18,13 @@ type Dependencies struct {
 	Reports    *queryreports.UseCase
 	Sources    *sourcestats.UseCase
 	Domains    *domainoverview.UseCase
-	Accounts   *manageaccount.UseCase
-	SyncJob    *syncjob.Runner
+	// FailedRecords versorgt die Fehlschläge-Ansicht (/fehlschlaege) —
+	// berichtsübergreifende Suche nach Records, bei denen DMARC nicht
+	// bestanden wurde (Ergänzung zur Berichte-Detailseite, die dieselbe
+	// Rohdaten-Aufbereitung für einen einzelnen Bericht zeigt).
+	FailedRecords *queryfailedrecords.UseCase
+	Accounts      *manageaccount.UseCase
+	SyncJob       *syncjob.Runner
 	// Importer braucht keine Zugangsdaten — Import aus hochgeladenen
 	// Dateien funktioniert unabhängig vom konfigurierten IMAP-Konto.
 	Importer *importfiles.UseCase

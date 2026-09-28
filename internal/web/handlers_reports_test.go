@@ -222,6 +222,101 @@ func TestHandleReportDetail_RendersMetadataPolicyAndRecords(t *testing.T) {
 	require.Contains(t, html, "fail")
 }
 
+func TestHandleReportDetail_RendersRawAuthResultDetail(t *testing.T) {
+	begin := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	full := mustAggregateReport(t, 42, "Google", "example.com", begin)
+	ip := mustSourceIP("203.0.113.1")
+	headerFrom := mustDomainName("example.com")
+	rec, err := report.NewRecord(ip, 10,
+		report.PolicyEvaluation{
+			Disposition: report.DispositionQuarantine,
+			DKIM:        report.AuthResultFail,
+			SPF:         report.AuthResultFail,
+			Reasons:     []report.PolicyOverrideReason{{Type: "forwarded", Comment: "bekannter Verteiler"}},
+		},
+		report.Identifiers{HeaderFrom: headerFrom, EnvelopeFrom: "bounce@example.com", EnvelopeTo: "empfang@example.org"},
+		report.AuthResults{
+			DKIM: []report.DKIMAuthResult{{Domain: "example.com", Selector: "sel1", Result: report.AuthResultFail}},
+			SPF:  []report.SPFAuthResult{{Domain: "example.net", Scope: "mfrom", Result: report.AuthResultFail}},
+		},
+	)
+	require.NoError(t, err)
+	full.Records = []report.Record{rec}
+
+	repo := &fakeReportRepository{byID: map[report.ReportID]*report.AggregateReport{42: &full}}
+	srv := newTestServerWithReports(t, repo)
+	client := authenticatedClient(t, srv)
+
+	resp := httpGet(t, client, "http://"+srv.Addr()+"/berichte/42")
+	defer func() { _ = resp.Body.Close() }()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	html := string(body)
+
+	require.Contains(t, html, "bounce@example.com")
+	require.Contains(t, html, "empfang@example.org")
+	require.Contains(t, html, "sel1")
+	require.Contains(t, html, "example.net")
+	require.Contains(t, html, "mfrom")
+	require.Contains(t, html, "forwarded")
+	require.Contains(t, html, "bekannter Verteiler")
+	require.Contains(t, html, `<a href="/berichte/42?nur_fehler=1" class="filter-reset">Nur fehlgeschlagene anzeigen</a>`)
+}
+
+func TestHandleReportDetail_OnlyFailedToggle_FiltersPassingRecords(t *testing.T) {
+	begin := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	full := mustAggregateReport(t, 42, "Google", "example.com", begin)
+	passing, err := report.NewRecord(mustSourceIP("203.0.113.1"), 5,
+		report.PolicyEvaluation{Disposition: report.DispositionNone, DKIM: report.AuthResultPass, SPF: report.AuthResultPass},
+		report.Identifiers{}, report.AuthResults{})
+	require.NoError(t, err)
+	failing, err := report.NewRecord(mustSourceIP("198.51.100.1"), 2,
+		report.PolicyEvaluation{Disposition: report.DispositionReject, DKIM: report.AuthResultFail, SPF: report.AuthResultFail},
+		report.Identifiers{}, report.AuthResults{})
+	require.NoError(t, err)
+	full.Records = []report.Record{passing, failing}
+
+	repo := &fakeReportRepository{byID: map[report.ReportID]*report.AggregateReport{42: &full}}
+	srv := newTestServerWithReports(t, repo)
+	client := authenticatedClient(t, srv)
+
+	resp := httpGet(t, client, "http://"+srv.Addr()+"/berichte/42?nur_fehler=1")
+	defer func() { _ = resp.Body.Close() }()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	html := string(body)
+
+	require.Contains(t, html, "198.51.100.1")
+	require.NotContains(t, html, "203.0.113.1")
+	require.Contains(t, html, `<a href="/berichte/42" class="filter-reset">Alle anzeigen</a>`)
+}
+
+func TestHandleReportDetail_OnlyFailedToggle_EmptyState(t *testing.T) {
+	begin := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	full := mustAggregateReport(t, 42, "Google", "example.com", begin)
+	passing, err := report.NewRecord(mustSourceIP("203.0.113.1"), 5,
+		report.PolicyEvaluation{Disposition: report.DispositionNone, DKIM: report.AuthResultPass, SPF: report.AuthResultPass},
+		report.Identifiers{}, report.AuthResults{})
+	require.NoError(t, err)
+	full.Records = []report.Record{passing}
+
+	repo := &fakeReportRepository{byID: map[report.ReportID]*report.AggregateReport{42: &full}}
+	srv := newTestServerWithReports(t, repo)
+	client := authenticatedClient(t, srv)
+
+	resp := httpGet(t, client, "http://"+srv.Addr()+"/berichte/42?nur_fehler=1")
+	defer func() { _ = resp.Body.Close() }()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Contains(t, string(body), "Keine fehlgeschlagenen Sendequellen in diesem Bericht.")
+}
+
 func TestHandleReportDetail_UnknownID_Returns500(t *testing.T) {
 	repo := &fakeReportRepository{byID: map[report.ReportID]*report.AggregateReport{}}
 	srv := newTestServerWithReports(t, repo)

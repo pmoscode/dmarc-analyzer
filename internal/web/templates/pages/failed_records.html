@@ -1,0 +1,96 @@
+{{define "content"}}
+<form class="filter-bar" method="get" action="/fehlschlaege" aria-label="Filter">
+  <label>Zeitraum
+    <select name="zeitraum">
+      {{range .PeriodOptions}}<option value="{{.Days}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
+    </select>
+  </label>
+  <label>Domain
+    <input type="text" name="domain" value="{{.Domain}}" placeholder="Alle" autocomplete="off">
+  </label>
+  <label>Quell-IP
+    <input type="text" name="quelle" value="{{.SourceIP}}" placeholder="Alle" autocomplete="off">
+  </label>
+  <button type="submit">Filter anwenden</button>
+  <a href="/fehlschlaege" class="filter-reset">Filter zurücksetzen</a>
+</form>
+
+<p class="chart-hint">Zeigt Datensätze, bei denen DMARC nicht bestanden wurde (weder DKIM noch SPF ausgerichtet bestanden), über alle Berichte im gewählten Zeitraum hinweg.</p>
+
+<p class="export-link"><a href="{{.ExportURL}}">CSV exportieren (gesamter gefilterter Bestand)</a></p>
+
+<table class="data-table" aria-label="Fehlgeschlagene Datensätze">
+  <thead>
+    <tr>
+      <th><a href="{{.SortDateURL}}">Zeitraum</a></th>
+      <th>Organisation</th>
+      <th>Domain</th>
+      <th><a href="{{.SortSourceIPURL}}">Quell-IP</a></th>
+      <th>Nachrichten</th>
+      <th>Disposition</th>
+      <th>DKIM</th>
+      <th>SPF</th>
+      <th>Details</th>
+    </tr>
+  </thead>
+  <tbody id="failed-records-rows">
+    {{template "rows" .Rows}}
+  </tbody>
+</table>
+{{if not .Rows.Rows}}
+<p class="empty-state">Keine fehlgeschlagenen Datensätze für diesen Filter gefunden.</p>
+{{end}}
+{{end}}
+
+{{define "rows"}}
+{{range .Rows}}
+<tr>
+  <td>{{.PeriodLabel}}</td>
+  <td><a href="{{.ReportURL}}">{{.OrgName}}</a></td>
+  <td>{{.Domain}}</td>
+  <td>{{.SourceIP}}</td>
+  <td>{{.Count}}</td>
+  <td><span class="badge badge-{{.DispositionTone}}">{{.Disposition}}</span></td>
+  <td><span class="badge badge-{{.DKIMTone}}">{{.DKIM}}</span></td>
+  <td><span class="badge badge-{{.SPFTone}}">{{.SPF}}</span></td>
+  <td>
+    <details class="record-detail">
+      <summary>anzeigen</summary>
+      <dl class="detail-list">
+        <dt>Header-From</dt><dd>{{.Detail.HeaderFrom}}</dd>
+        {{if .Detail.EnvelopeFrom}}<dt>Envelope-From</dt><dd>{{.Detail.EnvelopeFrom}}</dd>{{end}}
+        {{if .Detail.EnvelopeTo}}<dt>Envelope-To</dt><dd>{{.Detail.EnvelopeTo}}</dd>{{end}}
+      </dl>
+      {{if .Detail.DKIMResults}}
+      <p class="record-detail-heading">DKIM-Signaturen <button type="button" class="glossary-hint" data-tip="{{glossaryDef "DKIM-Selector"}}" aria-label="Begriff erklären: DKIM-Selector">?</button></p>
+      <ul class="record-detail-list">
+        {{range .Detail.DKIMResults}}<li>Domain {{.Domain}}, Selector {{.Selector}}: {{.Result}}</li>{{end}}
+      </ul>
+      {{end}}
+      {{if .Detail.SPFResults}}
+      <p class="record-detail-heading">SPF-Prüfungen <button type="button" class="glossary-hint" data-tip="{{glossaryDef "SPF-Scope"}}" aria-label="Begriff erklären: SPF-Scope">?</button></p>
+      <ul class="record-detail-list">
+        {{range .Detail.SPFResults}}<li>Domain {{.Domain}}, Scope {{.Scope}}: {{.Result}}</li>{{end}}
+      </ul>
+      {{end}}
+      {{if .Detail.Reasons}}
+      <p class="record-detail-heading">Gründe für Abweichung</p>
+      <ul class="record-detail-list">
+        {{range .Detail.Reasons}}<li>{{.Type}}{{if .Comment}}: {{.Comment}}{{end}}</li>{{end}}
+      </ul>
+      {{end}}
+    </details>
+  </td>
+</tr>
+{{end}}
+{{if .HasMore}}
+<tr id="failed-records-load-more-row">
+  <td colspan="9">
+    <button type="button" class="load-more"
+      hx-get="{{.NextPageURL}}"
+      hx-target="#failed-records-load-more-row"
+      hx-swap="outerHTML">Weitere laden</button>
+  </td>
+</tr>
+{{end}}
+{{end}}

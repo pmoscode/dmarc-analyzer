@@ -10,17 +10,19 @@ type navItem struct {
 }
 
 // navItems baut die Hauptnavigation für die aktuelle Anfrage. Weitere
-// Filterparameter (zeitraum/domain) werden bewusst nicht mitgegeben —
-// ein Seitenwechsel über die Navigation beginnt wieder mit der
-// Voreinstellung, das entspricht MIGRATIONSPLAN.md Abschnitt 8
-// ("Filterleiste ... wirkt weiter auf Übersicht, Berichte, Quellen"),
-// nicht "Filter über Seitenwechsel hinweg merken" (kein Vorgabe dafür).
+// Filterparameter (zeitraum/domain) werden bewusst nicht mitgegeben — ein
+// Seitenwechsel über die Navigation ist serverseitig weiterhin ein
+// gewöhnlicher GET auf die reine Seiten-URL; dass dieselbe Ansicht ihren
+// zuletzt benutzten Filter trotzdem wiederfindet, übernimmt rein
+// client-seitig internal/web/static/app.js (localStorage je Seitenpfad,
+// kein Server-Zustand).
 func navItems(currentPath string) []navItem {
 	items := []struct{ label, href string }{
 		{"Übersicht", "/"},
 		{"Berichte", "/berichte"},
 		{"Sendequellen", "/quellen"},
 		{"Domains", "/domains"},
+		{"Fehlschläge", "/fehlschlaege"},
 		{"Import", "/import"},
 		{"Einstellungen", "/einstellungen"},
 	}

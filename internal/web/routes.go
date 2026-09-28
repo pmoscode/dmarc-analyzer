@@ -36,6 +36,8 @@ func (s *Server) routes() http.Handler {
 	protected.HandleFunc("GET /quellen/seite", s.handleSourcesPage)
 	protected.HandleFunc("GET /domains", s.handleDomains)
 	protected.HandleFunc("GET /domains/seite", s.handleDomainsPage)
+	protected.HandleFunc("GET /fehlschlaege", s.handleFailedRecords)
+	protected.HandleFunc("GET /fehlschlaege/seite", s.handleFailedRecordsPage)
 	protected.HandleFunc("GET /einstellungen", s.handleSettings)
 	protected.HandleFunc("POST /konten/{id}/test", s.handleAccountTest)
 	protected.HandleFunc("POST /abgleich", s.handleSyncStart)
@@ -46,6 +48,7 @@ func (s *Server) routes() http.Handler {
 	protected.HandleFunc("GET /export/berichte.csv", s.handleExportReportsCSV)
 	protected.HandleFunc("GET /export/quellen.csv", s.handleExportSourcesCSV)
 	protected.HandleFunc("GET /export/domains.csv", s.handleExportDomainsCSV)
+	protected.HandleFunc("GET /export/fehlschlaege.csv", s.handleExportFailedRecordsCSV)
 	protected.HandleFunc("POST /abmelden", s.handleLogout)
 
 	hostChecked.Handle("/", requireSession(s.auth, requireCSRF(s.auth, protected)))

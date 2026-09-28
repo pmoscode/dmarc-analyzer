@@ -13,6 +13,7 @@ import (
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/account"
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/analysis"
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/domainstats"
+	"github.com/pmoscode/dmarc-analyzer/internal/domain/failedrecords"
 	"github.com/pmoscode/dmarc-analyzer/internal/domain/report"
 	domainsources "github.com/pmoscode/dmarc-analyzer/internal/domain/sources"
 	domainsync "github.com/pmoscode/dmarc-analyzer/internal/domain/sync"
@@ -181,6 +182,24 @@ func (f *fakeDomainsRepository) Query(_ context.Context, q domainstats.Query) (d
 	f.lastQuery = q
 	if f.queryErr != nil {
 		return domainstats.Page{}, f.queryErr
+	}
+	return f.page, nil
+}
+
+// fakeFailedRecordsRepository implementiert failedrecords.Repository mit
+// fest verdrahteten Rückgabewerten — für Tests von /fehlschlaege und
+// /fehlschlaege/seite.
+type fakeFailedRecordsRepository struct {
+	page     failedrecords.Page
+	queryErr error
+
+	lastQuery failedrecords.Query
+}
+
+func (f *fakeFailedRecordsRepository) Query(_ context.Context, q failedrecords.Query) (failedrecords.Page, error) {
+	f.lastQuery = q
+	if f.queryErr != nil {
+		return failedrecords.Page{}, f.queryErr
 	}
 	return f.page, nil
 }

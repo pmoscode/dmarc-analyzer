@@ -602,14 +602,49 @@ a {
   box-shadow: var(--shadow-md);
 }
 
-.filter-bar .filter-reset {
+/* .filter-reset wird sowohl innerhalb einer .filter-bar (dort per
+   align-self neben den Formularfeldern zentriert) als auch alleinstehend
+   verwendet (report_detail.html: "Nur fehlgeschlagene anzeigen"-
+   Umschalter neben der Sendequellen-Tabelle, außerhalb jeder
+   Filterleiste) — deshalb hier bewusst nicht auf .filter-bar
+   eingeschränkt. */
+.filter-reset {
   align-self: center;
   font-size: 13px;
   color: var(--ink-secondary);
 }
 
-.filter-bar .filter-reset:hover {
+.filter-reset:hover {
   color: var(--primary);
+}
+
+/* .record-detail ist das <details>-Element in der letzten Tabellenspalte
+   der Sendequellen-Tabelle (report_detail.html) bzw. der
+   Fehlschläge-Ansicht (failed_records.html) — zeigt auf Wunsch die
+   rohen DKIM-/SPF-Prüfergebnisse, Absenderkennungen und Override-Gründe
+   eines einzelnen Records, ohne die Tabelle standardmäßig zu überladen. */
+.record-detail summary {
+  cursor: pointer;
+  color: var(--primary);
+  font-size: 13px;
+}
+
+.record-detail .detail-list {
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.record-detail-heading {
+  margin: 10px 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-secondary);
+}
+
+.record-detail-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
 }
 
 .tiles {

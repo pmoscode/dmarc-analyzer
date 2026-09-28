@@ -173,6 +173,57 @@ func (s *Server) handleExportDomainsCSV(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+// handleExportFailedRecordsCSV: siehe handleExportReportsCSV, für die
+// Fehlschläge-Ansicht.
+func (s *Server) handleExportFailedRecordsCSV(w http.ResponseWriter, r *http.Request) {
+	filter := parseFailedRecordsFilter(r)
+
+	h := w.Header()
+	h.Set("Content-Type", "text/csv; charset=utf-8")
+	h.Set("Content-Disposition", `attachment; filename="fehlschlaege.csv"`)
+	h.Set("X-Content-Type-Options", "nosniff")
+
+	cw := csv.NewWriter(w)
+	if err := exportdata.WriteFailedRecordsCSVHeader(cw); err != nil {
+		s.logExportError(r, err)
+		return
+	}
+	flusher, _ := w.(http.Flusher)
+
+	cursor := ""
+	for {
+		q, err := filter.query(cursor, exportPageSize)
+		if err != nil {
+			s.logExportError(r, err)
+			return
+		}
+		page, err := s.deps.FailedRecords.List(r.Context(), q)
+		if err != nil {
+			s.logExportError(r, err)
+			return
+		}
+		for _, rec := range page.Records {
+			if err := exportdata.WriteFailedRecordCSVRow(cw, rec); err != nil {
+				s.logExportError(r, err)
+				return
+			}
+		}
+		cw.Flush()
+		if err := cw.Error(); err != nil {
+			s.logExportError(r, err)
+			return
+		}
+		if flusher != nil {
+			flusher.Flush()
+		}
+
+		if page.NextCursor == "" {
+			return
+		}
+		cursor = page.NextCursor
+	}
+}
+
 // logExportError protokolliert einen Fehler, der mitten im Streamen
 // eines CSV-Downloads auftritt — anders als s.serverError kann hier kein
 // HTTP-Fehlerstatus mehr gesendet werden (der 200er-Status samt Kopfzeilen

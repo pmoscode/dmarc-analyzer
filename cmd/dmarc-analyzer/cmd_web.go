@@ -42,6 +42,7 @@ func runWeb(ctx context.Context, a *app, _ []string) error {
 		Reports:             a.queries,
 		Sources:             a.sourceStats,
 		Domains:             a.domainStats,
+		FailedRecords:       a.failedRecords,
 		Accounts:            a.accounts,
 		SyncJob:             syncJob,
 		Importer:            a.importer,

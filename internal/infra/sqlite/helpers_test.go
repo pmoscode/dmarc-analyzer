@@ -38,6 +38,12 @@ type reportOpts struct {
 	end         time.Time
 	sourceIP    string
 	disposition report.Disposition
+	// dkim/spf überschreiben die sonst immer bestehenden (aligned)
+	// Auth-Ergebnisse des erzeugten Records — für Tests, die gezielt
+	// fehlgeschlagene Records brauchen (z. B. failedrecordsrepo_test.go).
+	// Leer bedeutet: wie bisher AuthResultPass.
+	dkim report.AuthResultValue
+	spf  report.AuthResultValue
 }
 
 // newTestReport baut einen fachlich gültigen AggregateReport mit genau
@@ -68,6 +74,12 @@ func newTestReport(t testing.TB, opts reportOpts) *report.AggregateReport {
 	if opts.disposition == "" {
 		opts.disposition = report.DispositionNone
 	}
+	if opts.dkim == "" {
+		opts.dkim = report.AuthResultPass
+	}
+	if opts.spf == "" {
+		opts.spf = report.AuthResultPass
+	}
 
 	domain, err := report.NewDomainName(opts.domain)
 	require.NoError(t, err)
@@ -96,16 +108,16 @@ func newTestReport(t testing.TB, opts reportOpts) *report.AggregateReport {
 		sourceIP, 3,
 		report.PolicyEvaluation{
 			Disposition: opts.disposition,
-			DKIM:        report.AuthResultPass,
-			SPF:         report.AuthResultPass,
+			DKIM:        opts.dkim,
+			SPF:         opts.spf,
 			Reasons: []report.PolicyOverrideReason{
 				{Type: "local_policy", Comment: "test-kommentar"},
 			},
 		},
 		report.Identifiers{HeaderFrom: headerFrom, EnvelopeFrom: "bounce." + opts.domain},
 		report.AuthResults{
-			DKIM: []report.DKIMAuthResult{{Domain: opts.domain, Selector: "sel1", Result: report.AuthResultPass}},
-			SPF:  []report.SPFAuthResult{{Domain: opts.domain, Result: report.AuthResultPass}},
+			DKIM: []report.DKIMAuthResult{{Domain: opts.domain, Selector: "sel1", Result: opts.dkim}},
+			SPF:  []report.SPFAuthResult{{Domain: opts.domain, Result: opts.spf}},
 		},
 	)
 	require.NoError(t, err)

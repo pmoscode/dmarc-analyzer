@@ -81,6 +81,14 @@ var Terms = []Term{
 		Name:       "Sendequelle × Tag (Pass-Rate)",
 		Definition: "Jede Zeile ist eine Sendequelle, jede Spalte ein Tag im gewählten Zeitraum. Die Farbe einer Zelle zeigt die Pass-Rate dieser Quelle an diesem Tag (rot = niedrig, grün = hoch). Eine leere Zelle bedeutet: An diesem Tag hat diese Quelle keine Nachrichten gesendet.",
 	},
+	{
+		Name:       "DKIM-Selector",
+		Definition: "Kennzeichnet, welcher öffentliche DKIM-Schlüssel zur Prüfung der Signatur verwendet wurde (veröffentlicht als DNS-TXT-Eintrag unter <selector>._domainkey.<domain>) — eine Domain kann mehrere Selektoren gleichzeitig nutzen, z. B. je Versanddienst.",
+	},
+	{
+		Name:       "SPF-Scope",
+		Definition: "Womit die geprüfte SPF-Domain verglichen wurde: „mfrom“ (Envelope-From, der Regelfall) oder „helo“ (der im SMTP-HELO/EHLO angegebene Name).",
+	},
 }
 
 // ByName sucht einen Begriff nach Name. ok ist false, wenn der Begriff
