@@ -92,14 +92,14 @@
             labels: labels,
             datasets: [
               {
-                label: "Passed",
+                label: "Bestanden",
                 data: passData,
                 backgroundColor: cssVar("--status-good"),
                 stack: "volumen",
                 pointURLs: urls,
               },
               {
-                label: "Failed",
+                label: "Fehlgeschlagen",
                 data: failData,
                 backgroundColor: cssVar("--status-critical"),
                 stack: "volumen",
@@ -135,7 +135,7 @@
         renderDailyVolumeTable(days);
         registerExport("verlauf", chart, function () {
           return {
-            header: ["Day", "Passed", "Failed"],
+            header: ["Tag", "Bestanden", "Fehlgeschlagen"],
             rows: days.map(function (d) { return [d.label, d.pass, d.fail]; }),
           };
         });
@@ -151,8 +151,8 @@
     if (!table) {
       return;
     }
-    var rows = ["<caption>Message volume per day</caption>",
-      "<tr><th>Day</th><th>Passed</th><th>Failed</th></tr>"];
+    var rows = ["<caption>Nachrichtenvolumen pro Tag</caption>",
+      "<tr><th>Tag</th><th>Bestanden</th><th>Fehlgeschlagen</th></tr>"];
     days.forEach(function (d) {
       rows.push(
         "<tr><td><a href=\"" + d.url + "\">" + escapeHTML(d.label) + "</a></td>" +
@@ -177,9 +177,9 @@
         var cells = data.cells || [];
         var toCSV = function () {
           return {
-            header: ["Source", "Day", "Pass rate", "Messages"],
+            header: ["Quelle", "Tag", "Pass-Rate", "Nachrichten"],
             rows: cells.map(function (c) {
-              return [c.y, c.x, c.hasData ? (c.passRate * 100).toFixed(1) + " %" : "no data", c.hasData ? c.total : ""];
+              return [c.y, c.x, c.hasData ? (c.passRate * 100).toFixed(1) + " %" : "keine Daten", c.hasData ? c.total : ""];
             }),
           };
         };
@@ -209,7 +209,7 @@
           data: {
             datasets: [
               {
-                label: "Pass rate",
+                label: "Pass-Rate",
                 data: cells,
                 backgroundColor: function (context) {
                   var raw = context.dataset.data[context.dataIndex];
@@ -257,9 +257,9 @@
                   label: function (context) {
                     var raw = context.dataset.data[context.dataIndex];
                     if (!raw.hasData) {
-                      return [raw.y, raw.x, "no data"];
+                      return [raw.y, raw.x, "keine Daten"];
                     }
-                    return [raw.y, raw.x, "Pass rate: " + (raw.passRate * 100).toFixed(1) + " %", "Messages: " + raw.total];
+                    return [raw.y, raw.x, "Pass-Rate: " + (raw.passRate * 100).toFixed(1) + " %", "Nachrichten: " + raw.total];
                   },
                 },
               },
@@ -289,10 +289,10 @@
     if (!table) {
       return;
     }
-    var rows = ["<caption>Sending source × day</caption>",
-      "<tr><th>Source</th><th>Day</th><th>Pass rate</th><th>Messages</th></tr>"];
+    var rows = ["<caption>Sendequelle × Tag</caption>",
+      "<tr><th>Quelle</th><th>Tag</th><th>Pass-Rate</th><th>Nachrichten</th></tr>"];
     cells.forEach(function (c) {
-      var passRate = c.hasData ? (c.passRate * 100).toFixed(1) + " %" : "no data";
+      var passRate = c.hasData ? (c.passRate * 100).toFixed(1) + " %" : "keine Daten";
       var count = c.hasData ? c.total : "–";
       rows.push(
         "<tr><td>" + escapeHTML(c.y) + "</td><td><a href=\"" + c.url + "\">" + escapeHTML(c.x) + "</a></td>" +
@@ -405,7 +405,7 @@
             labels: labels,
             datasets: [
               {
-                label: "Messages",
+                label: "Nachrichten",
                 data: totals,
                 backgroundColor: colors,
                 pointURLs: urls,
@@ -426,7 +426,7 @@
                 callbacks: {
                   label: function (context) {
                     var s = sources[context.dataIndex];
-                    return ["Messages: " + s.total, "Pass rate: " + (s.passRate * 100).toFixed(1) + " %"];
+                    return ["Nachrichten: " + s.total, "Pass-Rate: " + (s.passRate * 100).toFixed(1) + " %"];
                   },
                 },
               },
@@ -445,7 +445,7 @@
         renderTopSourcesTable(sources);
         registerExport("quellen", chart, function () {
           return {
-            header: ["Source", "Messages", "Pass rate"],
+            header: ["Quelle", "Nachrichten", "Pass-Rate"],
             rows: sources.map(function (s) { return [s.label, s.total, (s.passRate * 100).toFixed(1) + " %"]; }),
           };
         });
@@ -461,8 +461,8 @@
     if (!table) {
       return;
     }
-    var rows = ["<caption>Top sending sources</caption>",
-      "<tr><th>Source</th><th>Messages</th><th>Pass rate</th></tr>"];
+    var rows = ["<caption>Top-Sendequellen</caption>",
+      "<tr><th>Quelle</th><th>Nachrichten</th><th>Pass-Rate</th></tr>"];
     sources.forEach(function (s) {
       rows.push(
         "<tr><td><a href=\"" + s.url + "\">" + escapeHTML(s.label) + "</a></td>" +
@@ -537,7 +537,7 @@
         renderDispositionTable(slices);
         registerExport("disposition", chart, function () {
           return {
-            header: ["Disposition", "Messages"],
+            header: ["Disposition", "Nachrichten"],
             rows: slices.map(function (s) { return [s.label, s.total]; }),
           };
         });
@@ -553,8 +553,8 @@
     if (!table) {
       return;
     }
-    var rows = ["<caption>Disposition breakdown</caption>",
-      "<tr><th>Disposition</th><th>Messages</th></tr>"];
+    var rows = ["<caption>Verteilung nach Disposition</caption>",
+      "<tr><th>Disposition</th><th>Nachrichten</th></tr>"];
     slices.forEach(function (s) {
       rows.push(
         "<tr><td><a href=\"" + s.url + "\">" + escapeHTML(s.label) + "</a></td>" +

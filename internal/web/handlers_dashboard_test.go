@@ -39,7 +39,7 @@ func TestHandleDashboard_RendersFilterResetLink(t *testing.T) {
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(body), `<a href="/" class="filter-reset">Reset filter</a>`)
+	require.Contains(t, string(body), `<a href="/" class="filter-reset">Filter zurücksetzen</a>`)
 }
 
 func TestHandleDashboard_FilterParams_ReachRepository(t *testing.T) {
@@ -72,7 +72,7 @@ func TestHandleDashboard_GlossaryHints_ShowDefinitionInline(t *testing.T) {
 
 	require.NotContains(t, got, "/glossar")
 
-	for _, term := range []string{"DMARC pass rate", "Alignment", "Source IP", "Message volume per day", "Top sending sources", "Disposition breakdown", "Sending source × day (pass rate)"} {
+	for _, term := range []string{"DMARC-Pass-Rate", "Alignment", "Quell-IP", "Nachrichtenvolumen pro Tag", "Top-Sendequellen", "Verteilung nach Disposition", "Sendequelle × Tag (Pass-Rate)"} {
 		def, ok := glossary.ByName(term)
 		require.True(t, ok, term)
 		require.Contains(t, got, `data-tip="`+html.EscapeString(def.Definition)+`"`, term)

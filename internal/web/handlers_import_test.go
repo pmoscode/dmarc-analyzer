@@ -109,7 +109,7 @@ func TestHandleImportSubmit_ValidXML_ImportsAndShowsResult(t *testing.T) {
 
 	html, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(html), "1 new, 0 skipped, 0 failed.")
+	require.Contains(t, string(html), "1 neu, 0 übersprungen, 0 fehlerhaft.")
 	require.Equal(t, 1, reports.count())
 }
 
@@ -129,7 +129,7 @@ func TestHandleImportSubmit_MultipleFiles_AggregatesResult(t *testing.T) {
 
 	html, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(html), "2 new, 0 skipped, 0 failed.")
+	require.Contains(t, string(html), "2 neu, 0 übersprungen, 0 fehlerhaft.")
 	require.Equal(t, 2, reports.count())
 }
 
@@ -147,7 +147,7 @@ func TestHandleImportSubmit_CorruptFile_CountsAsFailed(t *testing.T) {
 
 	html, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(html), "0 new, 0 skipped, 1 failed.")
+	require.Contains(t, string(html), "0 neu, 0 übersprungen, 1 fehlerhaft.")
 	require.Equal(t, 1, failed.count())
 }
 
@@ -162,7 +162,7 @@ func TestHandleImportSubmit_NoFiles_ShowsError(t *testing.T) {
 
 	html, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(html), "Please select at least one file.")
+	require.Contains(t, string(html), "Bitte mindestens eine Datei auswählen.")
 }
 
 func TestHandleImportSubmit_FileTooLarge_CountsAsFailed(t *testing.T) {
@@ -178,7 +178,7 @@ func TestHandleImportSubmit_FileTooLarge_CountsAsFailed(t *testing.T) {
 
 	html, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(html), "0 new, 0 skipped, 1 failed.")
+	require.Contains(t, string(html), "0 neu, 0 übersprungen, 1 fehlerhaft.")
 }
 
 func TestHandleImportSubmit_MissingCSRFToken_Returns403(t *testing.T) {
@@ -210,6 +210,6 @@ func TestHandleImportSubmit_ZipWithMultipleReports_ImportsBoth(t *testing.T) {
 
 	html, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(html), "2 new, 0 skipped, 0 failed.")
+	require.Contains(t, string(html), "2 neu, 0 übersprungen, 0 fehlerhaft.")
 	require.Equal(t, 2, reports.count())
 }

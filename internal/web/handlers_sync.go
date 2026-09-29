@@ -102,7 +102,7 @@ func newSSEState(s syncjob.State) sseState {
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		http.Error(w, "This server does not support SSE", http.StatusInternalServerError)
+		http.Error(w, "SSE wird von diesem Server nicht unterstützt", http.StatusInternalServerError)
 		return
 	}
 

@@ -117,13 +117,13 @@ const sourcesUnknownValue = "—"
 func classifySource(s domainsources.Stat) (label, tone string) {
 	switch {
 	case s.DKIMPassRate >= 0.9 && s.SPFPassRate >= 0.9:
-		return "Authorized (DKIM & SPF)", "good"
+		return "Autorisiert (DKIM & SPF)", "good"
 	case s.DKIMPassRate >= 0.9:
-		return "Authorized (likely forwarding)", "good"
+		return "Autorisiert (vermutlich Weiterleitung)", "good"
 	case s.DKIMPassRate < 0.5:
-		return "Unconfirmed — review", "critical"
+		return "Nicht bestätigt — prüfen", "critical"
 	default:
-		return "Partially confirmed — review", "warning"
+		return "Teilweise bestätigt — prüfen", "warning"
 	}
 }
 
@@ -195,7 +195,7 @@ type sourcesPageData struct {
 
 func buildSourcesPageData(filter sourcesFilter, page domainsources.Page, imapHost string) sourcesPageData {
 	return sourcesPageData{
-		Title:         "Sending sources",
+		Title:         "Sendequellen",
 		Domain:        filter.Period.Domain,
 		PeriodOptions: filter.Period.options(),
 		SortVolumeURL: filter.sortLink(domainsources.SortByVolume),

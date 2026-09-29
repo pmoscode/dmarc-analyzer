@@ -29,7 +29,7 @@ func TestHandleSyncStart_StartsJobAndRedirectsBack(t *testing.T) {
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	// Redirect lands on /berichte (Referer), client follows it.
-	require.Contains(t, string(body), "Reports")
+	require.Contains(t, string(body), "Berichte")
 }
 
 func TestHandleSyncStart_AlreadyRunning_StillRedirectsWithoutError(t *testing.T) {

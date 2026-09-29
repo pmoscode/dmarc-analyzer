@@ -28,7 +28,7 @@ func (a *Adapter) FetchNew(ctx context.Context, state sync.State) (iter.Seq2[syn
 		return err
 	})
 	if selectErr != nil {
-		return nil, state, fmt.Errorf("failed to select mailbox %q: %w", state.Mailbox, selectErr)
+		return nil, state, fmt.Errorf("postfach %q konnte nicht ausgewählt werden: %w", state.Mailbox, selectErr)
 	}
 
 	rescan := state.UIDValidity == 0 || state.UIDValidity != selectData.UIDValidity

@@ -84,31 +84,31 @@ type OnProgress func(Progress)
 func (uc *UseCase) SyncAccount(ctx context.Context, accountID account.AccountID, onProgress OnProgress) (Result, error) {
 	acc, err := uc.Accounts.FindByID(ctx, accountID)
 	if err != nil {
-		return Result{}, fmt.Errorf("account %q could not be loaded: %w", accountID, err)
+		return Result{}, fmt.Errorf("konto %q konnte nicht geladen werden: %w", accountID, err)
 	}
 
 	source := uc.NewSource()
 	defer func() { _ = source.Close() }()
 
 	if err := source.Connect(ctx, *acc, uc.Secret); err != nil {
-		return Result{}, fmt.Errorf("could not connect to account %q: %w", accountID, err)
+		return Result{}, fmt.Errorf("verbindung zu konto %q konnte nicht aufgebaut werden: %w", accountID, err)
 	}
 
 	state, err := uc.States.Load(ctx, accountID, acc.Mailbox)
 	if err != nil {
-		return Result{}, fmt.Errorf("sync progress for account %q could not be loaded: %w", accountID, err)
+		return Result{}, fmt.Errorf("sync-fortschritt für konto %q konnte nicht geladen werden: %w", accountID, err)
 	}
 
 	seq, baseline, err := source.FetchNew(ctx, state)
 	if err != nil {
-		return Result{}, fmt.Errorf("could not fetch new messages for account %q: %w", accountID, err)
+		return Result{}, fmt.Errorf("neue nachrichten für konto %q konnten nicht abgerufen werden: %w", accountID, err)
 	}
 
 	// Persist the baseline immediately: even with zero processed
 	// messages, e.g. UIDValidity may have changed — that must be
 	// recorded before any message has been processed at all.
 	if err := uc.States.Save(ctx, baseline); err != nil {
-		return Result{}, fmt.Errorf("sync progress for account %q could not be saved: %w", accountID, err)
+		return Result{}, fmt.Errorf("sync-fortschritt für konto %q konnte nicht gespeichert werden: %w", accountID, err)
 	}
 
 	return uc.runPipeline(ctx, baseline, seq, onProgress)

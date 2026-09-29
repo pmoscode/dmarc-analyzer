@@ -228,13 +228,13 @@ var dispositionOrder = []report.Disposition{
 func dispositionLabel(d report.Disposition) string {
 	switch d {
 	case report.DispositionNone:
-		return "No action"
+		return "Keine Maßnahme"
 	case report.DispositionQuarantine:
-		return "Quarantine"
+		return "Quarantäne"
 	case report.DispositionReject:
-		return "Rejected"
+		return "Zurückgewiesen"
 	default:
-		return "Unknown"
+		return "Unbekannt"
 	}
 }
 

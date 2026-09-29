@@ -15,7 +15,7 @@ import (
 func requireHost(allowedHost string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Host != allowedHost {
-			http.Error(w, "invalid host", http.StatusMisdirectedRequest)
+			http.Error(w, "ungültiger Host", http.StatusMisdirectedRequest)
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -79,7 +79,7 @@ func recoverPanic(logger *slog.Logger, next http.Handler) http.Handler {
 		defer func() {
 			if rec := recover(); rec != nil {
 				logger.Error("panic in handler", "error", rec, "path", r.URL.Path)
-				http.Error(w, "internal error", http.StatusInternalServerError)
+				http.Error(w, "interner Fehler", http.StatusInternalServerError)
 			}
 		}()
 		next.ServeHTTP(w, r)
@@ -127,7 +127,7 @@ func requireCSRF(a *auth, next http.Handler) http.Handler {
 		}
 
 		if !sameOrigin(r) {
-			http.Error(w, "invalid origin", http.StatusForbidden)
+			http.Error(w, "ungültiger Origin", http.StatusForbidden)
 			return
 		}
 
@@ -136,7 +136,7 @@ func requireCSRF(a *auth, next http.Handler) http.Handler {
 			token = r.PostFormValue(csrfTokenField)
 		}
 		if !a.validCSRFToken(r, token) {
-			http.Error(w, "invalid or missing CSRF token", http.StatusForbidden)
+			http.Error(w, "ungültiges oder fehlendes CSRF-Token", http.StatusForbidden)
 			return
 		}
 

@@ -1,28 +1,28 @@
 {{define "content"}}
 <form class="filter-bar" method="get" action="/quellen" aria-label="Filter">
-  <label>Period
+  <label>Zeitraum
     <select name="zeitraum">
       {{range .PeriodOptions}}<option value="{{.Days}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
     </select>
   </label>
   <label>Domain
-    <input type="text" name="domain" value="{{.Domain}}" placeholder="All" autocomplete="off">
+    <input type="text" name="domain" value="{{.Domain}}" placeholder="Alle" autocomplete="off">
   </label>
-  <button type="submit">Apply filter</button>
-  <a href="/quellen" class="filter-reset">Reset filter</a>
+  <button type="submit">Filter anwenden</button>
+  <a href="/quellen" class="filter-reset">Filter zurücksetzen</a>
 </form>
 
-<p class="export-link"><a href="{{.ExportURL}}">Export CSV (entire filtered set)</a></p>
+<p class="export-link"><a href="{{.ExportURL}}">CSV exportieren (gesamter gefilterter Bestand)</a></p>
 
-<table class="data-table" aria-label="Sending sources">
+<table class="data-table" aria-label="Sendequellen">
   <thead>
     <tr>
-      <th><a href="{{.SortIPURL}}">Source IP</a></th>
-      <th><a href="{{.SortVolumeURL}}">Messages</a></th>
-      <th>Pass rate</th>
+      <th><a href="{{.SortIPURL}}">Quell-IP</a></th>
+      <th><a href="{{.SortVolumeURL}}">Nachrichten</a></th>
+      <th>Pass-Rate</th>
       <th>Hostname (rDNS/PTR)</th>
-      <th>Detected service</th>
-      <th>Classification <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Classification (sending source)"}}" aria-label="Explain term: Classification (sending source)">?</button></th>
+      <th>Erkannter Dienst</th>
+      <th>Einordnung <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Einordnung (Sendequelle)"}}" aria-label="Begriff erklären: Einordnung (Sendequelle)">?</button></th>
     </tr>
   </thead>
   <tbody id="sources-rows">
@@ -30,7 +30,7 @@
   </tbody>
 </table>
 {{if not .Rows.Rows}}
-<p class="empty-state">No sending sources found for this filter.</p>
+<p class="empty-state">Keine Sendequellen für diesen Filter gefunden.</p>
 {{end}}
 {{end}}
 
@@ -40,7 +40,7 @@
   <td>{{.IP}}</td>
   <td>{{.Total}}</td>
   <td>{{.PassRate}}</td>
-  <td>{{.Hostname}}{{if .GleicherHosterWieIMAP}} <span class="badge badge-info" title="Same operator domain part as the configured IMAP account">same host as IMAP</span>{{end}}</td>
+  <td>{{.Hostname}}{{if .GleicherHosterWieIMAP}} <span class="badge badge-info" title="Gleicher Betreiber-Domainteil wie das konfigurierte IMAP-Konto">gleicher Hoster wie IMAP</span>{{end}}</td>
   <td>{{.Service}}</td>
   <td><span class="badge badge-{{.EinordnungTon}}">{{.EinordnungLabel}}</span></td>
 </tr>
@@ -51,7 +51,7 @@
     <button type="button" class="load-more"
       hx-get="{{.NextPageURL}}"
       hx-target="#sources-load-more-row"
-      hx-swap="outerHTML">Load more</button>
+      hx-swap="outerHTML">Weitere laden</button>
   </td>
 </tr>
 {{end}}

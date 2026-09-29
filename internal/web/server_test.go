@@ -214,7 +214,7 @@ func TestServer_LoginFlow_ValidAdminGroup_GrantsSessionAndAccess(t *testing.T) {
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(body), "Overview")
+	require.Contains(t, string(body), "Übersicht")
 }
 
 func TestServer_LoginFlow_WithoutAdminGroup_Returns403AndNoSession(t *testing.T) {
@@ -236,7 +236,7 @@ func TestServer_LoginFlow_WithoutAdminGroup_Returns403AndNoSession(t *testing.T)
 	require.Contains(t, resp.Header.Get("Content-Type"), "text/html")
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(body), "Access denied")
+	require.Contains(t, string(body), "Zugriff verweigert")
 	require.Contains(t, string(body), "normal@example.com")
 	require.Contains(t, string(body), `href="/anmelden"`)
 }

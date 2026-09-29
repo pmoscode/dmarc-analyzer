@@ -262,7 +262,7 @@ func reportRows(reports []report.AggregateReport) []reportRowView {
 
 func buildReportsPageData(filter reportsFilter, page report.Page) reportsPageData {
 	data := reportsPageData{
-		Title:               "Reports",
+		Title:               "Berichte",
 		UsesAbsolutePeriod:  filter.UsesAbsolute,
 		Domain:              filter.Domain,
 		SourceIP:            filter.SourceIP,
@@ -291,7 +291,7 @@ func buildReportsPageData(filter reportsFilter, page report.Page) reportsPageDat
 	dispositions := []report.Disposition{"", report.DispositionNone, report.DispositionQuarantine, report.DispositionReject, report.DispositionUnknown}
 	data.DispositionOptions = make([]dispositionOptionView, len(dispositions))
 	for i, d := range dispositions {
-		label := "All"
+		label := "Alle"
 		if d != "" {
 			label = dispositionLabel(d)
 		}
@@ -300,9 +300,9 @@ func buildReportsPageData(filter reportsFilter, page report.Page) reportsPageDat
 
 	groups := []report.GroupBy{report.GroupByNone, report.GroupByDomain, report.GroupByOrg}
 	groupLabels := map[report.GroupBy]string{
-		report.GroupByNone:   "None",
+		report.GroupByNone:   "Keine",
 		report.GroupByDomain: "Domain",
-		report.GroupByOrg:    "Organization",
+		report.GroupByOrg:    "Organisation",
 	}
 	data.GroupOptions = make([]groupOptionView, len(groups))
 	for i, g := range groups {
@@ -448,19 +448,19 @@ func buildReportDetailData(full *report.AggregateReport, onlyFailed bool) report
 
 	basePath := fmt.Sprintf("/berichte/%d", full.ID)
 	toggleURL := basePath + "?nur_fehler=1"
-	toggleLabel := "Show only failed"
+	toggleLabel := "Nur fehlgeschlagene anzeigen"
 	if onlyFailed {
 		toggleURL = basePath
-		toggleLabel = "Show all"
+		toggleLabel = "Alle anzeigen"
 	}
 
 	return reportDetailPageData{
-		Title:            fmt.Sprintf("Report %s", full.Metadata.ReportID),
+		Title:            fmt.Sprintf("Bericht %s", full.Metadata.ReportID),
 		OrgName:          full.Metadata.OrgName,
 		Email:            full.Metadata.Email,
 		ExtraContactInfo: full.Metadata.ExtraContactInfo,
 		ReportID:         full.Metadata.ReportID,
-		RangeLabel: full.Metadata.Range.Begin.Format("2006-01-02 15:04") + " to " +
+		RangeLabel: full.Metadata.Range.Begin.Format("2006-01-02 15:04") + " bis " +
 			full.Metadata.Range.End.Format("2006-01-02 15:04"),
 		Domain:           full.Policy.Domain.String(),
 		Policy:           string(full.Policy.Policy),

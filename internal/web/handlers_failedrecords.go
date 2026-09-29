@@ -148,7 +148,7 @@ type failedRecordsPageData struct {
 
 func buildFailedRecordsPageData(filter failedRecordsFilter, page failedrecords.Page) failedRecordsPageData {
 	return failedRecordsPageData{
-		Title:           "Failures",
+		Title:           "Fehlschläge",
 		Domain:          filter.Period.Domain,
 		SourceIP:        filter.SourceIP,
 		PeriodOptions:   filter.Period.options(),

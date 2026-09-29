@@ -1,39 +1,39 @@
 {{define "content"}}
-<p><a href="/berichte">&larr; Back to the report table</a></p>
+<p><a href="/berichte">&larr; Zurück zur Berichtstabelle</a></p>
 
 <section class="detail-card">
-  <h2>Metadata</h2>
+  <h2>Metadaten</h2>
   <dl class="detail-list">
-    <dt>Sending organization</dt><dd>{{.OrgName}}</dd>
-    <dt>Email</dt><dd>{{.Email}}</dd>
-    {{if .ExtraContactInfo}}<dt>Additional contact info</dt><dd>{{.ExtraContactInfo}}</dd>{{end}}
-    <dt>Report ID</dt><dd>{{.ReportID}}</dd>
-    <dt>Period</dt><dd>{{.RangeLabel}}</dd>
+    <dt>Absender-Organisation</dt><dd>{{.OrgName}}</dd>
+    <dt>E-Mail</dt><dd>{{.Email}}</dd>
+    {{if .ExtraContactInfo}}<dt>Weitere Kontaktinfo</dt><dd>{{.ExtraContactInfo}}</dd>{{end}}
+    <dt>Report-ID</dt><dd>{{.ReportID}}</dd>
+    <dt>Zeitraum</dt><dd>{{.RangeLabel}}</dd>
   </dl>
 </section>
 
 <section class="detail-card">
-  <h2>Published policy</h2>
+  <h2>Veröffentlichte Richtlinie</h2>
   <dl class="detail-list">
     <dt>Domain</dt><dd>{{.Domain}}</dd>
-    <dt>Policy (p)</dt><dd>{{.Policy}}</dd>
-    <dt>Subdomain policy (sp)</dt><dd>{{.SubdomainPolicy}}</dd>
-    <dt>DKIM alignment</dt><dd>{{.DKIMAlignment}}</dd>
-    <dt>SPF alignment</dt><dd>{{.SPFAlignment}}</dd>
-    <dt>Percentage (pct)</dt><dd>{{.Percentage}} %</dd>
+    <dt>Richtlinie (p)</dt><dd>{{.Policy}}</dd>
+    <dt>Subdomain-Richtlinie (sp)</dt><dd>{{.SubdomainPolicy}}</dd>
+    <dt>DKIM-Alignment</dt><dd>{{.DKIMAlignment}}</dd>
+    <dt>SPF-Alignment</dt><dd>{{.SPFAlignment}}</dd>
+    <dt>Prozentsatz (pct)</dt><dd>{{.Percentage}} %</dd>
   </dl>
 </section>
 
 <section class="detail-card">
-  <h2>Sending sources ({{.TotalRecordCount}})</h2>
+  <h2>Sendequellen ({{.TotalRecordCount}})</h2>
   <p class="chart-hint">
-    {{if .OnlyFailed}}Showing {{.ShownRecordCount}} of {{.TotalRecordCount}} records where DMARC failed.{{else}}Showing all records in this report.{{end}}
+    {{if .OnlyFailed}}Zeigt {{.ShownRecordCount}} von {{.TotalRecordCount}} Datensätzen, bei denen DMARC nicht bestanden wurde.{{else}}Zeigt alle Datensätze dieses Berichts.{{end}}
     <a href="{{.ToggleURL}}" class="filter-reset">{{.ToggleLabel}}</a>
   </p>
   {{if .Records}}
-  <table class="data-table" aria-label="Sending sources in this report">
+  <table class="data-table" aria-label="Sendequellen in diesem Bericht">
     <thead>
-      <tr><th>Source IP</th><th>Messages</th><th>Disposition</th><th>DKIM</th><th>SPF</th><th>Details</th></tr>
+      <tr><th>Quell-IP</th><th>Nachrichten</th><th>Disposition</th><th>DKIM</th><th>SPF</th><th>Details</th></tr>
     </thead>
     <tbody>
       {{range .Records}}
@@ -45,26 +45,26 @@
         <td><span class="badge badge-{{.SPFTone}}">{{.SPF}}</span></td>
         <td>
           <details class="record-detail">
-            <summary>show</summary>
+            <summary>anzeigen</summary>
             <dl class="detail-list">
               <dt>Header-From</dt><dd>{{.Detail.HeaderFrom}}</dd>
               {{if .Detail.EnvelopeFrom}}<dt>Envelope-From</dt><dd>{{.Detail.EnvelopeFrom}}</dd>{{end}}
               {{if .Detail.EnvelopeTo}}<dt>Envelope-To</dt><dd>{{.Detail.EnvelopeTo}}</dd>{{end}}
             </dl>
             {{if .Detail.DKIMResults}}
-            <p class="record-detail-heading">DKIM signatures <button type="button" class="glossary-hint" data-tip="{{glossaryDef "DKIM selector"}}" aria-label="Explain term: DKIM selector">?</button></p>
+            <p class="record-detail-heading">DKIM-Signaturen <button type="button" class="glossary-hint" data-tip="{{glossaryDef "DKIM-Selector"}}" aria-label="Begriff erklären: DKIM-Selector">?</button></p>
             <ul class="record-detail-list">
-              {{range .Detail.DKIMResults}}<li>Domain {{.Domain}}, selector {{.Selector}}: {{.Result}}</li>{{end}}
+              {{range .Detail.DKIMResults}}<li>Domain {{.Domain}}, Selector {{.Selector}}: {{.Result}}</li>{{end}}
             </ul>
             {{end}}
             {{if .Detail.SPFResults}}
-            <p class="record-detail-heading">SPF checks <button type="button" class="glossary-hint" data-tip="{{glossaryDef "SPF scope"}}" aria-label="Explain term: SPF scope">?</button></p>
+            <p class="record-detail-heading">SPF-Prüfungen <button type="button" class="glossary-hint" data-tip="{{glossaryDef "SPF-Scope"}}" aria-label="Begriff erklären: SPF-Scope">?</button></p>
             <ul class="record-detail-list">
-              {{range .Detail.SPFResults}}<li>Domain {{.Domain}}, scope {{.Scope}}: {{.Result}}</li>{{end}}
+              {{range .Detail.SPFResults}}<li>Domain {{.Domain}}, Scope {{.Scope}}: {{.Result}}</li>{{end}}
             </ul>
             {{end}}
             {{if .Detail.Reasons}}
-            <p class="record-detail-heading">Reasons for deviation</p>
+            <p class="record-detail-heading">Gründe für Abweichung</p>
             <ul class="record-detail-list">
               {{range .Detail.Reasons}}<li>{{.Type}}{{if .Comment}}: {{.Comment}}{{end}}</li>{{end}}
             </ul>
@@ -76,7 +76,7 @@
     </tbody>
   </table>
   {{else}}
-  <p class="empty-state">{{if .OnlyFailed}}No failed sending sources in this report.{{else}}No sending sources in this report.{{end}}</p>
+  <p class="empty-state">{{if .OnlyFailed}}Keine fehlgeschlagenen Sendequellen in diesem Bericht.{{else}}Keine Sendequellen in diesem Bericht.{{end}}</p>
   {{end}}
 </section>
 {{end}}

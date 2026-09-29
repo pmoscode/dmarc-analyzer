@@ -19,14 +19,44 @@ Exactly one IMAP account per container, no account CRUD in the UI.
 
 ## Language rule — important, breaks CI otherwise
 
-- **Comments, error messages, log messages, UI strings, docs: English.**
-- **Go identifiers (packages, types, functions, fields): English.**
-- `misspell` is therefore disabled in the linter (`.golangci.yml`) — this was
-  originally to avoid false positives from German comments. That reason no
-  longer applies now that the whole codebase is English; re-enabling
-  `misspell` is a reasonable follow-up, but do it deliberately (verify it
-  doesn't flag proper nouns/identifiers) rather than as a side effect of
-  this change.
+- **Comments, doc comments, log messages, docs: English.**
+- **Anything rendered in the browser: German.** HTML template text,
+  JS-injected UI strings (labels, tooltips, chart legends, browser
+  notifications), `http.Error(...)` response bodies, page titles, nav
+  labels, flash/redirect messages, and `internal/web/glossary` tooltip
+  text are all German. `internal/web/templates/layout.html` sets
+  `lang="de"` accordingly.
+- **Go identifiers (packages, types, functions, fields): English**
+  regardless of the above — a German UI string lives in a value, never in
+  an identifier.
+- **Error messages: it depends on whether the message ever reaches the
+  browser verbatim.** Most don't: `internal/web`'s `serverError` helper
+  (`handlers.go`) logs the real `err` via `s.logger.Error(...)` (English)
+  and replaces it with a fixed, already-German response text — so
+  `internal/app`/`internal/infra`/`internal/domain` error messages stay
+  English like the rest of those layers, *unless* a specific call chain
+  is wired to display `err.Error()` to the user directly. Right now there
+  is exactly one such chain, and it is German for that reason:
+  `internal/web/handlers_sync.go`'s `newSSEState` puts
+  `syncjob.State.Err.Error()` into the `/ereignisse` SSE stream, and
+  `static/app.js` shows it verbatim in the sync-failed status line and
+  browser notification. That pulls in `internal/app/syncreports.UseCase.
+  SyncAccount`'s five top-level wrapped errors and what they in turn wrap
+  in `internal/infra/sqlite/accountrepo.go` (`FindAll`/`FindByID`),
+  `internal/infra/imap/{adapter,dial,backoff,fetch}.go` (`Connect`/
+  `FetchNew`'s direct return only), and `internal/infra/sqlite/
+  syncstaterepo.go` (`Load`/`Save`). Everything else in those same
+  files — comments, per-report/per-message errors that only ever get
+  counted via `Result.Failed` (never shown as text), unrelated errors —
+  stays English. Before wiring a new error path into something the UI
+  displays verbatim, either author that specific message in German or
+  replace it with a fixed, translated message at the `internal/web`
+  boundary (the `serverError` pattern) — don't assume an error's text
+  will automatically show up in the right language just because it's
+  German (or English) at its source.
+- `misspell` stays disabled in the linter (`.golangci.yml`) — a
+  deliberately mixed-language codebase (English internals, German UI)
+  defeats an English dictionary check.
 
 ## Commands
 

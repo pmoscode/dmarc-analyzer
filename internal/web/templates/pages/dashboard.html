@@ -1,36 +1,36 @@
 {{define "content"}}
 <form class="filter-bar" method="get" action="/" aria-label="Filter">
-  <label>Period
+  <label>Zeitraum
     <select name="zeitraum">
       {{range .PeriodOptions}}<option value="{{.Days}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
     </select>
   </label>
   <label>Domain
-    <input type="text" name="domain" value="{{.Domain}}" placeholder="All" autocomplete="off">
+    <input type="text" name="domain" value="{{.Domain}}" placeholder="Alle" autocomplete="off">
   </label>
-  <button type="submit">Apply filter</button>
-  <a href="/" class="filter-reset">Reset filter</a>
+  <button type="submit">Filter anwenden</button>
+  <a href="/" class="filter-reset">Filter zurücksetzen</a>
 </form>
 
-<section class="tiles" aria-label="Metrics">
+<section class="tiles" aria-label="Kennzahlen">
   <div class="tile">
-    <span class="tile-label">Total messages</span>
+    <span class="tile-label">Nachrichten gesamt</span>
     <span class="tile-value">{{.TotalMessages}}</span>
   </div>
   <div class="tile">
-    <span class="tile-label">DMARC pass rate <button type="button" class="glossary-hint" data-tip="{{glossaryDef "DMARC pass rate"}}" aria-label="Explain term: DMARC pass rate">?</button></span>
+    <span class="tile-label">DMARC-Pass-Rate <button type="button" class="glossary-hint" data-tip="{{glossaryDef "DMARC-Pass-Rate"}}" aria-label="Begriff erklären: DMARC-Pass-Rate">?</button></span>
     <span class="tile-value">{{.PassRatePercent}}</span>
   </div>
   <div class="tile">
-    <span class="tile-label">DKIM alignment rate <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Alignment"}}" aria-label="Explain term: Alignment">?</button></span>
+    <span class="tile-label">DKIM-Alignment-Rate <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Alignment"}}" aria-label="Begriff erklären: Alignment">?</button></span>
     <span class="tile-value">{{.DKIMAlignmentPercent}}</span>
   </div>
   <div class="tile">
-    <span class="tile-label">SPF alignment rate <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Alignment"}}" aria-label="Explain term: Alignment">?</button></span>
+    <span class="tile-label">SPF-Alignment-Rate <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Alignment"}}" aria-label="Begriff erklären: Alignment">?</button></span>
     <span class="tile-value">{{.SPFAlignmentPercent}}</span>
   </div>
   <div class="tile">
-    <span class="tile-label">Distinct sources <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Source IP"}}" aria-label="Explain term: Source IP">?</button></span>
+    <span class="tile-label">Unterschiedliche Quellen <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Quell-IP"}}" aria-label="Begriff erklären: Quell-IP">?</button></span>
     <span class="tile-value">{{.DistinctSources}}</span>
   </div>
 </section>
@@ -38,82 +38,82 @@
 {{if .HasTrend}}
 <p class="trend {{if .TrendUp}}trend-up{{else}}trend-down{{end}}">{{.TrendText}}</p>
 {{else}}
-<p class="trend trend-none">no comparison to the previous period available</p>
+<p class="trend trend-none">kein Vergleich zur Vorperiode möglich</p>
 {{end}}
 
-{{/* Grouping is deliberately not one long, monotonous column: the time
-     series and the disposition donut are both roughly square and sit
-     side by side; top sending sources (many narrow bars) and the
-     heatmap (width grows with the number of days) each get their own
-     full row with a horizontal scroll area — the same grouping as
-     formerly internal/ui/dashboard, see AGENTS.md. */}}
+{{/* Gruppierung bewusst nicht als eine lange, eintönige Spalte: Zeitreihe
+     und Disposition-Donut sind beide ungefähr quadratisch und stehen
+     nebeneinander; Top-Sendequellen (viele schmale Balken) und die
+     Heatmap (Breite wächst mit der Anzahl Tage) bekommen je eine eigene
+     volle Zeile mit horizontalem Scrollbereich — dieselbe Gruppierung
+     wie zuvor internal/ui/dashboard, siehe AGENTS.md. */}}
 <section class="charts">
   <div class="charts-row charts-row-2">
     <div class="chart-card">
-      <h2>Message volume per day <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Message volume per day"}}" aria-label="Explain term: Message volume per day">?</button></h2>
-      <p class="chart-hint">Scroll wheel to zoom, drag to pan. Click a day to see that day's reports.</p>
+      <h2>Nachrichtenvolumen pro Tag <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Nachrichtenvolumen pro Tag"}}" aria-label="Begriff erklären: Nachrichtenvolumen pro Tag">?</button></h2>
+      <p class="chart-hint">Mausrad zum Zoomen, Ziehen zum Verschieben. Klick auf einen Tag zeigt die Berichte dieses Tages.</p>
       <div class="chart-canvas-wrap" id="chart-verlauf-wrap">
-        <canvas id="chart-verlauf" aria-label="Stacked bar chart: message volume per day, split into passed and failed" role="img"></canvas>
+        <canvas id="chart-verlauf" aria-label="Gestapeltes Balkendiagramm: Nachrichtenvolumen pro Tag, aufgeteilt nach bestanden und fehlgeschlagen" role="img"></canvas>
       </div>
       <div class="chart-actions">
-        <button type="button" class="chart-export" data-chart="verlauf" data-export="png">Export PNG</button>
-        <button type="button" class="chart-export" data-chart="verlauf" data-export="csv">Export CSV</button>
+        <button type="button" class="chart-export" data-chart="verlauf" data-export="png">PNG exportieren</button>
+        <button type="button" class="chart-export" data-chart="verlauf" data-export="csv">CSV exportieren</button>
       </div>
       <details class="chart-table-toggle">
-        <summary>Show as table</summary>
+        <summary>Als Tabelle anzeigen</summary>
         <table id="chart-verlauf-table" class="chart-table"></table>
       </details>
     </div>
 
     <div class="chart-card">
-      <h2>Disposition breakdown <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Disposition breakdown"}}" aria-label="Explain term: Disposition breakdown">?</button></h2>
-      <p class="chart-hint">Click a segment to see the reports with that disposition.</p>
+      <h2>Verteilung nach Disposition <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Verteilung nach Disposition"}}" aria-label="Begriff erklären: Verteilung nach Disposition">?</button></h2>
+      <p class="chart-hint">Klick auf ein Segment zeigt die Berichte mit dieser Disposition.</p>
       <div class="chart-canvas-wrap" id="chart-disposition-wrap">
-        <canvas id="chart-disposition" aria-label="Donut chart: message distribution by disposition" role="img"></canvas>
+        <canvas id="chart-disposition" aria-label="Donut-Diagramm: Verteilung der Nachrichten nach Disposition" role="img"></canvas>
       </div>
       <div class="chart-actions">
-        <button type="button" class="chart-export" data-chart="disposition" data-export="png">Export PNG</button>
-        <button type="button" class="chart-export" data-chart="disposition" data-export="csv">Export CSV</button>
+        <button type="button" class="chart-export" data-chart="disposition" data-export="png">PNG exportieren</button>
+        <button type="button" class="chart-export" data-chart="disposition" data-export="csv">CSV exportieren</button>
       </div>
       <details class="chart-table-toggle">
-        <summary>Show as table</summary>
+        <summary>Als Tabelle anzeigen</summary>
         <table id="chart-disposition-table" class="chart-table"></table>
       </details>
     </div>
   </div>
 
   <div class="chart-card">
-    <h2>Top sending sources <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Top sending sources"}}" aria-label="Explain term: Top sending sources">?</button></h2>
-    <p class="chart-hint">Click a bar to see the reports from that source.</p>
+    <h2>Top-Sendequellen <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Top-Sendequellen"}}" aria-label="Begriff erklären: Top-Sendequellen">?</button></h2>
+    <p class="chart-hint">Klick auf einen Balken zeigt die Berichte dieser Quelle.</p>
     <div class="chart-scroll">
       <div class="chart-canvas-wrap" id="chart-quellen-wrap">
-        <canvas id="chart-quellen" aria-label="Horizontal bar chart: message volume per sending source, colored by pass rate" role="img"></canvas>
+        <canvas id="chart-quellen" aria-label="Horizontales Balkendiagramm: Nachrichtenvolumen je Sendequelle, eingefärbt nach Pass-Rate" role="img"></canvas>
       </div>
     </div>
     <div class="chart-actions">
-      <button type="button" class="chart-export" data-chart="quellen" data-export="png">Export PNG</button>
-      <button type="button" class="chart-export" data-chart="quellen" data-export="csv">Export CSV</button>
+      <button type="button" class="chart-export" data-chart="quellen" data-export="png">PNG exportieren</button>
+      <button type="button" class="chart-export" data-chart="quellen" data-export="csv">CSV exportieren</button>
     </div>
     <details class="chart-table-toggle">
-      <summary>Show as table</summary>
+      <summary>Als Tabelle anzeigen</summary>
       <table id="chart-quellen-table" class="chart-table"></table>
     </details>
   </div>
 
   <div class="chart-card">
-    <h2>Sending source × day (pass rate) <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Sending source × day (pass rate)"}}" aria-label="Explain term: Sending source × day (pass rate)">?</button></h2>
-    <p class="chart-hint">Click a cell to see the reports from that source on that day.</p>
+    <h2>Sendequelle × Tag (Pass-Rate) <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Sendequelle × Tag (Pass-Rate)"}}" aria-label="Begriff erklären: Sendequelle × Tag (Pass-Rate)">?</button></h2>
+    <p class="chart-hint">Klick auf eine Zelle zeigt die Berichte dieser Quelle an diesem Tag.</p>
     <div class="chart-scroll">
       <div class="chart-canvas-wrap" id="chart-heatmap-wrap">
-        <canvas id="chart-heatmap" aria-label="Heatmap: pass rate per sending source and day" role="img"></canvas>
+        <canvas id="chart-heatmap" aria-label="Heatmap: Pass-Rate je Sendequelle und Tag" role="img"></canvas>
       </div>
     </div>
     <div class="chart-actions">
-      <button type="button" class="chart-export" data-chart="heatmap" data-export="png">Export PNG</button>
-      <button type="button" class="chart-export" data-chart="heatmap" data-export="csv">Export CSV</button>
+      <button type="button" class="chart-export" data-chart="heatmap" data-export="png">PNG exportieren</button>
+      <button type="button" class="chart-export" data-chart="heatmap" data-export="csv">CSV exportieren</button>
     </div>
     <details class="chart-table-toggle">
-      <summary>Show as table</summary>
+      <summary>Als Tabelle anzeigen</summary>
       <table id="chart-heatmap-table" class="chart-table"></table>
     </details>
   </div>

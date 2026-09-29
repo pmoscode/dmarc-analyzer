@@ -42,5 +42,5 @@ func retry(ctx context.Context, fn func() error) error {
 			return ctx.Err()
 		}
 	}
-	return fmt.Errorf("failed after %d attempts: %w", maxAttempts, lastErr)
+	return fmt.Errorf("nach %d versuchen fehlgeschlagen: %w", maxAttempts, lastErr)
 }

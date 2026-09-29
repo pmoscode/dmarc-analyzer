@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="de">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -12,7 +12,7 @@
       <h1>DMARC Analyzer</h1>
       {{with buildInfo}}<p class="app-build"><span class="app-version">{{.Version}}</span>{{if .Commit}} · <span class="app-commit" title="Commit {{.Commit}}">{{.ShortCommit}}</span>{{end}}</p>{{end}}
     </div>
-    <nav class="app-nav" aria-label="Main navigation">
+    <nav class="app-nav" aria-label="Hauptnavigation">
       <ul>
         {{range .Nav}}<li><a href="{{.Href}}"{{if .Active}} class="active" aria-current="page"{{end}}>{{.Label}}</a></li>{{end}}
       </ul>
@@ -20,17 +20,17 @@
     <div class="sync-area">
       <form method="post" action="/abgleich" id="sync-start-form" class="sync-form">
         <input type="hidden" name="csrf_token" value="{{csrfToken}}">
-        <button type="submit" id="sync-start-button">Start sync</button>
+        <button type="submit" id="sync-start-button">Abgleich starten</button>
       </form>
       <form method="post" action="/abgleich/abbrechen" id="sync-cancel-form" class="sync-form" hidden>
         <input type="hidden" name="csrf_token" value="{{csrfToken}}">
-        <button type="submit">Cancel</button>
+        <button type="submit">Abbrechen</button>
       </form>
       <span id="sync-status" class="sync-status" aria-live="polite"></span>
     </div>
     <form method="post" action="/abmelden" class="logout-form">
       <input type="hidden" name="csrf_token" value="{{csrfToken}}">
-      <button type="submit" class="secondary">Log out</button>
+      <button type="submit" class="secondary">Abmelden</button>
     </form>
   </header>
   <main class="app-main">

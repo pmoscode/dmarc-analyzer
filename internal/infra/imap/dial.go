@@ -31,7 +31,7 @@ func dial(ctx context.Context, acc account.MailAccount) (*imapclient.Client, err
 		conn, err = (&net.Dialer{}).DialContext(ctx, "tcp", address)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to establish connection to %s: %w", address, err)
+		return nil, fmt.Errorf("verbindung zu %s konnte nicht aufgebaut werden: %w", address, err)
 	}
 
 	return imapclient.New(conn, &imapclient.Options{}), nil

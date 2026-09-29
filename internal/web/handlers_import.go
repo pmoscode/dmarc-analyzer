@@ -80,7 +80,7 @@ func (s *Server) handleImportSubmit(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxImportRequestSize)
 	//nolint:gosec // G120: see the MaxBytesReader limit directly above.
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		redirectToImportWithError(w, r, "Could not read the file(s) — too large in total?")
+		redirectToImportWithError(w, r, "Die Datei(en) konnten nicht gelesen werden — insgesamt zu groß?")
 		return
 	}
 	defer func() {
@@ -91,7 +91,7 @@ func (s *Server) handleImportSubmit(w http.ResponseWriter, r *http.Request) {
 
 	files := r.MultipartForm.File["dateien"]
 	if len(files) == 0 {
-		redirectToImportWithError(w, r, "Please select at least one file.")
+		redirectToImportWithError(w, r, "Bitte mindestens eine Datei auswählen.")
 		return
 	}
 

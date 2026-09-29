@@ -63,7 +63,7 @@ func TestHandleDomains_RendersFilterResetLink(t *testing.T) {
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(body), `<a href="/domains" class="filter-reset">Reset filter</a>`)
+	require.Contains(t, string(body), `<a href="/domains" class="filter-reset">Filter zurücksetzen</a>`)
 }
 
 func TestHandleDomains_EmptyResult_ShowsEmptyState(t *testing.T) {
@@ -75,7 +75,7 @@ func TestHandleDomains_EmptyResult_ShowsEmptyState(t *testing.T) {
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(body), "No domains")
+	require.Contains(t, string(body), "Keine Domains")
 }
 
 func TestHandleDomains_FilterParamsReachRepository(t *testing.T) {

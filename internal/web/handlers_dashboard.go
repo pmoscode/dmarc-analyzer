@@ -50,7 +50,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	current := dash.Comparison.Current
 	data := dashboardPageData{
-		Title:                "Overview",
+		Title:                "Übersicht",
 		Nav:                  navItems(r.URL.Path),
 		TotalMessages:        current.TotalMessages,
 		PassRatePercent:      formatPercent(current.PassRate),
@@ -74,5 +74,5 @@ func formatPercent(rate float64) string {
 }
 
 func formatTrend(passRateTrendPoints float64) string {
-	return fmt.Sprintf("%+.1f percentage points vs. previous period", passRateTrendPoints*100)
+	return fmt.Sprintf("%+.1f Prozentpunkte ggü. Vorperiode", passRateTrendPoints*100)
 }

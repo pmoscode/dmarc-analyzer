@@ -10,7 +10,7 @@ import (
 // user/browser).
 func (s *Server) serverError(w http.ResponseWriter, r *http.Request, err error) {
 	s.logger.Error("request failed", "path", r.URL.Path, "error", err)
-	http.Error(w, "Could not load data.", http.StatusInternalServerError)
+	http.Error(w, "Daten konnten nicht geladen werden.", http.StatusInternalServerError)
 }
 
 // writeJSON writes v as a JSON response. NaN/Inf in float64 fields would

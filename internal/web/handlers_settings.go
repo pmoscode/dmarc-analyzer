@@ -90,8 +90,8 @@ func (s *Server) handleAccountTest(w http.ResponseWriter, r *http.Request) {
 	id := account.AccountID(r.PathValue("id"))
 
 	if err := s.deps.Accounts.TestConnectionByID(r.Context(), id); err != nil {
-		redirectToSettingsWithMessage(w, r, "Connection failed.", true)
+		redirectToSettingsWithMessage(w, r, "Verbindung fehlgeschlagen.", true)
 		return
 	}
-	redirectToSettingsWithMessage(w, r, "Connection successful.", false)
+	redirectToSettingsWithMessage(w, r, "Verbindung erfolgreich.", false)
 }

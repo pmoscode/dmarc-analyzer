@@ -1,27 +1,27 @@
 {{define "content"}}
 <form class="filter-bar" method="get" action="/domains" aria-label="Filter">
-  <label>Period
+  <label>Zeitraum
     <select name="zeitraum">
       {{range .PeriodOptions}}<option value="{{.Days}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
     </select>
   </label>
   <label>Domain
-    <input type="text" name="domain" value="{{.Domain}}" placeholder="All" autocomplete="off">
+    <input type="text" name="domain" value="{{.Domain}}" placeholder="Alle" autocomplete="off">
   </label>
-  <button type="submit">Apply filter</button>
-  <a href="/domains" class="filter-reset">Reset filter</a>
+  <button type="submit">Filter anwenden</button>
+  <a href="/domains" class="filter-reset">Filter zurücksetzen</a>
 </form>
 
-<p class="export-link"><a href="{{.ExportURL}}">Export CSV (entire filtered set)</a></p>
+<p class="export-link"><a href="{{.ExportURL}}">CSV exportieren (gesamter gefilterter Bestand)</a></p>
 
 <table class="data-table" aria-label="Domains">
   <thead>
     <tr>
       <th><a href="{{.SortDomainURL}}">Domain</a></th>
-      <th><a href="{{.SortVolumeURL}}">Messages</a></th>
-      <th>Pass rate</th>
-      <th>Reports</th>
-      <th>Distinct sources</th>
+      <th><a href="{{.SortVolumeURL}}">Nachrichten</a></th>
+      <th>Pass-Rate</th>
+      <th>Berichte</th>
+      <th>Unterschiedliche Quellen</th>
     </tr>
   </thead>
   <tbody id="domains-rows">
@@ -29,7 +29,7 @@
   </tbody>
 </table>
 {{if not .Rows.Rows}}
-<p class="empty-state">No domains found for this filter.</p>
+<p class="empty-state">Keine Domains für diesen Filter gefunden.</p>
 {{end}}
 {{end}}
 
@@ -49,7 +49,7 @@
     <button type="button" class="load-more"
       hx-get="{{.NextPageURL}}"
       hx-target="#domains-load-more-row"
-      hx-swap="outerHTML">Load more</button>
+      hx-swap="outerHTML">Weitere laden</button>
   </td>
 </tr>
 {{end}}

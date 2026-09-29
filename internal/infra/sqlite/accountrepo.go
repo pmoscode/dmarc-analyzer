@@ -61,7 +61,7 @@ func (r *AccountRepository) FindByID(ctx context.Context, id account.AccountID) 
 		return nil, fmt.Errorf("account %q: %w", id, sql.ErrNoRows)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("could not load account %q: %w", id, err)
+		return nil, fmt.Errorf("account %q konnte nicht geladen werden: %w", id, err)
 	}
 	return acc, nil
 }
@@ -75,7 +75,7 @@ func (r *AccountRepository) FindAll(ctx context.Context) ([]account.MailAccount,
 
 	rows, err := r.db.QueryContext(ctx, stmt)
 	if err != nil {
-		return nil, fmt.Errorf("could not load accounts: %w", err)
+		return nil, fmt.Errorf("accounts konnten nicht geladen werden: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
@@ -83,7 +83,7 @@ func (r *AccountRepository) FindAll(ctx context.Context) ([]account.MailAccount,
 	for rows.Next() {
 		acc, err := scanAccount(rows)
 		if err != nil {
-			return nil, fmt.Errorf("could not read account row: %w", err)
+			return nil, fmt.Errorf("account-zeile konnte nicht gelesen werden: %w", err)
 		}
 		accounts = append(accounts, *acc)
 	}

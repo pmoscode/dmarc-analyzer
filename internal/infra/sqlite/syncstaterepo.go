@@ -38,16 +38,16 @@ func (r *SyncStateRepository) Load(ctx context.Context, accountID account.Accoun
 		return sync.State{AccountID: accountID, Mailbox: mailbox}, nil
 	}
 	if err != nil {
-		return sync.State{}, fmt.Errorf("could not load sync state for account %q, mailbox %q: %w", accountID, mailbox, err)
+		return sync.State{}, fmt.Errorf("sync-state für konto %q, postfach %q konnte nicht geladen werden: %w", accountID, mailbox, err)
 	}
 
 	uidValidity32, err := toUint32(uidValidity)
 	if err != nil {
-		return sync.State{}, fmt.Errorf("stored uid_validity is invalid: %w", err)
+		return sync.State{}, fmt.Errorf("gespeicherte uid_validity ist ungültig: %w", err)
 	}
 	lastUID32, err := toUint32(lastUID)
 	if err != nil {
-		return sync.State{}, fmt.Errorf("stored last_uid is invalid: %w", err)
+		return sync.State{}, fmt.Errorf("gespeicherte last_uid ist ungültig: %w", err)
 	}
 
 	state := sync.State{
@@ -59,7 +59,7 @@ func (r *SyncStateRepository) Load(ctx context.Context, accountID account.Accoun
 	if lastSyncAt.Valid {
 		t, err := time.Parse(time.RFC3339Nano, lastSyncAt.String)
 		if err != nil {
-			return sync.State{}, fmt.Errorf("stored last_sync_at is invalid: %w", err)
+			return sync.State{}, fmt.Errorf("gespeichertes last_sync_at ist ungültig: %w", err)
 		}
 		state.LastSyncAt = t
 	}
@@ -88,7 +88,7 @@ func (r *SyncStateRepository) Save(ctx context.Context, state sync.State) error 
 		lastSyncAt.UTC().Format(time.RFC3339Nano),
 	)
 	if err != nil {
-		return fmt.Errorf("could not save sync state for account %q, mailbox %q: %w", state.AccountID, state.Mailbox, err)
+		return fmt.Errorf("sync-state für konto %q, postfach %q konnte nicht gespeichert werden: %w", state.AccountID, state.Mailbox, err)
 	}
 	return nil
 }

@@ -30,32 +30,32 @@ func (s *Server) handleLoginCallback(w http.ResponseWriter, r *http.Request) {
 
 	cookie, err := r.Cookie(pendingLoginCookieName)
 	if err != nil {
-		http.Error(w, "Login attempt not found or expired — please start again via /anmelden.", http.StatusBadRequest)
+		http.Error(w, "Anmeldevorgang nicht gefunden oder abgelaufen — bitte erneut über /anmelden starten.", http.StatusBadRequest)
 		return
 	}
 
 	pending, ok := s.auth.redeemLogin(cookie.Value, r.URL.Query().Get("state"))
 	if !ok {
-		http.Error(w, "Login attempt invalid or expired — please start again via /anmelden.", http.StatusBadRequest)
+		http.Error(w, "Anmeldevorgang ungültig oder abgelaufen — bitte erneut über /anmelden starten.", http.StatusBadRequest)
 		return
 	}
 
 	if errParam := r.URL.Query().Get("error"); errParam != "" {
 		slog.Warn("oidc login rejected by authentik", "error", errParam, "description", r.URL.Query().Get("error_description"))
-		http.Error(w, "Login rejected: "+errParam, http.StatusForbidden)
+		http.Error(w, "Anmeldung abgelehnt: "+errParam, http.StatusForbidden)
 		return
 	}
 
 	code := r.URL.Query().Get("code")
 	if code == "" {
-		http.Error(w, "Response from Authentik does not contain a code.", http.StatusBadRequest)
+		http.Error(w, "Antwort von Authentik enthält keinen Code.", http.StatusBadRequest)
 		return
 	}
 
 	claims, err := s.oidc.exchange(r.Context(), code, pending.pkceVerifier, pending.nonce)
 	if err != nil {
 		slog.Error("oidc token exchange failed", "error", err)
-		http.Error(w, "Login failed.", http.StatusUnauthorized)
+		http.Error(w, "Anmeldung fehlgeschlagen.", http.StatusUnauthorized)
 		return
 	}
 

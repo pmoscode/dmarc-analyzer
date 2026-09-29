@@ -17,13 +17,13 @@ type navItem struct {
 // (localStorage per page path, no server state).
 func navItems(currentPath string) []navItem {
 	items := []struct{ label, href string }{
-		{"Overview", "/"},
-		{"Reports", "/berichte"},
-		{"Sending sources", "/quellen"},
+		{"Übersicht", "/"},
+		{"Berichte", "/berichte"},
+		{"Sendequellen", "/quellen"},
 		{"Domains", "/domains"},
-		{"Failures", "/fehlschlaege"},
+		{"Fehlschläge", "/fehlschlaege"},
 		{"Import", "/import"},
-		{"Settings", "/einstellungen"},
+		{"Einstellungen", "/einstellungen"},
 	}
 
 	out := make([]navItem, len(items))

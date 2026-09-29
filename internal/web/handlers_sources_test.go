@@ -72,7 +72,7 @@ func TestHandleSources_RendersFilterResetLink(t *testing.T) {
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(body), `<a href="/quellen" class="filter-reset">Reset filter</a>`)
+	require.Contains(t, string(body), `<a href="/quellen" class="filter-reset">Filter zurücksetzen</a>`)
 }
 
 func TestHandleSources_NoEnrichment_ShowsPlaceholderValue(t *testing.T) {
@@ -99,7 +99,7 @@ func TestHandleSources_EmptyResult_ShowsEmptyState(t *testing.T) {
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(body), "No sending sources")
+	require.Contains(t, string(body), "Keine Sendequellen")
 }
 
 func TestHandleSources_FilterParamsReachRepository(t *testing.T) {
@@ -177,11 +177,11 @@ func TestClassifySource(t *testing.T) {
 		wantLabel string
 		wantTone  string
 	}{
-		{"dkim and spf both pass", 1.0, 1.0, "Authorized (DKIM & SPF)", "good"},
-		{"only dkim passes: forwarding", 1.0, 0.0, "Authorized (likely forwarding)", "good"},
-		{"dkim just above threshold, spf middling", 0.95, 0.6, "Authorized (likely forwarding)", "good"},
-		{"dkim predominantly fails", 0.2, 0.0, "Unconfirmed — review", "critical"},
-		{"ambiguous, in between", 0.7, 0.3, "Partially confirmed — review", "warning"},
+		{"dkim and spf both pass", 1.0, 1.0, "Autorisiert (DKIM & SPF)", "good"},
+		{"only dkim passes: forwarding", 1.0, 0.0, "Autorisiert (vermutlich Weiterleitung)", "good"},
+		{"dkim just above threshold, spf middling", 0.95, 0.6, "Autorisiert (vermutlich Weiterleitung)", "good"},
+		{"dkim predominantly fails", 0.2, 0.0, "Nicht bestätigt — prüfen", "critical"},
+		{"ambiguous, in between", 0.7, 0.3, "Teilweise bestätigt — prüfen", "warning"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -220,8 +220,8 @@ func TestHandleSources_SameHosterAsIMAP_ShowsBadge(t *testing.T) {
 	require.NoError(t, err)
 	html := string(body)
 
-	require.Contains(t, html, "same host as IMAP")
-	require.Contains(t, html, "Authorized (DKIM &amp; SPF)")
+	require.Contains(t, html, "gleicher Hoster wie IMAP")
+	require.Contains(t, html, "Autorisiert (DKIM &amp; SPF)")
 }
 
 func TestHandleSources_DifferentHosterThanIMAP_NoBadge(t *testing.T) {
@@ -239,6 +239,6 @@ func TestHandleSources_DifferentHosterThanIMAP_NoBadge(t *testing.T) {
 	require.NoError(t, err)
 	html := string(body)
 
-	require.NotContains(t, html, "same host as IMAP")
-	require.Contains(t, html, "Authorized (likely forwarding)")
+	require.NotContains(t, html, "gleicher Hoster wie IMAP")
+	require.Contains(t, html, "Autorisiert (vermutlich Weiterleitung)")
 }

@@ -23,15 +23,15 @@ const defaultPeriodDays = 30
 func periodLabel(days int) string {
 	switch days {
 	case 7:
-		return "Last 7 days"
+		return "Letzte 7 Tage"
 	case 30:
-		return "Last 30 days"
+		return "Letzte 30 Tage"
 	case 90:
-		return "Last 90 days"
+		return "Letzte 90 Tage"
 	case 365:
-		return "Last year"
+		return "Letztes Jahr"
 	default:
-		return "Last " + strconv.Itoa(days) + " days"
+		return "Letzte " + strconv.Itoa(days) + " Tage"
 	}
 }
 

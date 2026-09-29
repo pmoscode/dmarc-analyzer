@@ -314,7 +314,7 @@ func TestHandleChartDisposition_ReturnsAllFourInFixedOrderWithDrilldownURLs(t *t
 	require.Len(t, got.Slices, 4)
 
 	require.Equal(t, "none", got.Slices[0].Disposition)
-	require.Equal(t, "No action", got.Slices[0].Label)
+	require.Equal(t, "Keine Maßnahme", got.Slices[0].Label)
 	require.Equal(t, 80, got.Slices[0].Total)
 	require.Contains(t, got.Slices[0].URL, "disposition=none")
 

@@ -16,11 +16,11 @@
   }
 
   function progressText(p) {
-    return p.processed + " processed, " + p.new + " new, " + p.skipped + " skipped, " + p.failed + " failed";
+    return p.processed + " verarbeitet, " + p.new + " neu, " + p.skipped + " übersprungen, " + p.failed + " fehlerhaft";
   }
 
   function totalText(t) {
-    return t.new + " new, " + t.skipped + " skipped, " + t.failed + " failed";
+    return t.new + " neu, " + t.skipped + " übersprungen, " + t.failed + " fehlerhaft";
   }
 
   // notifyResult shows a browser notification for a finished sync result
@@ -60,7 +60,7 @@
       startForm.hidden = true;
       cancelForm.hidden = false;
       var account = state.currentAccount ? " (" + state.currentAccount + ")" : "";
-      statusEl.textContent = "Sync running" + account + ": " + progressText(state.progress);
+      statusEl.textContent = "Abgleich läuft" + account + ": " + progressText(state.progress);
       return;
     }
 
@@ -69,21 +69,21 @@
 
     switch (state.status) {
       case "done":
-        statusEl.textContent = "Last sync: " + totalText(state.total);
+        statusEl.textContent = "Letzter Abgleich: " + totalText(state.total);
         if (wasRunning) {
-          notifyResult("Sync completed", totalText(state.total));
+          notifyResult("Abgleich abgeschlossen", totalText(state.total));
         }
         break;
       case "cancelled":
-        statusEl.textContent = "Sync cancelled.";
+        statusEl.textContent = "Abgleich abgebrochen.";
         if (wasRunning) {
-          notifyResult("Sync cancelled", "");
+          notifyResult("Abgleich abgebrochen", "");
         }
         break;
       case "failed":
-        statusEl.textContent = "Sync failed" + (state.err ? ": " + state.err : ".");
+        statusEl.textContent = "Abgleich fehlgeschlagen" + (state.err ? ": " + state.err : ".");
         if (wasRunning) {
-          notifyResult("Sync failed", state.err || "");
+          notifyResult("Abgleich fehlgeschlagen", state.err || "");
         }
         break;
       default:
@@ -121,11 +121,11 @@
     switch (Notification.permission) {
       case "granted":
         button.hidden = true;
-        status.textContent = "Browser notifications are enabled.";
+        status.textContent = "Browser-Benachrichtigungen sind aktiviert.";
         break;
       case "denied":
         button.hidden = true;
-        status.textContent = "Browser notifications were blocked — change the permission in this site's browser settings.";
+        status.textContent = "Browser-Benachrichtigungen wurden blockiert — Berechtigung in den Browser-Einstellungen dieser Seite ändern.";
         break;
       default:
         button.hidden = false;
@@ -174,7 +174,7 @@ document.addEventListener("submit", function (event) {
     }
     var files = fileInput.files;
     if (!files || files.length === 0) {
-      text.textContent = "Drag files here or click to choose";
+      text.textContent = "Dateien hierher ziehen oder klicken zum Auswählen";
       return;
     }
     var names = [];

@@ -49,7 +49,7 @@ func (a *Adapter) Connect(ctx context.Context, acc account.MailAccount, secret a
 		return nil
 	})
 	if dialErr != nil {
-		return fmt.Errorf("failed to establish connection to %s:%d: %w", acc.Host, acc.Port, dialErr)
+		return fmt.Errorf("verbindung zu %s:%d konnte nicht aufgebaut werden: %w", acc.Host, acc.Port, dialErr)
 	}
 
 	loginErr := runCtx(ctx, client, func() error {
@@ -58,7 +58,7 @@ func (a *Adapter) Connect(ctx context.Context, acc account.MailAccount, secret a
 	if loginErr != nil {
 		_ = client.Close()
 		return fmt.Errorf(
-			"login as %q failed — an app password is required when two-factor authentication is enabled: %w",
+			"anmeldung als %q fehlgeschlagen — bei aktivierter Zwei-Faktor-Authentifizierung wird ein App-Passwort benötigt: %w",
 			acc.Username, loginErr,
 		)
 	}

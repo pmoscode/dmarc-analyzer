@@ -48,8 +48,8 @@ func TestHandleSettings_RendersConfiguredAccountAndRuntimeSettings(t *testing.T)
 
 	require.Contains(t, html, "First account")
 	require.Contains(t, html, "imap.example.com")
-	require.Contains(t, html, "24 months")
-	require.Contains(t, html, "every 60 minutes")
+	require.Contains(t, html, "24 Monate")
+	require.Contains(t, html, "alle 60 Minuten")
 	require.NotContains(t, html, `name="passwort"`, "there is no account form anymore — credentials come from ENV")
 }
 
@@ -63,7 +63,7 @@ func TestHandleSettings_NoAccountConfigured_ShowsEmptyState(t *testing.T) {
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(body), "No account configured")
+	require.Contains(t, string(body), "Kein Konto konfiguriert")
 }
 
 func TestHandleAccountTest_Success_ShowsSuccessMessage(t *testing.T) {
@@ -77,7 +77,7 @@ func TestHandleAccountTest_Success_ShowsSuccessMessage(t *testing.T) {
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(body), "Connection successful.")
+	require.Contains(t, string(body), "Verbindung erfolgreich.")
 }
 
 func TestHandleAccountTest_ConnectionFails_ShowsErrorMessage(t *testing.T) {
@@ -92,7 +92,7 @@ func TestHandleAccountTest_ConnectionFails_ShowsErrorMessage(t *testing.T) {
 
 	body, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	require.Contains(t, string(body), "Connection failed.")
+	require.Contains(t, string(body), "Verbindung fehlgeschlagen.")
 }
 
 func TestHandleAccountTest_MissingCSRFToken_Returns403(t *testing.T) {
