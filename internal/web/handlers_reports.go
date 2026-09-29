@@ -404,6 +404,12 @@ type reportDetailPageData struct {
 }
 
 type recordRowView struct {
+	// DetailID identifies this row's detail dialog (record-detail.js) —
+	// unlike failedRecordRowView.DetailID, the position alone is enough:
+	// this page renders every record once, with no pagination that could
+	// append more rows later.
+	DetailID string
+
 	SourceIP        string
 	Count           int
 	Disposition     string
@@ -434,6 +440,7 @@ func buildReportDetailData(full *report.AggregateReport, onlyFailed bool) report
 	records := make([]recordRowView, len(shown))
 	for i, rec := range shown {
 		records[i] = recordRowView{
+			DetailID:        fmt.Sprintf("rd-%d", i),
 			SourceIP:        rec.SourceIP.String(),
 			Count:           rec.Count,
 			Disposition:     string(rec.Evaluated.Disposition),

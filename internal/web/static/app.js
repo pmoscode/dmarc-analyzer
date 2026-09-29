@@ -205,6 +205,87 @@ document.addEventListener("submit", function (event) {
   fileInput.addEventListener("change", updateLabel);
 })();
 
+// Record detail dialogs (failed_records.html, report_detail.html): each
+// row's "Details" button opens its own <dialog> (data-dialog-target
+// points at its id) instead of expanding inline in the last table column
+// — a long DKIM/SPF/reason list no longer distorts the row height. A
+// delegated listener instead of binding per button, so rows appended
+// later via htmx ("Weitere laden" on failed_records.html) work without
+// any extra wiring. The close button is a native `<form method="dialog">`
+// submit — no JS needed for that half. Escape-to-close and focus
+// trapping are native <dialog> behavior via showModal() too.
+//
+// The "?" glossary hints INSIDE such a dialog are a special case, unlike
+// every other .glossary-hint in the app (dashboard tiles, table headers):
+// those show a plain CSS hover/focus tooltip (app.css), which works fine
+// because the whole term stays in view. Inside a dialog's own scrollable
+// column that assumption breaks — a tooltip that opens below the
+// currently visible area needs the user to scroll down to read it, but
+// scrolling moves the button out from under a mouse that hasn't itself
+// moved, which un-hovers it and closes the tooltip again. So these
+// buttons instead open/update a persistent panel that's part of the
+// dialog's own layout (record-detail-glossary-panel in app.css) and
+// stays open regardless of scroll position, until explicitly closed.
+document.addEventListener("click", function (event) {
+  var trigger = event.target.closest("[data-dialog-target]");
+  if (trigger) {
+    var dialog = document.getElementById(trigger.getAttribute("data-dialog-target"));
+    if (dialog && typeof dialog.showModal === "function") {
+      dialog.showModal();
+    }
+    return;
+  }
+
+  var hint = event.target.closest(".record-detail-dialog .glossary-hint");
+  if (hint) {
+    var dialogEl = hint.closest(".record-detail-dialog");
+    var panel = dialogEl && dialogEl.querySelector(".record-detail-glossary-panel");
+    if (panel) {
+      panel.querySelector(".record-detail-glossary-panel-title").textContent = hint.getAttribute("data-term") || "";
+      panel.querySelector(".record-detail-glossary-text").textContent = hint.getAttribute("data-tip") || "";
+      panel.hidden = false;
+    }
+    return;
+  }
+
+  var panelClose = event.target.closest(".record-detail-glossary-close");
+  if (panelClose) {
+    var openPanel = panelClose.closest(".record-detail-glossary-panel");
+    if (openPanel) {
+      openPanel.hidden = true;
+    }
+    return;
+  }
+
+  // A click that lands on the ::backdrop (outside the dialog's own box,
+  // but still inside the <dialog> element in the DOM) reports the
+  // <dialog> itself as event.target — used here to close on an
+  // outside click, the same way native <select>/browser dialogs behave.
+  if (event.target.nodeName === "DIALOG" && event.target.hasAttribute("open")) {
+    event.target.close();
+  }
+});
+
+// Collapse the glossary panel again whenever a record detail dialog
+// closes (close button, backdrop click, or Escape — all of them end up
+// firing this), so reopening the same row's dialog later starts fresh
+// instead of remembering whichever term was last explained. "close"
+// does NOT bubble (unlike "click" above), but the capturing phase still
+// reaches a listener on document regardless — that's what the trailing
+// `true` (useCapture) is for, and it's what makes this delegated the
+// same way as the click listener, including for dialogs added later via
+// htmx ("Weitere laden" on failed_records.html).
+document.addEventListener("close", function (event) {
+  var dlg = event.target;
+  if (!(dlg instanceof HTMLDialogElement) || !dlg.classList.contains("record-detail-dialog")) {
+    return;
+  }
+  var panel = dlg.querySelector(".record-detail-glossary-panel");
+  if (panel) {
+    panel.hidden = true;
+  }
+}, true);
+
 // Remember the filter per view (dashboard, reports, domains, sources
 // each have their own filter-bar form, see internal/web/filter.go —
 // "filters live in the URL"). Without this script, every view forgets

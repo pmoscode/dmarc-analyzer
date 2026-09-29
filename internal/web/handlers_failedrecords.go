@@ -1,6 +1,7 @@
 package web
 
 import (
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -85,6 +86,15 @@ func failedRecordsPageURL(filter failedRecordsFilter, cursor string) string {
 // --- Template data ---------------------------------------------------------
 
 type failedRecordRowView struct {
+	// DetailID identifies this row's detail dialog (record-detail.js) —
+	// report ID + source IP + position in this response. Report ID and
+	// source IP alone are unique across the whole paginated result (the
+	// keyset cursor never returns a record twice), but a single report
+	// can in principle carry more than one record for the same source
+	// IP (distinct auth results) — the appended index only needs to
+	// disambiguate those within one page/response.
+	DetailID string
+
 	PeriodLabel string
 	ReportURL   string
 	OrgName     string
@@ -105,6 +115,7 @@ func failedRecordRows(records []failedrecords.Record) []failedRecordRowView {
 	rows := make([]failedRecordRowView, len(records))
 	for i, rec := range records {
 		rows[i] = failedRecordRowView{
+			DetailID:        fmt.Sprintf("fr-%d-%s-%d", rec.ReportID, rec.SourceIP.String(), i),
 			PeriodLabel:     rec.PeriodBegin.Format("2006-01-02") + " – " + rec.PeriodEnd.Format("2006-01-02"),
 			ReportURL:       "/berichte/" + strconv.FormatInt(int64(rec.ReportID), 10),
 			OrgName:         rec.OrgName,

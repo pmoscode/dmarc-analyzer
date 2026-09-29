@@ -89,6 +89,22 @@ var Terms = []Term{
 		Name:       "SPF-Scope",
 		Definition: "Womit die geprüfte SPF-Domain verglichen wurde: „mfrom“ (Envelope-From, der Regelfall) oder „helo“ (der im SMTP-HELO/EHLO angegebene Name).",
 	},
+	{
+		Name:       "Header-From",
+		Definition: "Die im E-Mail-Programm sichtbar angezeigte Absenderadresse (Feld „From:“ im Nachrichtenkopf) — das sieht der Empfänger tatsächlich. DMARC prüft, ob SPF und/oder DKIM mit GENAU DIESER Domain übereinstimmen (siehe Begriff „Alignment“), nicht mit der technischen Absenderadresse (Envelope-From). Beispiel: Eine Nachricht, die im Postfach als „von newsletter@ihre-domain.de“ erscheint, hat hier ihre-domain.de stehen.",
+	},
+	{
+		Name:       "Envelope-From",
+		Definition: "Die technische Absenderadresse aus dem SMTP-Envelope (Kommando „MAIL FROM“) — legt fest, wohin Unzustellbarkeitsmeldungen (Bounces) gehen, und ist die Adresse, gegen die SPF geprüft wird. Kann von der sichtbar angezeigten Absenderadresse (Header-From) abweichen, etwa bei Newslettern oder Mailinglisten. Positiv-Beispiel: bounce.ihre-domain.de bei sichtbarem Absender newsletter@ihre-domain.de — beide gehören zur selben Domain, SPF-Alignment besteht. Negativ-Beispiel: MAIL FROM fremder-dienst.example.com bei einer Nachricht, die als „von ihre-domain.de“ angezeigt wird — die Domains weichen ab, SPF-Alignment besteht nicht, selbst wenn die SPF-Prüfung selbst (Autorisierung des sendenden Servers) besteht.",
+	},
+	{
+		Name:       "Envelope-To",
+		Definition: "Die technische Empfängeradresse aus dem SMTP-Envelope (Kommando „RCPT TO“) — meist identisch mit der sichtbaren Empfängeradresse, kann aber z. B. bei serverseitigen Weiterleitungen abweichen. Für die DMARC-Bewertung selbst ohne Bedeutung, wird vom Bericht nur zur Nachvollziehbarkeit mitgeliefert.",
+	},
+	{
+		Name:       "Override-Grund",
+		Definition: "Ein vom Empfänger dokumentierter Grund, warum die tatsächlich angewendete Maßnahme (Disposition) von der veröffentlichten Richtlinie abweicht — z. B. weil eine Nachricht trotz p=reject dennoch zugestellt wurde. Häufige Werte: „forwarded“ (der Empfänger vermutet eine Weiterleitung), „sampled_out“ (die Nachricht fiel durch den pct-Anteil heraus, siehe Begriff „pct“, und wurde deshalb nicht nach Richtlinie behandelt), „trusted_forwarder“ (bekannter, vertrauenswürdiger Weiterleitungsdienst), „mailing_list“ (Mailingliste), „local_policy“ (eine eigene Regel des Empfängers) oder „other“ (sonstiger Grund, meist im Kommentar näher erläutert).",
+	},
 }
 
 // ByName looks up a term by name. ok is false if the term doesn't exist

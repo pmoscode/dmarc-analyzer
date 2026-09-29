@@ -617,20 +617,216 @@ a {
   color: var(--primary);
 }
 
-/* .record-detail is the <details> element in the last table column of
-   the sending-sources table (report_detail.html) or the failures view
-   (failed_records.html) — shows the raw DKIM/SPF check results, sender
-   identifiers, and override reasons of a single record on demand,
-   without cluttering the table by default. */
-.record-detail summary {
-  cursor: pointer;
+/* .record-detail-trigger opens the <dialog> below (report_detail.html,
+   failed_records.html) — the detail content used to sit inline in the
+   last table column via <details>, which distorted the row height as
+   soon as a record had several DKIM/SPF results or override reasons. A
+   dialog keeps the table itself a constant height regardless of how much
+   detail a record has. */
+.record-detail-trigger {
+  padding: 4px 10px;
+  border: 1px solid var(--gridline);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
   color: var(--primary);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.record-detail-trigger:hover {
+  background: var(--gridline);
+}
+
+/* .record-detail-dialog is opened via dialog.showModal() (static/app.js)
+   — the browser centers it and supplies focus trapping/Escape-to-close
+   natively. Its own box is a flex column (fixed header + scrollable
+   body) so the header never scrolls away and the body can independently
+   size itself; see .record-detail-dialog-body below for why the body
+   itself doesn't just use one plain overflow-y: auto either.
+   IMPORTANT: every rule here is scoped to [open]. The UA stylesheet
+   hides a <dialog> via "dialog:not([open]) { display: none }" — an
+   AUTHOR rule (this one) always wins over that regardless of selector
+   specificity, so an unscoped "display: flex" here would force the
+   dialog permanently visible, inline in the page, even closed. That
+   exact bug shipped once already: every row's dialog rendered open (as
+   a plain flex box in normal document flow, not an actual modal) the
+   moment the page loaded, before any click. */
+.record-detail-dialog[open] {
+  width: min(480px, calc(100vw - 32px));
+  max-height: min(600px, calc(100vh - 64px));
+  display: flex;
+  flex-direction: column;
+  margin: auto;
+  padding: 16px 20px;
+  border: 1px solid var(--gridline);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-md);
+  transition: width 0.15s ease;
+}
+
+/* Widen to make room once the glossary side panel (below) is showing —
+   :has() reacts to the panel's [hidden] attribute, so no JS is needed
+   just to resize the dialog itself, only to populate/toggle the panel. */
+.record-detail-dialog[open]:has(.record-detail-glossary-panel:not([hidden])) {
+  width: min(740px, calc(100vw - 32px));
+}
+
+.record-detail-dialog::backdrop {
+  background: rgba(11, 11, 11, 0.45);
+}
+
+.record-detail-dialog-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 12px;
+}
+
+.record-detail-dialog-header h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.record-detail-dialog-close {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--gridline);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink-secondary);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.record-detail-dialog-close:hover {
+  background: var(--gridline);
+  color: var(--ink);
+}
+
+/* .record-detail-dialog-body holds the two (potential) columns
+   side by side: .record-detail-dialog-main (the actual record data) and
+   .record-detail-glossary-panel (a term explanation, hidden until a "?"
+   button is clicked — see static/app.js). min-height: 0 is load-bearing
+   here: without it, a flex child with its own overflow: auto refuses to
+   shrink below its content size, so it would never actually scroll,
+   just keep growing the dialog past max-height instead. */
+.record-detail-dialog-body {
+  display: flex;
+  gap: 16px;
+  min-height: 0;
+}
+
+.record-detail-dialog-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  /* Explicit, not left to default: per the CSS overflow spec, an
+     unspecified overflow-x would otherwise compute to "auto" too just
+     because overflow-y isn't "visible" — this column only ever scrolls
+     vertically. */
+  overflow-x: hidden;
+}
+
+.record-detail-dialog-main .detail-list {
   font-size: 13px;
 }
 
-.record-detail .detail-list {
-  margin-top: 8px;
+/* The glossary panel is a plain click-to-open explanation column, NOT a
+   floating hover tooltip like .glossary-hint gets everywhere else in the
+   app (see further down) — a tooltip that pops up outside the currently
+   scrolled-into-view area is useless here: scrolling down to read it
+   moves the mouse out from under the button that opened it (different
+   viewport position under a static mouse), which immediately closes it
+   again. A panel that's part of the dialog's own layout instead stays
+   open regardless of scroll position, on either column. */
+.record-detail-glossary-panel {
+  flex: 0 0 240px;
+  width: 240px;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border-left: 1px solid var(--gridline);
+  padding-left: 16px;
   font-size: 13px;
+  color: var(--ink-secondary);
+}
+
+.record-detail-glossary-panel[hidden] {
+  display: none;
+}
+
+.record-detail-glossary-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 8px;
+}
+
+.record-detail-glossary-panel-title {
+  font-weight: 600;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.record-detail-glossary-close {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--gridline);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--ink-secondary);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.record-detail-glossary-close:hover {
+  background: var(--gridline);
+  color: var(--ink);
+}
+
+.record-detail-glossary-text {
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Side by side only fits on a wide-enough dialog — below that, the panel
+   drops under the main column instead of squeezing it unreadably thin.
+   The dialog also can't usefully widen for the two-column layout below
+   this breakpoint (width is already clamped to calc(100vw - 32px)). */
+@media (max-width: 640px) {
+  .record-detail-dialog-body {
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .record-detail-dialog-main {
+    overflow-y: visible;
+  }
+
+  .record-detail-glossary-panel {
+    flex: 0 0 auto;
+    width: auto;
+    max-height: 45%;
+    border-left: none;
+    border-top: 1px solid var(--gridline);
+    padding-left: 0;
+    padding-top: 12px;
+  }
 }
 
 .record-detail-heading {
@@ -721,7 +917,9 @@ a {
    Pure CSS, no JavaScript — .glossary-hint[data-tip] generates the
    tooltip via ::after, positions a small arrow via ::before, both
    initially invisible (opacity 0 + no pointer-events) and only shown on
-   :hover/:focus-visible. */
+   :hover/:focus-visible. Exception: inside .record-detail-dialog, this
+   popup is turned off (see further down) in favor of a click-to-open
+   side panel — static/app.js handles the click there. */
 .glossary-hint {
   position: relative;
   display: inline-flex;
@@ -760,11 +958,23 @@ a {
   transform: translate(-50%, 4px);
 }
 
+/* max-width/max-height: 0 + overflow: hidden at rest — opacity: 0 alone
+   hides the tooltip visually, but its box still has full (up to 280px ×
+   content-height) geometry and still counts toward a scrolling
+   ancestor's scrollable-overflow area regardless of opacity. Inside
+   .record-detail-dialog (overflow-y: auto) that produced a permanently
+   visible, oversized scroll range from tooltips nobody was even
+   hovering. Collapsing the box to 0×0 at rest removes that footprint
+   entirely; :hover/:focus-visible below snap it back open (not
+   transitioned — only opacity/transform animate, the size change is
+   instant and imperceptible under the fade-in). */
 .glossary-hint[data-tip]::after {
   content: attr(data-tip);
   width: max-content;
-  max-width: 280px;
-  padding: 8px 10px;
+  max-width: 0;
+  max-height: 0;
+  padding: 0;
+  overflow: hidden;
   border-radius: 10px;
   background: var(--ink);
   color: var(--page-bg);
@@ -795,6 +1005,22 @@ a {
   transform: translate(-50%, 0);
 }
 
+/* Snap the box back open — not transitioned (only opacity/transform
+   above are), so the size change is instant while the fade-in still
+   plays smoothly over the already-correctly-sized box. max-height is a
+   fixed cap because it must be a concrete value, not "auto" (the 0
+   resting state above needs something to snap FROM), but it still
+   silently clips content, via the overflow: hidden a couple of rules up
+   — 480px comfortably fits even the longest current glossary definition
+   (Envelope-From, ~725 characters, ~300px tall at 280px width); check
+   this again if a much longer definition gets added later. */
+.glossary-hint[data-tip]:hover::after,
+.glossary-hint[data-tip]:focus-visible::after {
+  max-width: 280px;
+  max-height: 480px;
+  padding: 8px 10px;
+}
+
 /* In a table header row, the hint sits right under the sticky header
    (.app-header) — a tooltip that otherwise opens UPWARD would get
    clipped beyond the visible area there. For occurrences inside th,
@@ -812,6 +1038,22 @@ a {
 
 .data-table th .glossary-hint[data-tip]::before {
   top: calc(100% + 4px);
+}
+
+/* Inside .record-detail-dialog, "?" buttons don't use the floating
+   hover/focus popup at all — see .record-detail-glossary-panel further
+   up for why (a popup that opens outside the currently scrolled-into-
+   view area closes itself the moment you scroll to read it, since the
+   mouse ends up over different content). They open the in-dialog panel
+   instead (static/app.js), so the popup is turned off here entirely
+   rather than merely repositioned. */
+.record-detail-dialog .glossary-hint[data-tip]::after,
+.record-detail-dialog .glossary-hint[data-tip]::before {
+  content: none;
+}
+
+.record-detail-dialog .glossary-hint {
+  cursor: pointer;
 }
 
 .chart-card {
