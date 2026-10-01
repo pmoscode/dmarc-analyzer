@@ -9,7 +9,7 @@ require (
 	github.com/go-jose/go-jose/v4 v4.1.5
 	github.com/stretchr/testify v1.12.1
 	golang.org/x/oauth2 v0.37.0
-	modernc.org/sqlite v1.59.0
+	modernc.org/sqlite v1.60.1
 )
 
 require (
