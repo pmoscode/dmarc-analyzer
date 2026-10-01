@@ -59,10 +59,13 @@ func TestParse_RFC7489CanonicalExample(t *testing.T) {
 	require.Equal(t, "203.0.113.5", r.Records[0].SourceIP.String())
 	require.Equal(t, 2, r.Records[0].Count)
 	require.Equal(t, report.DispositionNone, r.Records[0].Evaluated.Disposition)
+	require.Len(t, r.Records[0].Auth.SPF, 1)
+	require.Equal(t, "mfrom", r.Records[0].Auth.SPF[0].Scope, "scope is missing from the XML, the RFC default of mfrom must apply")
 
 	require.Equal(t, report.DispositionReject, r.Records[1].Evaluated.Disposition)
 	require.Len(t, r.Records[1].Evaluated.Reasons, 1)
 	require.Equal(t, "forwarded", r.Records[1].Evaluated.Reasons[0].Type)
+	require.Equal(t, "mfrom", r.Records[1].Auth.SPF[0].Scope, "explicit scope must be preserved, not overwritten by the default")
 }
 
 func TestParse_GoogleStyle_MissingAlignmentDefaultsToRelaxed(t *testing.T) {

@@ -20,6 +20,14 @@ import (
 // field is missing from the XML.
 const defaultPercentage = 100
 
+// defaultSPFScope is the default the RFC 7489 schema (Appendix C,
+// SPFAuthResultType) mandates for "scope" when the field is missing —
+// same idea as parseAlignmentModeWithDefault for adkim/aspf. In
+// practice this is common: many providers only report SPF against the
+// envelope-from and omit scope entirely, relying on this default,
+// rather than reporting against the HELO/EHLO identity (scope "helo").
+const defaultSPFScope = "mfrom"
+
 // Parser implements sync.ReportParser for DMARC aggregate reports (RUA)
 // and tolerates RFC deviations by individual providers: unknown enum
 // values are mapped to Unknown instead of aborting the import.
@@ -257,9 +265,18 @@ func mapSPFResults(results []spfAuthResult) []report.SPFAuthResult {
 	for _, res := range results {
 		mapped = append(mapped, report.SPFAuthResult{
 			Domain: res.Domain,
-			Scope:  res.Scope,
+			Scope:  scopeOrDefault(res.Scope),
 			Result: report.ParseAuthResultValue(res.Result),
 		})
 	}
 	return mapped
+}
+
+// scopeOrDefault applies defaultSPFScope when "scope" is missing from the
+// XML.
+func scopeOrDefault(raw string) string {
+	if strings.TrimSpace(raw) == "" {
+		return defaultSPFScope
+	}
+	return raw
 }

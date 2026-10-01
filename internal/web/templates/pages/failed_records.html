@@ -85,13 +85,13 @@
         {{if .Detail.EnvelopeTo}}<dt>Envelope-To <button type="button" class="glossary-hint" data-term="Envelope-To" data-tip="{{glossaryDef "Envelope-To"}}" aria-label="Begriff erklären: Envelope-To">?</button></dt><dd>{{.Detail.EnvelopeTo}}</dd>{{end}}
       </dl>
       {{if .Detail.DKIMResults}}
-      <p class="record-detail-heading">DKIM-Signaturen <button type="button" class="glossary-hint" data-term="DKIM-Selector" data-tip="{{glossaryDef "DKIM-Selector"}}" aria-label="Begriff erklären: DKIM-Selector">?</button></p>
+      <p class="record-detail-heading">DKIM-Signaturen <button type="button" class="glossary-hint" data-term="DKIM-Selector" data-tip="{{glossaryDef "DKIM-Selector"}}" aria-label="Begriff erklären: DKIM-Selector" title="Selector">?</button> <button type="button" class="glossary-hint" data-term="DKIM-Ergebnis" data-tip="{{glossaryDef "DKIM-Ergebnis"}}" aria-label="Begriff erklären: DKIM-Ergebnis" title="Ergebnis">?</button></p>
       <ul class="record-detail-list">
         {{range .Detail.DKIMResults}}<li>Domain {{.Domain}}, Selector {{.Selector}}: {{.Result}}</li>{{end}}
       </ul>
       {{end}}
       {{if .Detail.SPFResults}}
-      <p class="record-detail-heading">SPF-Prüfungen <button type="button" class="glossary-hint" data-term="SPF-Scope" data-tip="{{glossaryDef "SPF-Scope"}}" aria-label="Begriff erklären: SPF-Scope">?</button></p>
+      <p class="record-detail-heading">SPF-Prüfungen <button type="button" class="glossary-hint" data-term="SPF-Scope" data-tip="{{glossaryDef "SPF-Scope"}}" aria-label="Begriff erklären: SPF-Scope" title="Scope">?</button> <button type="button" class="glossary-hint" data-term="SPF-Ergebnis" data-tip="{{glossaryDef "SPF-Ergebnis"}}" aria-label="Begriff erklären: SPF-Ergebnis" title="Ergebnis">?</button></p>
       <ul class="record-detail-list">
         {{range .Detail.SPFResults}}<li>Domain {{.Domain}}, Scope {{.Scope}}: {{.Result}}</li>{{end}}
       </ul>
