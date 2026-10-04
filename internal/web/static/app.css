@@ -73,7 +73,7 @@ a {
   position: sticky;
   top: 0;
   z-index: 30;
-  padding: 14px 0;
+  padding: 8px 0;
   margin: 0 -16px 28px;
   padding-inline: 16px;
   background: var(--header-bg);
@@ -101,7 +101,7 @@ a {
    near-black), so it stays readable in dark mode. */
 .app-logo {
   display: block;
-  height: 44px;
+  height: 38px;
   width: auto;
   border-radius: 8px;
 }
