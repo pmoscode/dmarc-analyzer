@@ -97,15 +97,13 @@ a {
   grid-row: 1 / span 2;
 }
 
-/* The logo's strokes are near-black on transparent, so it sits on a light
-   chip to stay readable in dark mode. */
+/* The logo SVG carries its own white background (its strokes are
+   near-black), so it stays readable in dark mode. */
 .app-logo {
   display: block;
   height: 44px;
   width: auto;
-  padding: 2px 6px;
   border-radius: 8px;
-  background: #fff;
 }
 
 .app-header h1 {
