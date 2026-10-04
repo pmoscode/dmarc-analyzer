@@ -86,6 +86,28 @@ a {
   gap: 8px 24px;
 }
 
+.app-brand {
+  display: grid;
+  grid-template-columns: auto auto;
+  column-gap: 14px;
+  align-items: center;
+}
+
+.app-brand .app-logo {
+  grid-row: 1 / span 2;
+}
+
+/* The logo's strokes are near-black on transparent, so it sits on a light
+   chip to stay readable in dark mode. */
+.app-logo {
+  display: block;
+  height: 44px;
+  width: auto;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: #fff;
+}
+
 .app-header h1 {
   margin: 0;
   font-size: 19px;
