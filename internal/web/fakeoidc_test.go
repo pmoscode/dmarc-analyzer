@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -36,6 +37,9 @@ type fakeOIDCProvider struct {
 	nextSubject string
 	nextEmail   string
 	lastNonce   string
+
+	// down simulates an unreachable Authentik (discovery answers 502).
+	down atomic.Bool
 }
 
 // testOIDCClientID is the client ID all tests in this package use both
@@ -70,6 +74,10 @@ func (p *fakeOIDCProvider) setClaims(subject, email string, groups []string) {
 }
 
 func (p *fakeOIDCProvider) handleDiscovery(w http.ResponseWriter, _ *http.Request) {
+	if p.down.Load() {
+		http.Error(w, "", http.StatusBadGateway)
+		return
+	}
 	doc := map[string]any{
 		"issuer":                                p.issuer(),
 		"authorization_endpoint":                p.issuer() + "/authorize",

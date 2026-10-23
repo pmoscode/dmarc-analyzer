@@ -9,6 +9,11 @@ import (
 // new, short-lived login attempt for it (state/nonce/PKCE, see auth.go
 // beginLogin).
 func (s *Server) handleLoginStart(w http.ResponseWriter, r *http.Request) {
+	authenticator, ok := s.oidcOrUnavailable(w, r)
+	if !ok {
+		return
+	}
+
 	id, p, err := s.auth.beginLogin()
 	if err != nil {
 		s.serverError(w, r, err)
@@ -16,7 +21,10 @@ func (s *Server) handleLoginStart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	setPendingLoginCookie(w, id)
-	http.Redirect(w, r, s.oidc.authCodeURL(p.state, p.nonce, p.pkceVerifier), http.StatusSeeOther)
+	//nolint:gosec // G710: false positive — the target is Authentik's
+	// authorize endpoint from discovery (DMARC_OIDC_ISSUER_URL); only
+	// r.Context() flows into the lookup, nothing from the request URL.
+	http.Redirect(w, r, authenticator.authCodeURL(p.state, p.nonce, p.pkceVerifier), http.StatusSeeOther)
 }
 
 // handleLoginCallback processes the return from Authentik: exchange the
@@ -52,7 +60,12 @@ func (s *Server) handleLoginCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claims, err := s.oidc.exchange(r.Context(), code, pending.pkceVerifier, pending.nonce)
+	authenticator, ok := s.oidcOrUnavailable(w, r)
+	if !ok {
+		return
+	}
+
+	claims, err := authenticator.exchange(r.Context(), code, pending.pkceVerifier, pending.nonce)
 	if err != nil {
 		slog.Error("oidc token exchange failed", "error", err)
 		http.Error(w, "Anmeldung fehlgeschlagen.", http.StatusUnauthorized)
@@ -64,7 +77,7 @@ func (s *Server) handleLoginCallback(w http.ResponseWriter, r *http.Request) {
 		username = claims.Subject
 	}
 
-	if !claims.isAdmin(s.oidc.adminGroup) {
+	if !claims.isAdmin(authenticator.adminGroup) {
 		slog.Warn("oidc login rejected: missing admin group", "subject", claims.Subject, "email", claims.Email)
 		s.renderAccessDenied(w, r, username)
 		return
@@ -113,9 +126,25 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	s.auth.endSession(r)
 	clearSessionCookie(w)
 
-	if u := s.oidc.endSessionURL(); u != "" {
-		http.Redirect(w, r, u, http.StatusSeeOther)
-		return
+	// With Authentik unreachable, the logout stays local.
+	if authenticator, err := s.oidc.get(r.Context()); err == nil {
+		if u := authenticator.endSessionURL(); u != "" {
+			http.Redirect(w, r, u, http.StatusSeeOther)
+			return
+		}
 	}
 	http.Redirect(w, r, "/anmelden", http.StatusSeeOther)
+}
+
+// oidcOrUnavailable returns the discovered OIDC authenticator or — while
+// Authentik is unreachable (see lazyOIDCAuthenticator) — answers 503 and
+// returns false.
+func (s *Server) oidcOrUnavailable(w http.ResponseWriter, r *http.Request) (*oidcAuthenticator, bool) {
+	authenticator, err := s.oidc.get(r.Context())
+	if err != nil {
+		slog.Warn("oidc provider unavailable", "error", err)
+		http.Error(w, "Anmeldung derzeit nicht möglich, weil Authentik nicht erreichbar ist — bitte in ein paar Minuten erneut versuchen.", http.StatusServiceUnavailable)
+		return nil, false
+	}
+	return authenticator, true
 }

@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -184,12 +185,36 @@ func loginViaFakeOIDC(t *testing.T, srv *Server) *http.Client {
 	return client
 }
 
-func TestNew_UnreachableIssuer_ReturnsError(t *testing.T) {
-	opts := testOIDCOptions("http://127.0.0.1:1/nichts-hier")
+// TestServer_IssuerUnavailableAtStartup_LoginRecoversWithoutRestart covers
+// the 2026-10-21 outage: after a host reboot Authentik came up later than
+// this container, and a failed discovery used to abort startup. Now the
+// server starts anyway, /anmelden answers 503 while Authentik is down, and
+// login works as soon as it's back — no restart needed.
+func TestServer_IssuerUnavailableAtStartup_LoginRecoversWithoutRestart(t *testing.T) {
+	provider := newFakeOIDCProvider(t)
+	provider.down.Store(true)
 
-	_, err := New(context.Background(), testDeps(), opts)
+	srv, err := New(context.Background(), testDeps(), testOIDCOptions(provider.issuer()))
+	require.NoError(t, err, "an unreachable issuer must not keep the server from starting")
+	t.Cleanup(func() { _ = srv.Shutdown(context.Background()) })
+	require.NoError(t, srv.Start(context.Background()))
 
-	require.Error(t, err)
+	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	loginStatus := func() int {
+		resp := httpGet(t, client, "http://"+srv.Addr()+"/anmelden")
+		defer func() { _ = resp.Body.Close() }()
+		return resp.StatusCode
+	}
+
+	require.Equal(t, http.StatusServiceUnavailable, loginStatus())
+
+	provider.down.Store(false)
+	// Skip the discoveryRetryAfter wait instead of sleeping in the test.
+	srv.oidc.mu.Lock()
+	srv.oidc.lastTry = time.Time{}
+	srv.oidc.mu.Unlock()
+
+	require.Equal(t, http.StatusSeeOther, loginStatus(), "login should redirect to Authentik once it's reachable")
 }
 
 func TestNew_InvalidRedirectURL_ReturnsError(t *testing.T) {

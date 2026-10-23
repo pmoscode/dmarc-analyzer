@@ -4,8 +4,11 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
+	"sync"
+	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
@@ -56,10 +59,9 @@ func (o *oidcAuthenticator) insecureContext(ctx context.Context) context.Context
 	return oidc.ClientContext(ctx, o.httpClient)
 }
 
-// newOIDCAuthenticator loads the discovery document from cfg.IssuerURL —
-// if that fails (Authentik unreachable, wrong issuer URL), the caller
-// reports it as a clear startup error instead of a broken login at
-// runtime.
+// newOIDCAuthenticator loads the discovery document from cfg.IssuerURL.
+// Not called at startup directly but through lazyOIDCAuthenticator, so an
+// unreachable Authentik doesn't keep the server from starting.
 func newOIDCAuthenticator(ctx context.Context, cfg OIDCConfig) (*oidcAuthenticator, error) {
 	var httpClient *http.Client
 	if cfg.InsecureSkipVerify {
@@ -97,6 +99,82 @@ func newOIDCAuthenticator(ctx context.Context, cfg OIDCConfig) (*oidcAuthenticat
 		adminGroup: cfg.AdminGroup,
 		httpClient: httpClient,
 	}, nil
+}
+
+const (
+	// discoveryTimeout bounds a single discovery attempt.
+	discoveryTimeout = 10 * time.Second
+	// discoveryRetryAfter is how long a failed discovery is cached: login
+	// requests within that window get the last error right away instead
+	// of hitting an Authentik that is most likely still unreachable.
+	discoveryRetryAfter = 5 * time.Second
+	// discoveryMaxBackoff caps the interval between warmup attempts.
+	discoveryMaxBackoff = time.Minute
+)
+
+// lazyOIDCAuthenticator runs discovery on demand and retries it after a
+// failure. That keeps Authentik from being a hard startup dependency: after
+// a host reboot it typically comes up later than this container, and a
+// failed discovery at startup used to exit the process — which Docker
+// doesn't reliably restart (2026-10-21: the container stayed down). Now the
+// server starts regardless, existing sessions keep working, and only
+// /anmelden answers "temporarily unavailable" until discovery succeeds.
+type lazyOIDCAuthenticator struct {
+	cfg OIDCConfig
+
+	mu      sync.Mutex
+	auth    *oidcAuthenticator
+	lastErr error
+	lastTry time.Time
+}
+
+func newLazyOIDCAuthenticator(cfg OIDCConfig) *lazyOIDCAuthenticator {
+	return &lazyOIDCAuthenticator{cfg: cfg}
+}
+
+// get returns the discovered authenticator, running discovery if needed.
+// Within discoveryRetryAfter of a failure it returns the cached error.
+func (l *lazyOIDCAuthenticator) get(ctx context.Context) (*oidcAuthenticator, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.auth != nil {
+		return l.auth, nil
+	}
+	if l.lastErr != nil && time.Since(l.lastTry) < discoveryRetryAfter {
+		return nil, l.lastErr
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, discoveryTimeout)
+	defer cancel()
+	auth, err := newOIDCAuthenticator(ctx, l.cfg)
+	l.lastTry = time.Now()
+	if err != nil {
+		l.lastErr = err
+		return nil, err
+	}
+	l.auth, l.lastErr = auth, nil
+	return auth, nil
+}
+
+// warmup attempts discovery right at startup and then with a growing
+// interval until it succeeds or ctx ends — so the first login doesn't have
+// to wait for discovery and an unreachable Authentik shows up in the log.
+func (l *lazyOIDCAuthenticator) warmup(ctx context.Context, logger *slog.Logger) {
+	backoff := discoveryRetryAfter
+	for {
+		_, err := l.get(ctx)
+		if err == nil {
+			logger.Info("oidc discovery succeeded", "issuer", l.cfg.IssuerURL)
+			return
+		}
+		logger.Warn("oidc discovery failed, retrying", "error", err, "retry_in", backoff)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(backoff):
+		}
+		backoff = min(backoff*2, discoveryMaxBackoff)
+	}
 }
 
 // authCodeURL returns the Authentik authorize URL for a new login

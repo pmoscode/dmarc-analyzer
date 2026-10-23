@@ -156,8 +156,11 @@ time. Concrete pinned versions live in `docs/DEPENDENCIES.md`, not in
   the RFC 5737 range (`192.0.2.0/24`, `198.51.100.0/24`, `203.0.113.0/24`),
   domains as `example.com`/`example.org` — never real addresses or domains.
 - `internal/web` tests against OIDC-protected routes need a real server:
-  `New(ctx, deps, opts)` makes a real OIDC discovery request against
-  `opts.OIDC.IssuerURL` at startup. For this there's
+  the server makes a real OIDC discovery request against
+  `opts.OIDC.IssuerURL` (lazily, via `lazyOIDCAuthenticator` in
+  `oidc.go` — warmed up in `Start`, retried on `/anmelden` while
+  Authentik is unreachable, so it's never a hard startup dependency).
+  For this there's
   `internal/web/fakeoidc_test.go` (`newFakeOIDCProvider`) — a minimal,
   local identity provider (discovery/JWKS/authorize/token, genuinely
   signed ID tokens), not a mock of the client logic. See

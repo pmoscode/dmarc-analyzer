@@ -42,7 +42,7 @@ type Server struct {
 	deps    Dependencies
 	logger  *slog.Logger
 	auth    *auth
-	oidc    *oidcAuthenticator
+	oidc    *lazyOIDCAuthenticator
 	views   *views
 	devMode bool
 
@@ -83,11 +83,6 @@ func New(ctx context.Context, deps Dependencies, opts Options) (*Server, error) 
 		return nil, fmt.Errorf("DMARC_OIDC_ISSUER_URL is not a complete URL: %q", opts.OIDC.IssuerURL)
 	}
 
-	authenticator, err := newOIDCAuthenticator(ctx, opts.OIDC)
-	if err != nil {
-		return nil, err
-	}
-
 	a := newAuth()
 
 	v, err := newViews(opts.Dev, opts.Build, a.csrfTokenForRequest)
@@ -104,7 +99,7 @@ func New(ctx context.Context, deps Dependencies, opts Options) (*Server, error) 
 		deps:             deps,
 		logger:           logger,
 		auth:             a,
-		oidc:             authenticator,
+		oidc:             newLazyOIDCAuthenticator(opts.OIDC),
 		views:            v,
 		devMode:          opts.Dev,
 		allowedHost:      redirectURL.Host,
@@ -136,7 +131,8 @@ func (s *Server) bind(addr string) error {
 // Start starts the server in the background. Lifecycle managed via
 // SIGINT/SIGTERM (see cmd/dmarc-analyzer/cmd_web.go) — "docker stop"
 // sends SIGTERM.
-func (s *Server) Start(context.Context) error {
+func (s *Server) Start(ctx context.Context) error {
+	go s.oidc.warmup(ctx, s.logger)
 	go func() {
 		if err := s.httpServer.Serve(s.listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			s.logger.Error("server stopped", "error", err)
