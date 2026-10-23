@@ -20,18 +20,21 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # go-version-file instead of a pinned version: go.mod's "go"
+      # directive is the single source of truth, so CI can't drift behind
+      # a local toolchain bump again.
       - uses: actions/setup-go@v7
         with:
-          go-version: "1.27.1"
+          go-version-file: go.mod
           cache: true
 
       - name: Install Task
         uses: arduino/setup-task@v3.0.0
         with:
-          version: "3.53.1"
+          version: "3.54.0"
 
       - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
 
       - name: Check fmt drift
         run: |

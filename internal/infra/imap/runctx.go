@@ -12,15 +12,23 @@ import (
 // honors context.Context"). Still waits for fn to return afterward, so no
 // goroutine is left hanging.
 func runCtx(ctx context.Context, closer io.Closer, fn func() error) error {
-	done := make(chan error, 1)
-	go func() { done <- fn() }()
+	// fnErr is published via close(done), which happens-before every
+	// receive from done — no extra synchronization needed. A struct{}
+	// channel (instead of chan error) keeps errcheck from flagging the
+	// discarding receive in the cancellation branch.
+	var fnErr error
+	done := make(chan struct{})
+	go func() {
+		fnErr = fn()
+		close(done)
+	}()
 
 	select {
-	case err := <-done:
-		return err
+	case <-done:
+		return fnErr
 	case <-ctx.Done():
 		_ = closer.Close()
-		<-done // fn must return promptly after the Close
+		<-done // fn must return promptly after the Close; its error is superseded by ctx.Err()
 		return ctx.Err()
 	}
 }
