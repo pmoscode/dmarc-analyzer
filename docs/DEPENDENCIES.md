@@ -16,12 +16,12 @@ the next `task tidy` anyway.
 | Module                            | Version         | Usage                                                                                                                                                  |
 |------------------------------------|-----------------|--------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `github.com/stretchr/testify`    | `v1.12.1`       | `require` in all tests                                                                                                                                 |
-| `modernc.org/sqlite`             | `v1.59.0`       | Persistence (`internal/infra/sqlite`), CGO-free — required for `CGO_ENABLED=0` in the Docker build                                                    |
+| `modernc.org/sqlite`             | `v1.61.1`       | Persistence (`internal/infra/sqlite`), CGO-free — required for `CGO_ENABLED=0` in the Docker build                                                    |
 | `github.com/emersion/go-imap/v2` | `v2.0.0-beta.8` | IMAP adapter (`internal/infra/imap`)                                                                                                                   |
 | `github.com/emersion/go-message` | `v0.18.2`       | MIME splitting (`internal/infra/mailmime`) into `sync.RawAttachment`                                                                                   |
 | `github.com/coreos/go-oidc/v3`   | `v3.21.0`       | OIDC client (discovery, ID token validation) against Authentik, see `docs/features/auth.md`                                                           |
 | `golang.org/x/oauth2`            | `v0.37.0`       | Authorization code flow + PKCE for the OIDC login                                                                                                      |
-| `github.com/go-jose/go-jose/v4`  | `v4.1.5`        | Transitive via `go-oidc` (JWT/JWS signature verification), directly imported in the test double `internal/web/fakeoidc_test.go` (local fake identity provider) |
+| `github.com/go-jose/go-jose/v4`  | `v4.1.8`        | Transitive via `go-oidc` (JWT/JWS signature verification), directly imported in the test double `internal/web/fakeoidc_test.go` (local fake identity provider) |
 
 ### Frontend (`internal/web/static/vendor/`) — not a Go module, minified files checked into the repository
 
