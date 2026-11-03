@@ -15,7 +15,7 @@
   <a href="/fehlschlaege" class="filter-reset">Filter zurücksetzen</a>
 </form>
 
-<p class="chart-hint">Zeigt Datensätze, bei denen DMARC nicht bestanden wurde (weder DKIM noch SPF ausgerichtet bestanden), über alle Berichte im gewählten Zeitraum hinweg.</p>
+<p class="chart-hint">Zeigt alle Sendequellen aus dem gewählten Zeitraum, deren E-Mails die DMARC-Prüfung nicht bestanden haben — weder DKIM noch SPF wurde passend zur sichtbaren Absenderadresse bestätigt. Dahinter stecken entweder Fälschungsversuche oder eigene Versanddienste, die noch nicht richtig eingerichtet sind.</p>
 
 <p class="export-link"><a href="{{.ExportURL}}">CSV exportieren (gesamter gefilterter Bestand)</a></p>
 
@@ -27,9 +27,9 @@
       <th>Domain</th>
       <th><a href="{{.SortSourceIPURL}}">Quell-IP</a></th>
       <th>Nachrichten</th>
-      <th>Disposition</th>
-      <th>DKIM</th>
-      <th>SPF</th>
+      <th>Disposition <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Disposition"}}" aria-label="Begriff erklären: Disposition">?</button></th>
+      <th>DKIM <button type="button" class="glossary-hint" data-tip="{{glossaryDef "DKIM"}}" aria-label="Begriff erklären: DKIM">?</button></th>
+      <th>SPF <button type="button" class="glossary-hint" data-tip="{{glossaryDef "SPF"}}" aria-label="Begriff erklären: SPF">?</button></th>
       <th>Details</th>
     </tr>
   </thead>

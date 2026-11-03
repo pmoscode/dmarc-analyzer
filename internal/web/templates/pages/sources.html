@@ -19,8 +19,8 @@
     <tr>
       <th><a href="{{.SortIPURL}}">Quell-IP</a></th>
       <th><a href="{{.SortVolumeURL}}">Nachrichten</a></th>
-      <th>Pass-Rate</th>
-      <th>Hostname (rDNS/PTR)</th>
+      <th>Pass-Rate <button type="button" class="glossary-hint" data-tip="{{glossaryDef "DMARC-Pass-Rate"}}" aria-label="Begriff erklären: DMARC-Pass-Rate">?</button></th>
+      <th>Hostname (rDNS/PTR) <button type="button" class="glossary-hint" data-tip="{{glossaryDef "rDNS / PTR"}}" aria-label="Begriff erklären: rDNS / PTR">?</button></th>
       <th>Erkannter Dienst</th>
       <th>Einordnung <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Einordnung (Sendequelle)"}}" aria-label="Begriff erklären: Einordnung (Sendequelle)">?</button></th>
     </tr>
@@ -40,7 +40,7 @@
   <td>{{.IP}}</td>
   <td>{{.Total}}</td>
   <td>{{.PassRate}}</td>
-  <td>{{.Hostname}}{{if .GleicherHosterWieIMAP}} <span class="badge badge-info" title="Gleicher Betreiber-Domainteil wie das konfigurierte IMAP-Konto">gleicher Hoster wie IMAP</span>{{end}}</td>
+  <td>{{.Hostname}}{{if .GleicherHosterWieIMAP}} <span class="badge badge-info" title="Dieser Server gehört offenbar zum selben Anbieter wie das Postfach, aus dem die Berichte abgerufen werden — meist also Ihr eigener Mailanbieter.">gleicher Hoster wie IMAP</span>{{end}}</td>
   <td>{{.Service}}</td>
   <td><span class="badge badge-{{.EinordnungTon}}">{{.EinordnungLabel}}</span></td>
 </tr>

@@ -16,11 +16,11 @@
   <h2>Veröffentlichte Richtlinie</h2>
   <dl class="detail-list">
     <dt>Domain</dt><dd>{{.Domain}}</dd>
-    <dt>Richtlinie (p)</dt><dd>{{.Policy}}</dd>
-    <dt>Subdomain-Richtlinie (sp)</dt><dd>{{.SubdomainPolicy}}</dd>
-    <dt>DKIM-Alignment</dt><dd>{{.DKIMAlignment}}</dd>
-    <dt>SPF-Alignment</dt><dd>{{.SPFAlignment}}</dd>
-    <dt>Prozentsatz (pct)</dt><dd>{{.Percentage}} %</dd>
+    <dt>Richtlinie (p) <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Policy (p=)"}}" aria-label="Begriff erklären: Policy (p=)">?</button></dt><dd>{{.Policy}}</dd>
+    <dt>Subdomain-Richtlinie (sp) <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Policy (p=)"}}" aria-label="Begriff erklären: Policy (p=)">?</button></dt><dd>{{.SubdomainPolicy}}</dd>
+    <dt>DKIM-Alignment <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Alignment"}}" aria-label="Begriff erklären: Alignment">?</button></dt><dd>{{.DKIMAlignment}}</dd>
+    <dt>SPF-Alignment <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Alignment"}}" aria-label="Begriff erklären: Alignment">?</button></dt><dd>{{.SPFAlignment}}</dd>
+    <dt>Prozentsatz (pct) <button type="button" class="glossary-hint" data-tip="{{glossaryDef "pct"}}" aria-label="Begriff erklären: pct">?</button></dt><dd>{{.Percentage}} %</dd>
   </dl>
 </section>
 
@@ -33,7 +33,7 @@
   {{if .Records}}
   <table class="data-table" aria-label="Sendequellen in diesem Bericht">
     <thead>
-      <tr><th>Quell-IP</th><th>Nachrichten</th><th>Disposition</th><th>DKIM</th><th>SPF</th><th>Details</th></tr>
+      <tr><th>Quell-IP <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Quell-IP"}}" aria-label="Begriff erklären: Quell-IP">?</button></th><th>Nachrichten</th><th>Disposition <button type="button" class="glossary-hint" data-tip="{{glossaryDef "Disposition"}}" aria-label="Begriff erklären: Disposition">?</button></th><th>DKIM <button type="button" class="glossary-hint" data-tip="{{glossaryDef "DKIM"}}" aria-label="Begriff erklären: DKIM">?</button></th><th>SPF <button type="button" class="glossary-hint" data-tip="{{glossaryDef "SPF"}}" aria-label="Begriff erklären: SPF">?</button></th><th>Details</th></tr>
     </thead>
     <tbody>
       {{range .Records}}

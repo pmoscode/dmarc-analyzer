@@ -9,7 +9,7 @@ import (
 func TestByName_KnownTerm_ReturnsTerm(t *testing.T) {
 	term, ok := ByName("DMARC")
 	require.True(t, ok)
-	require.Contains(t, term.Definition, "RFC 7489")
+	require.Contains(t, term.Definition, "gefälschte Absender")
 }
 
 func TestByName_UnknownTerm_ReturnsFalse(t *testing.T) {

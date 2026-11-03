@@ -821,6 +821,7 @@ a {
 .record-detail-glossary-text {
   margin: 0;
   line-height: 1.5;
+  white-space: pre-line;
 }
 
 /* Side by side only fits on a wide-enough dialog — below that, the panel
@@ -1002,7 +1003,9 @@ a {
   font-weight: 400;
   line-height: 1.4;
   text-align: left;
-  white-space: normal;
+  /* pre-line: glossary definitions use "\n" to put value lists one per
+     line (see internal/web/glossary/terms.go). */
+  white-space: pre-line;
   box-shadow: var(--shadow-md);
   z-index: 20;
 }
