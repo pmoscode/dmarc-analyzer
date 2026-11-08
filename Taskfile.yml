@@ -160,3 +160,105 @@ tasks:
       - go get -u ./...
       - go get -u go@latest
       - go mod tidy
+
+  # ==================== Release tagging ====================
+  tag:patch:
+    desc: "Creates a new patch release tag (x.y.Z+1): dependency upgrade, check, then tag+push"
+    cmds:
+      - task: _tag:preflight
+      - task: _tag:confirm
+        vars:
+          BUMP: patch
+      - task: upgrade
+      - task: check
+      - task: _tag:commit-deps
+      - task: _tag:release
+        vars:
+          BUMP: patch
+
+  tag:minor:
+    desc: "Creates a new minor release tag (x.Y+1.0): dependency upgrade, check, then tag+push"
+    cmds:
+      - task: _tag:preflight
+      - task: _tag:confirm
+        vars:
+          BUMP: minor
+      - task: upgrade
+      - task: check
+      - task: _tag:commit-deps
+      - task: _tag:release
+        vars:
+          BUMP: minor
+
+  _tag:preflight:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "❌ Working tree is not clean. Commit or stash your changes first." >&2
+          exit 1
+        fi
+
+  _tag:confirm:
+    internal: true
+    silent: true
+    desc: "Shows the resulting tag version upfront and asks for confirmation before upgrade + check run"
+    vars:
+      LATEST_TAG:
+        sh: git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || echo "v0.0.0"
+      NEXT_TAG:
+        sh: |
+          LATEST="{{.LATEST_TAG}}"
+          LATEST="${LATEST#v}"
+          MAJOR=$(echo "$LATEST" | cut -d. -f1)
+          MINOR=$(echo "$LATEST" | cut -d. -f2)
+          PATCH=$(echo "$LATEST" | cut -d. -f3)
+          if [ "{{.BUMP}}" = "minor" ]; then
+            MINOR=$((MINOR + 1))
+            PATCH=0
+          else
+            PATCH=$((PATCH + 1))
+          fi
+          echo "v${MAJOR}.${MINOR}.${PATCH}"
+    prompt: "This will bump {{.LATEST_TAG}} -> {{.NEXT_TAG}} ({{.BUMP}}): upgrade deps, run check (fmt+lint+test), then tag+push. Continue?"
+    cmds:
+      - echo "→ Proceeding towards tag {{.NEXT_TAG}}"
+
+  _tag:commit-deps:
+    internal: true
+    silent: true
+    desc: "Commits go.mod/go.sum if 'task upgrade' changed them"
+    cmds:
+      - |
+        if ! git diff --quiet -- go.mod go.sum 2>/dev/null; then
+          git add go.mod go.sum
+          git commit -m "chore(deps): update dependencies"
+          echo "✅ Dependency update committed."
+        else
+          echo "ℹ️  No dependency changes to commit."
+        fi
+
+  _tag:release:
+    internal: true
+    vars:
+      LATEST_TAG:
+        sh: git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || echo "v0.0.0"
+      NEXT_TAG:
+        sh: |
+          LATEST="{{.LATEST_TAG}}"
+          LATEST="${LATEST#v}"
+          MAJOR=$(echo "$LATEST" | cut -d. -f1)
+          MINOR=$(echo "$LATEST" | cut -d. -f2)
+          PATCH=$(echo "$LATEST" | cut -d. -f3)
+          if [ "{{.BUMP}}" = "minor" ]; then
+            MINOR=$((MINOR + 1))
+            PATCH=0
+          else
+            PATCH=$((PATCH + 1))
+          fi
+          echo "v${MAJOR}.${MINOR}.${PATCH}"
+    cmds:
+      - git tag -a "{{.NEXT_TAG}}" -m "Release {{.NEXT_TAG}}"
+      - git push origin "{{.NEXT_TAG}}"
+      - echo "✅ Tag {{.NEXT_TAG}} created and pushed."
