@@ -8,7 +8,7 @@ require (
 	github.com/emersion/go-message v0.18.2
 	github.com/go-jose/go-jose/v4 v4.1.9
 	github.com/stretchr/testify v1.12.1
-	golang.org/x/oauth2 v0.37.0
+	golang.org/x/oauth2 v0.38.0
 	modernc.org/sqlite v1.62.0
 )
 
