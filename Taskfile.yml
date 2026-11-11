@@ -157,7 +157,9 @@ tasks:
   upgrade:
     desc: "Updates all dependencies to the latest versions"
     cmds:
-      - go get -u ./...
+      # Only direct deps: `go get -u ./...` would also bump indirect deps past what their parent supports
+      # (e.g. mfridman/interpolate v0.2.0 breaks goose). Inner template is quoted so Task passes it to `go list`.
+      - go get $(go list -m -f '{{ "{{if not (or .Indirect .Main)}}{{.Path}}@latest{{end}}" }}' all)
       - go get -u go@latest
       - go mod tidy
 
