@@ -4,7 +4,7 @@ go 1.27.4
 
 require (
 	github.com/coreos/go-oidc/v3 v3.21.0
-	github.com/emersion/go-imap/v2 v2.0.0-beta.8
+	github.com/emersion/go-imap/v2 v2.0.0-beta.9
 	github.com/emersion/go-message v0.18.2
 	github.com/go-jose/go-jose/v4 v4.1.9
 	github.com/stretchr/testify v1.12.1
